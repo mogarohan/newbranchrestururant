@@ -15,7 +15,7 @@ class Order extends Model
         'status',
         'customer_name',
         'notes',
-        'subtotal',
+        //'subtotal',
         'total_amount',
     ];
 

@@ -11,26 +11,32 @@ use Illuminate\Support\Str;
 
 class QrSessionController extends Controller
 {
-    public function validateQr(Restaurant $restaurant, RestaurantTable $table, string $token) {
+    public function validateQr(Restaurant $restaurant, RestaurantTable $table, $token)
+    {
         abort_unless($table->restaurant_id === $restaurant->id, 404);
         abort_unless($table->qr_token === $token, 403);
         abort_unless($table->is_active, 403);
-        abort_unless($restaurant->is_active, 403);
 
-        // Check if ANY active primary session exists on this table
-        $existingHost = QrSession::where('restaurant_table_id', $table->id)
+        // 1. Find the primary host
+        $host = \App\Models\QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
             ->where('is_active', true)
-            ->where('expires_at', '>', now()) // Ensure host hasn't expired
-            ->latest()
             ->first();
 
+        // 2. Count how many people are currently approved/active at this table
+        $currentOccupancy = \App\Models\QrSession::where('restaurant_table_id', $table->id)
+            ->whereIn('join_status', ['active', 'approved'])
+            ->count();
+
+        // 3. Check if capacity is reached
+        $isFull = $currentOccupancy >= $table->seating_capacity;
+
         return response()->json([
-            'valid' => true,
-            'has_active_host' => $existingHost ? true : false,
-            'host_name' => $existingHost ? $existingHost->customer_name : null,
-            'restaurant' => ['id' => $restaurant->id, 'name' => $restaurant->name, 'logo' => $restaurant->logo_path],
-            'table' => ['id' => $table->id, 'number' => $table->table_number],
+            'has_active_host' => (bool) $host,
+            'host_name'       => $host ? $host->customer_name : null,
+            'is_full'         => $isFull, // 🔥 Tell the app if the table is full
+            'capacity'        => $table->seating_capacity,
+            'occupancy'       => $currentOccupancy
         ]);
     }
 

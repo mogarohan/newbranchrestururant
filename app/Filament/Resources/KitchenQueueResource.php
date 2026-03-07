@@ -12,7 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
-
+use App\Events\OrderStatusUpdated;
 class KitchenQueueResource extends Resource
 {
     protected static ?string $model = KitchenQueue::class;
@@ -242,6 +242,7 @@ class KitchenQueueResource extends Resource
             'to_status' => $newStatus,
             'changed_by' => auth()->id(),
         ]);
+        OrderStatusUpdated::dispatch($record->order);
     }
 
     /*

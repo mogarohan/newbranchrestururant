@@ -14,6 +14,7 @@ use App\Models\MenuItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Events\OrderStatusUpdated; // 🔥 NEW: Import the Event
 
 class PlaceOrderController extends Controller
 {
@@ -51,6 +52,7 @@ class PlaceOrderController extends Controller
                 'session_token' => ['Session expired or invalid.']
             ]);
         }
+        
         // 🔒 Restrict ordering for non-primary users
         if (!$session->is_primary && $session->join_status !== 'approved') {
             throw ValidationException::withMessages([
@@ -89,6 +91,7 @@ class PlaceOrderController extends Controller
         }
 
         $totalAmount = $subtotal; // tax = 0
+        $order = null; // 🔥 NEW: Define outside to use in event dispatch
 
         DB::transaction(function () use (
             $restaurant,
@@ -96,7 +99,8 @@ class PlaceOrderController extends Controller
             $session,
             $validated,
             $preparedItems,
-            $totalAmount
+            $totalAmount,
+            &$order // 🔥 NEW: Pass by reference
         ) {
 
             $order = Order::create([
@@ -105,7 +109,6 @@ class PlaceOrderController extends Controller
                 'qr_session_id' => $session->id,
                 'customer_name' => $session->customer_name,
                 'status' => 'placed',
-                'subtotal' => $totalAmount,
                 'tax_amount' => 0,
                 'total_amount' => $totalAmount,
                 'notes' => $validated['notes'] ?? null,
@@ -115,12 +118,6 @@ class PlaceOrderController extends Controller
                 $order->items()->create($itemData);
             }
 
-            // KitchenQueue::create([
-            //     'order_id' => $order->id,
-            //     'current_status' => 'placed',
-            //     'priority' => 0,
-            // ]);
-
             OrderStatusLog::create([
                 'order_id' => $order->id,
                 'from_status' => null,
@@ -129,13 +126,19 @@ class PlaceOrderController extends Controller
                 'changed_by_id' => null,
             ]);
         });
+
+        // 🔥 NEW: Dispatch Event to update Manager Dashboard in real-time
+        if ($order) {
+            OrderStatusUpdated::dispatch($order);
+        }
+
         return response()->json([
             'message' => 'Order placed successfully.',
             'total_amount' => $totalAmount
         ], 201);
     }
     
-        public function getSessionOrders($token)
+    public function getSessionOrders($token)
     {
         $session = QrSession::where('session_token', $token)->where('is_active', true)->firstOrFail();
 
@@ -151,7 +154,7 @@ class PlaceOrderController extends Controller
                 ->latest()
                 ->get();
         } else {
-            // If I am Guest: I only see my own orders (or you can hide this if bill is consolidated)
+            // If I am Guest: I only see my own orders
             $orders = Order::with('items')
                 ->where('qr_session_id', $session->id)
                 ->latest()
@@ -160,5 +163,4 @@ class PlaceOrderController extends Controller
 
         return response()->json($orders);
     }
-
 }

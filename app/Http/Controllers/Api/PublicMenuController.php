@@ -42,13 +42,21 @@ class PublicMenuController extends Controller
             ], 403); // Return 403 Forbidden
         }
 
+        // 🔥 GET HOST SESSION FOR DYNAMIC UI
+        $hostSession = \App\Models\QrSession::where('restaurant_table_id', $table->id)
+            ->where('is_primary', true)
+            ->where('is_active', true)
+            ->first();
+
         // If we get here, the user is allowed to see the menu
         return response()->json([
             'session' => [
+                'id' => $session->id, // 🔥 ADD THIS LINE!
                 'token' => $session->session_token,
                 'expires_at' => $session->expires_at,
                 'join_status' => $session->join_status, // Send status back for frontend sync
                 'is_primary' => $session->is_primary,
+                'host_name' => $hostSession ? $hostSession->customer_name : 'Unknown',
             ],
 
             'restaurant' => [
@@ -62,6 +70,7 @@ class PublicMenuController extends Controller
             'table' => [
                 'id' => $table->id,
                 'number' => $table->table_number,
+                'capacity' => $table->seating_capacity, 
             ],
 
             'categories' => $restaurant->categories()

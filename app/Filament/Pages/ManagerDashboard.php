@@ -8,6 +8,7 @@ use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
+use App\Events\OrderStatusUpdated; // 🔥 NEW: Import the Event
 
 class ManagerDashboard extends Page
 {
@@ -19,7 +20,18 @@ class ManagerDashboard extends Page
     protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
-
+    public function getListeners()
+    {
+        return [
+            // Listen to the public restaurant channel for new orders
+            "echo-private:restaurant.{$this->getRestaurantId()},OrderStatusUpdated" => '$refresh',
+        ];
+    }
+    
+    private function getRestaurantId()
+    {
+        return auth()->user()->restaurant_id;
+    }
     public function getMaxContentWidth(): MaxWidth | string | null
     {
         return MaxWidth::Full; // Force full width for 200 tables
@@ -47,7 +59,8 @@ class ManagerDashboard extends Page
         $oldStatus = $order->status;
         $order->update(['status' => $status]);
 
-        if ($status === 'preparing') {
+        // Send to kitchen when 'accepted', not 'preparing'
+        if ($status === 'accepted') {
             KitchenQueue::firstOrCreate(
                 ['order_id' => $order->id],
                 ['current_status' => 'placed', 'priority' => 0]
@@ -60,6 +73,9 @@ class ManagerDashboard extends Page
             'to_status' => $status,
             'changed_by' => auth()->id(),
         ]);
+
+        // 🔥 NEW: Dispatch Event to update Customer's Phone in real-time
+        OrderStatusUpdated::dispatch($order);
     }
 
     protected function getViewData(): array

@@ -150,7 +150,9 @@
 
                                     {{-- Actions --}}
                                     <div style="display: flex; gap: 0.5rem;">
-                                        <button wire:click="updateStatus({{ $order->id }}, 'preparing')" style="background: var(--brand-orange); color: white; border: none; padding: 0.5rem; border-radius: 0.4rem; font-weight: 800; font-size: 0.8rem; flex: 1; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">Accept & Cook</button>
+                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: var(--brand-orange); color: white; border: none; padding: 0.5rem; border-radius: 0.4rem; font-weight: 800; font-size: 0.8rem; flex: 1; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
+                                            Accept Order
+                                        </button>                                        
                                         <button wire:click="updateStatus({{ $order->id }}, 'cancelled')" onclick="confirm('Reject this order?')" class="rm-bg-sub rm-border" style="color: var(--text-main); padding: 0.5rem 1rem; border-radius: 0.4rem; font-weight: 800; font-size: 0.8rem; cursor: pointer; border-width: 1px;">Reject</button>
                                     </div>
                                 </div>
