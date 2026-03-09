@@ -1,22 +1,20 @@
-FROM php:8.3-fpm
+FROM php:8.3-cli
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
-    nginx \
     git \
     unzip \
     zip \
     curl \
-    supervisor \
-    cron \
     libpq-dev \
+    libonig-dev \
     libzip-dev \
     libicu-dev \
     libpng-dev \
     libjpeg-dev \
     libfreetype6-dev
 
-# PHP extensions
+# Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 
 RUN docker-php-ext-install \
@@ -35,19 +33,12 @@ WORKDIR /var/www
 
 COPY . .
 
+# Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Laravel optimization
-RUN php artisan config:cache || true
-RUN php artisan route:cache || true
-
-# Permissions
+# Fix Laravel permissions
 RUN chmod -R 775 storage bootstrap/cache
-
-# Copy configs
-COPY docker/nginx.conf /etc/nginx/sites-available/default
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 EXPOSE 10000
 
-CMD ["/usr/bin/supervisord"]
+CMD php artisan serve --host=0.0.0.0 --port=10000
