@@ -36,6 +36,15 @@ COPY . .
 # Install dependencies
 RUN composer install --no-dev --optimize-autoloader
 
+# Install Node
+RUN apt-get update && apt-get install -y nodejs npm
+
+# Install frontend dependencies
+RUN npm install
+
+# Build Vite assets
+RUN npm run build
+
 # Fix Laravel permissions
 RUN chmod -R 775 storage bootstrap/cache
 
