@@ -54,12 +54,13 @@ class QrSessionController extends Controller
         $existingHost = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
             ->where('is_active', true)
-            ->where('expires_at', '>', now()) // 🔥 Ghost-proof filter
+            ->where('expires_at', '>', now())
             ->latest()
             ->first();
 
         // 1. Split Table OR No Host exists -> Create NEW Primary
         if (!$existingHost || $mode === 'new') {
+            // No event needed for hosts
             return QrSession::create([
                 'restaurant_id' => $restaurant->id,
                 'restaurant_table_id' => $table->id,
@@ -74,17 +75,22 @@ class QrSessionController extends Controller
         }
 
         // 2. Joining Table -> Create GUEST tied to Host
-        return QrSession::create([
+        $guestSession = QrSession::create([
             'restaurant_id' => $restaurant->id,
             'restaurant_table_id' => $table->id,
             'customer_name' => $customerName,
             'session_token' => Str::uuid(),
             'is_primary' => false,
-            'join_status' => 'pending', // Waiting for host approval
+            'join_status' => 'pending', 
             'is_active' => true,
-            'host_session_id' => $existingHost->id, // LINK TO HOST
+            'host_session_id' => $existingHost->id, 
             'expires_at' => now()->addHours(3),
         ]);
+
+        // 🔥 FIX: Fire the event for the GUEST, and do it BEFORE returning!
+        \App\Events\GuestJoinRequested::dispatch($guestSession);
+
+        return response()->json($guestSession, 201);
     }
 
     public function getPendingRequests($tableId)
@@ -109,20 +115,35 @@ class QrSessionController extends Controller
         ]);
     }
 
-    public function respondToJoin(Request $request, $sessionId)
+   public function respondToJoin(Request $request, $sessionId)
     {
-        $action = $request->input('action'); 
-
         $session = QrSession::findOrFail($sessionId);
+        
+        // 🔥 BULLETPROOF TOKEN EXTRACTION: 
+        // Checks Bearer Token, Raw Header, OR JSON Body payload
+        $hostToken = $request->bearerToken() 
+            ?: $request->header('Authorization') 
+            ?: $request->input('session_token');
 
-        if ($action === 'approve') {
-            $session->update(['join_status' => 'approved']);
-        } else {
-            $session->update([
-                'join_status' => 'rejected',
-                'is_active' => false
-            ]);
+        // Security: Ensure the person approving is the actual Host
+        $hostSession = QrSession::where('session_token', $hostToken)
+            ->where('is_primary', true)
+            ->first();
+
+        if (!$hostSession || $session->host_session_id !== $hostSession->id) {
+            return response()->json([
+                'message' => 'Unauthorized. Invalid Host Token.'
+            ], 403);
         }
+
+        $status = $request->input('action') === 'approve' ? 'approved' : 'rejected';
+
+        $session->update([
+            'join_status' => $status,
+            'is_active' => $status === 'approved'
+        ]);
+
+        \App\Events\JoinRequestResponded::dispatch($session, $status);
 
         return response()->json(['message' => 'Join request updated']);
     }

@@ -34,12 +34,15 @@ class PublicMenuController extends Controller
         );
 
         // 🔥 CRITICAL FIX: STOP HERE IF NOT APPROVED 🔥
-        // If the session is NOT primary AND status is NOT approved, block access.
         if (!$session->is_primary && $session->join_status !== 'approved') {
             return response()->json([
                 'message' => 'You are waiting for approval.',
-                'join_status' => $session->join_status 
-            ], 403); // Return 403 Forbidden
+                'join_status' => $session->join_status,
+                // MUST return the session ID even on 403 so the guest can connect to WebSockets!
+                'session' => [
+                    'id' => $session->id 
+                ]
+            ], 403); 
         }
 
         // 🔥 GET HOST SESSION FOR DYNAMIC UI
@@ -51,10 +54,10 @@ class PublicMenuController extends Controller
         // If we get here, the user is allowed to see the menu
         return response()->json([
             'session' => [
-                'id' => $session->id, // 🔥 ADD THIS LINE!
+                'id' => $session->id, 
                 'token' => $session->session_token,
                 'expires_at' => $session->expires_at,
-                'join_status' => $session->join_status, // Send status back for frontend sync
+                'join_status' => $session->join_status, 
                 'is_primary' => $session->is_primary,
                 'host_name' => $hostSession ? $hostSession->customer_name : 'Unknown',
             ],

@@ -37,7 +37,9 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->is_super_admin
             || $this->role?->name === 'restaurant_admin'
-            || $this->role?->name === 'manager';
+            || $this->role?->name === 'manager'
+            || $this->role?->name === 'waiter'
+            || $this->role?->name === 'chef';
     }
 
     public function restaurant(): BelongsTo

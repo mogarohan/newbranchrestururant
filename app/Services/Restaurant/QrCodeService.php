@@ -19,7 +19,7 @@ class QrCodeService
     Storage::disk('public')->makeDirectory($folder);
 
     //$url = "http://192.168.1.32:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
-    $url = "http://192.168.1.23:8081/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
+    $url = "https://rest-menu-smoky.vercel.app/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
 
     /**
      * 1️⃣ Generate QR SVG

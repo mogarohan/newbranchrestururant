@@ -16,7 +16,7 @@ use App\Events\OrderStatusUpdated;
 class KitchenQueueResource extends Resource
 {
     protected static ?string $model = KitchenQueue::class;
-
+protected static bool $shouldRegisterNavigation = false; // 🔥 Hides the old table
     protected static ?string $navigationIcon = 'heroicon-o-fire';
     protected static ?string $navigationLabel = 'Kitchen Display';
     protected static ?string $navigationGroup = 'Kitchen';
@@ -29,7 +29,8 @@ class KitchenQueueResource extends Resource
 
     public static function canViewAny(): bool
     {
-        return auth()->user()?->role?->name === 'chef';
+        return false;
+        //auth()->user()?->role?->name === 'chef';
     }
 
     public static function canCreate(): bool
