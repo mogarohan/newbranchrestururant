@@ -20,6 +20,9 @@ use App\Services\Restaurant\QrCodeService;
 use Filament\Tables\Columns\ImageColumn;
 use App\Services\Restaurant\QrZipService;
 use Filament\Tables\Actions\Action;
+use Filament\Tables\Columns\Layout\Stack;
+use Filament\Tables\Columns\Layout\Split;
+
 class RestaurantTableResource extends Resource
 {
     protected static ?string $model = RestaurantTable::class;
@@ -34,33 +37,14 @@ class RestaurantTableResource extends Resource
             && auth()->user()->restaurant_id !== null
             && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
     }
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id);
     }
 
-   /*
     public static function form(Form $form): Form
-    {
-        return $form
-            ->schema([
-                Forms\Components\Select::make('restaurant_id')
-                    ->relationship('restaurant', 'name')
-                    ->required(),
-                Forms\Components\TextInput::make('table_number')
-                    ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('seating_capacity')
-                    ->required()
-                    ->numeric()
-                    ->default(1),
-                Forms\Components\Toggle::make('is_active')
-                    ->required(),
-            ]);
-    }
-            */
-     public static function form(Form $form): Form
     {
         return $form
             ->schema([
@@ -80,133 +64,60 @@ class RestaurantTableResource extends Resource
             ]);
     }
 
-    // public static function table(Table $table): Table
-    // {
-    //     return $table
-    //         ->columns([
-    //             Tables\Columns\TextColumn::make('table_number')
-    //                 ->label('Table No.')
-    //                 ->sortable(),
-
-    //             Tables\Columns\TextColumn::make('seating_capacity')
-    //                 ->label('Capacity'),
-
-    //             Tables\Columns\IconColumn::make('is_active')
-    //                 ->boolean(),
-
-    //             Tables\Columns\TextColumn::make('created_at')
-    //                 ->dateTime(),
-    //         ])
-    //         ->actions([
-    //             Tables\Actions\ViewAction::make(),
-    //         ]);
-    // }
-
     public static function table(Table $table): Table
     {
         return $table
-            /*->columns([
-                Tables\Columns\TextColumn::make('table_number'),
-                Tables\Columns\TextColumn::make('seating_capacity'),
-                ImageColumn::make('qr_path')
+            ->contentGrid([
+                'md' => 2,
+                'xl' => 4,
+                '2xl' => 5,
+            ])
+            ->columns([
+                Stack::make([
+                    Split::make([
+                        Stack::make([
+                            Tables\Columns\TextColumn::make('table_number')
+                                ->label('Table No')
+                                ->weight(\Filament\Support\Enums\FontWeight::Bold)
+                                ->size('lg'), // Removed searchable() and sortable() from here
+
+                        ]),
+                        Tables\Columns\IconColumn::make('is_active')
+                            ->boolean()
+                            ->grow(false),
+                    ]),
+
+                    ImageColumn::make('qr_path')
                         ->label('QR')
                         ->disk('public')
-                        ->height(80)
+                        ->height(200)
+                        ->width('100%')
+                        ->extraImgAttributes([
+                            'style' => 'background-color: #e8c08d; padding: 2rem; border-radius: 0.5rem; object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem;',
+                        ])
                         ->visibility('public'),
-                Tables\Columns\TextColumn::make('qr_token'),
-                Tables\Columns\IconColumn::make('is_active')->boolean(),
-                // Tables\Actions\Action::make('download_qr')
-                //         ->label('Download QR')
-                //         ->icon('heroicon-o-arrow-down-tray')
-                //         ->action(fn ($record) =>
-                //             response()->download(
-                //                 storage_path('app/public/' . $record->qr_path)
-                //             )
-                //         ),
-            ])*/
-                ->columns([
-                        Tables\Columns\TextColumn::make('table_number')
-                            ->label('Table No')
-                            ->sortable(),
+                ])->space(3),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->button()
+                    ->color('warning'), // Uses orange color for the design
+            ])
 
-                        Tables\Columns\TextColumn::make('seating_capacity')
-                            ->sortable(),
-
-                        ImageColumn::make('qr_path')
-                            ->label('QR')
-                            ->disk('public')
-                            ->height(80)
-                            ->visibility('public'),
-
-                        Tables\Columns\IconColumn::make('is_active')
-                            ->boolean(),
-                    ])
-                    ->actions([
-                        Tables\Actions\Action::make('download_qr')
-                            ->label('Download QR')
-                            ->icon('heroicon-o-arrow-down-tray')
-                            ->action(fn ($record) =>
-                                response()->download(
-                                    storage_path('app/public/' . $record->qr_path)
-                                )
-                            ),
-                            
-
-                        /*Tables\Actions\Action::make('regenerate_qr')
-                            ->label('Regenerate QR')
-                            ->icon('heroicon-o-arrow-path')
-                            ->color('warning')
-                            ->requiresConfirmation()
-                            ->action(fn ($record) =>
-                                app(\App\Services\Restaurant\QrCodeService::class)
-                                    ->regenerate(auth()->user()->restaurant, $record)
-                            ),*/
-                        
-                        Tables\Actions\EditAction::make(),
-                        Tables\Actions\DeleteAction::make(),
-                    ])
-                    ->bulkActions([
-                        Tables\Actions\BulkAction::make('download_selected_qr')
-                                ->label('Download Selected QRs')
-                                ->icon('heroicon-o-archive-box-arrow-down')
-                                ->action(function ($records) {
-                                    $zipPath = app(QrZipService::class)
-                                        ->createForTables($records);
-
-                                    return response()
-                                        ->download($zipPath)
-                                        ->deleteFileAfterSend(true);
-                                })
-                                ->requiresConfirmation(),
-                            Tables\Actions\DeleteBulkAction::make(),
-                    ])
             ->headerActions([
-    //            Action::make('download_all_qr')
-    // ->label('Download All Table QRs')
-    // ->icon('heroicon-o-archive-box-arrow-down')
-    // ->action(function () {
-    //     $restaurant = auth()->user()->restaurant;
+                Tables\Actions\Action::make('download_all_qr')
+                    ->label('Download All Table QRs')
+                    ->icon('heroicon-o-archive-box-arrow-down')
+                    ->action(function () {
+                        $restaurant = auth()->user()->restaurant;
 
-    //     $zipPath = app(QrZipService::class)->createZip($restaurant);
+                        $zipPath = app(QrZipService::class)
+                            ->createForRestaurant($restaurant);
 
-    //     return response()
-    //         ->download($zipPath)
-    //         ->deleteFileAfterSend(true);
-    // }),
-                    Tables\Actions\Action::make('download_all_qr')
-                            ->label('Download All Table QRs')
-                            ->icon('heroicon-o-archive-box-arrow-down')
-                            ->action(function () {
-                                // $record is RestaurantTable ✅
-                                $restaurant = auth()->user()->restaurant;
-
-                                $zipPath = app(QrZipService::class)
-                                    ->createForRestaurant($restaurant);
-
-                                return response()
-                                    ->download($zipPath)
-                                    ->deleteFileAfterSend(true);
-                            }),
+                        return response()
+                            ->download($zipPath)
+                            ->deleteFileAfterSend(true);
+                    }),
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
@@ -238,17 +149,6 @@ class RestaurantTableResource extends Resource
                             $qrService->generate($table);
                         }
                     }),
-                    // Tables\Actions\BulkAction::make('download_all_qr')
-                    // ->label('Download All QR')
-                    // ->icon('heroicon-o-archive-box')
-                    // ->action(function ($records) {
-                    //     $restaurant = auth()->user()->restaurant;
-
-                    //     $zipPath = app(QrZipService::class)
-                    //         ->createZip($restaurant, $records);
-
-                    //     return response()->download($zipPath);
-                    // }),
             ]);
     }
 
@@ -263,11 +163,12 @@ class RestaurantTableResource extends Resource
     {
         return false; // Disable manual creation
     }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListRestaurantTables::route('/'),
-           // 'create' => Pages\CreateRestaurantTable::route('/create'),
+            // 'create' => Pages\CreateRestaurantTable::route('/create'),
             'edit' => Pages\EditRestaurantTable::route('/{record}/edit'),
         ];
     }

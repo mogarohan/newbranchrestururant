@@ -22,13 +22,13 @@ class PaymentResource extends Resource
     protected static ?string $navigationGroup = 'Payment Panel';
     protected static ?int $navigationSort = 1;
 
-    
+
     public static function canAccess(): bool
     {
         // return auth()->check()
         //     && auth()->user()->restaurant_id
         //     && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
-        return false ; // Temporarily disable access to payment resource for all users
+        return false; // Temporarily disable access to payment resource for all users
     }
 
     public static function getEloquentQuery(): Builder
@@ -107,7 +107,7 @@ class PaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('payment_method')
                     ->badge()
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'cash' => 'success',
                         'card' => 'primary',
                         'upi' => 'warning',
@@ -116,7 +116,7 @@ class PaymentResource extends Resource
 
                 Tables\Columns\TextColumn::make('status')
                     ->badge()
-                    ->color(fn ($state) => match ($state) {
+                    ->color(fn($state) => match ($state) {
                         'paid' => 'success',
                         'pending' => 'warning',
                         'failed' => 'danger',

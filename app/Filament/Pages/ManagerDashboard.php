@@ -16,8 +16,7 @@ class ManagerDashboard extends Page
     protected static string $view = 'filament.pages.manager-dashboard';
     protected static ?string $navigationLabel = 'Restaurant Dashboard';
     protected static ?string $title = 'Restaurant Dashboard';
-    protected static ?string $navigationGroup = 'Operations';
-    protected static ?int $navigationSort = 1;
+        protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
     // 🔥 Listen to Pusher and instantly refresh the page when an order drops!
@@ -31,12 +30,12 @@ class ManagerDashboard extends Page
             "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
         ];
     }
-    
+
     private function getRestaurantId()
     {
         return auth()->user()->restaurant_id;
     }
-    public function getMaxContentWidth(): MaxWidth | string | null
+    public function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full; // Force full width for 200 tables
     }
@@ -51,9 +50,9 @@ class ManagerDashboard extends Page
     public function openTable($tableId)
     {
         if ($this->selectedTableId === $tableId) {
-            $this->selectedTableId = null; 
+            $this->selectedTableId = null;
         } else {
-            $this->selectedTableId = $tableId; 
+            $this->selectedTableId = $tableId;
         }
     }
 
@@ -112,7 +111,7 @@ class ManagerDashboard extends Page
                 'qrSessions' => fn($q) => $q->where('is_active', true),
                 'orders' => function ($q) {
                     $q->whereIn('status', ['preparing', 'ready', 'served'])
-                      ->with('items.menuItem.category'); 
+                        ->with('items.menuItem.category');
                 }
             ])->find($this->selectedTableId);
         }

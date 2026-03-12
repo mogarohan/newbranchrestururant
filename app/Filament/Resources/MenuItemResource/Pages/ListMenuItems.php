@@ -13,7 +13,17 @@ class ListMenuItems extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make(),
+            Actions\CreateAction::make()
+                ->label('Add Menu Item')
+                ->icon('heroicon-o-plus')
+                ->color('warning'),
+        ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            MenuItemResource\Widgets\MenuItemStats::class,
         ];
     }
 }

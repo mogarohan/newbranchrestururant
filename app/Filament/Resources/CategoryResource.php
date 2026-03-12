@@ -16,42 +16,26 @@ class CategoryResource extends Resource
     protected static ?string $model = Category::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
-
     protected static ?string $navigationLabel = 'Categories';
-
     protected static ?string $navigationGroup = 'Menu Management';
-
     protected static ?int $navigationSort = 1;
 
-    /* ---------------------------------------------------------
-     | ACCESS CONTROL
-     |----------------------------------------------------------*/
     public static function canAccess(): bool
     {
         return auth()->check()
             && auth()->user()->restaurant_id !== null
-            && in_array(auth()->user()->role->name, [
-                'restaurant_admin',
-                'manager',
-            ]);
+            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
     }
 
-    /* ---------------------------------------------------------
-     | TENANT SCOPING
-     |----------------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id);
     }
 
-    /* ---------------------------------------------------------
-     | FORM
-     |----------------------------------------------------------*/
     public static function form(Form $form): Form
     {
         return $form->schema([
-            // Forced restaurant binding
             Forms\Components\Hidden::make('restaurant_id')
                 ->default(fn () => auth()->user()->restaurant_id)
                 ->required(),
@@ -63,8 +47,7 @@ class CategoryResource extends Resource
                     table: 'categories',
                     column: 'name',
                     ignoreRecord: true,
-                    modifyRuleUsing: fn ($rule) =>
-                        $rule->where('restaurant_id', auth()->user()->restaurant_id)
+                    modifyRuleUsing: fn ($rule) => $rule->where('restaurant_id', auth()->user()->restaurant_id)
                 ),
 
             Forms\Components\TextInput::make('sort_order')
@@ -77,9 +60,6 @@ class CategoryResource extends Resource
         ]);
     }
 
-    /* ---------------------------------------------------------
-     | TABLE
-     |----------------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
@@ -87,36 +67,35 @@ class CategoryResource extends Resource
             ->defaultSort('sort_order')
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->weight('bold')
                     ->sortable()
                     ->searchable(),
 
-                Tables\Columns\IconColumn::make('is_active')
-                    ->boolean()
-                    ->label('Active'),
+                // Toggle column matches the orange theme
+                Tables\Columns\ToggleColumn::make('is_active')
+                    ->label('Status')
+                    ->onColor('warning'),
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('Created On')
+                    ->dateTime('d M, Y')
+                    ->color('gray')
                     ->sortable(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->iconButton(),
 
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn () =>
-                        auth()->user()->role->name === 'restaurant_admin'
-                    ),
+                    ->iconButton()
+                    ->visible(fn () => auth()->user()->role->name === 'restaurant_admin'),
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make()
-                    ->visible(fn () =>
-                        auth()->user()->role->name === 'restaurant_admin'
-                    ),
+                    ->visible(fn () => auth()->user()->role->name === 'restaurant_admin'),
             ]);
     }
 
-    /* ---------------------------------------------------------
-     | PAGES
-     |----------------------------------------------------------*/
     public static function getPages(): array
     {
         return [
