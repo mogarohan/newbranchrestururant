@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
+use Illuminate\Support\HtmlString; // 👈 CSS Injection ke liye zaroori hai
 
 class MenuItemResource extends Resource
 {
@@ -83,24 +84,59 @@ class MenuItemResource extends Resource
         ]);
     }
 
+    /* ---------------------------------------------------
+     | TABLE (UPDATED FOR TRANSPARENCY & PREMIUM LOOK)
+     |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
+            // 🎨 CSS INJECTION FOR TRANSPARENCY
+            ->heading(new HtmlString('
+                <style>
+                    /* Make the entire table wrapper transparent */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Headers, Toolbars, Footers */
+                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Individual Rows */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        transition: background-color 0.2s ease;
+                    }
+                    /* Row Hover Effect */
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+                    }
+                </style>
+                <span style="font-size: 1.25rem; font-weight: 800;">Restaurant Menu Items</span>
+            '))
             ->columns([
+                
+                // 1. Image
                 Tables\Columns\ImageColumn::make('image_path')
-                    ->label('Image')
+                    ->label('IMAGE')
                     ->circular()
-                    ->size(50),
+                    ->size(50)
+                    ->defaultImageUrl('https://ui-avatars.com/api/?name=Food&color=FFFFFF&background=111827'), // Added fallback if image missing
 
+                // 2. Name & Description stacked
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Item Name')
+                    ->label('ITEM NAME')
                     ->weight('bold')
                     ->searchable()
                     ->sortable()
-                    ->description(fn (MenuItem $record): string => $record->description ?? ''),
+                    ->description(fn (MenuItem $record): string => Str::limit($record->description ?? '', 40)), // Limited desc so row doesn't get too tall
 
+                // 3. Category Badge
                 Tables\Columns\TextColumn::make('category.name')
-                    ->label('Category')
+                    ->label('CATEGORY')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'Appetizers' => 'info',
@@ -110,20 +146,31 @@ class MenuItemResource extends Resource
                         default => 'gray',
                     }),
 
+                // 4. Price
                 Tables\Columns\TextColumn::make('price')
-                    ->label('Price (INR)')
+                    ->label('PRICE')
                     ->money('INR')
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->color('primary'),
 
+                // 5. Availability Toggle
                 Tables\Columns\ToggleColumn::make('is_available')
-                    ->label('Availability')
-                    ->onColor('warning'),
+                    ->label('AVAILABILITY')
+                    ->onColor('warning'), // Orange theme match
             ])
+            ->defaultSort('created_at', 'desc')
             ->actions([
-                Tables\Actions\EditAction::make()->iconButton(),
-                Tables\Actions\DeleteAction::make()->iconButton(),
-            ])
-            ->defaultSort('created_at', 'desc');
+                // Premium Button Actions matching the other pages
+                Tables\Actions\EditAction::make()
+                    ->color('warning')
+                    ->button()
+                    ->outlined(),
+
+                Tables\Actions\DeleteAction::make()
+                    ->color('danger')
+                    ->button()
+                    ->outlined(),
+            ]);
     }
 
     public static function getPages(): array

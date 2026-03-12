@@ -10,6 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+use Illuminate\Support\HtmlString; // 👈 Custom CSS ke liye import kiya gaya hai
 
 class RestaurantResource extends Resource
 {
@@ -17,7 +18,8 @@ class RestaurantResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = 'Restaurants';
-    protected static ?string $navigationGroup = 'Super Admin';
+    protected static ?string $navigationGroup = 'Administration';
+    
 
     /**
      * 🔐 Only Super Admin can see this resource
@@ -35,7 +37,8 @@ class RestaurantResource extends Resource
                 ->required()
                 ->maxLength(255)
                 ->live(onBlur: true)
-                ->afterStateUpdated(fn ($state, callable $set) =>
+                ->afterStateUpdated(
+                    fn($state, callable $set) =>
                     $set('slug', Str::slug($state))
                 ),
 
@@ -50,11 +53,12 @@ class RestaurantResource extends Resource
                 ->image()
                 ->imageEditor()
                 ->disk('public')
-                ->directory(fn ($get) =>
+                ->directory(
+                    fn($get) =>
                     'restaurants/' . ($get('slug') ?? 'temp') . '/LOGO'
                 )
                 ->getUploadedFileNameForStorageUsing(
-                    fn ($file) => 'logo.' . $file->getClientOriginalExtension()
+                    fn($file) => 'logo.' . $file->getClientOriginalExtension()
                 )
                 ->acceptedFileTypes([
                     'image/png',
@@ -66,7 +70,7 @@ class RestaurantResource extends Resource
                 ])
                 ->visibility('public')
                 ->maxSize(2048)
-                ->required(fn (string $operation) => $operation === 'create'),
+                ->required(fn(string $operation) => $operation === 'create'),
 
             Forms\Components\TextInput::make('user_limits')
                 ->numeric()
@@ -78,49 +82,83 @@ class RestaurantResource extends Resource
         ]);
     }
 
-
+    /* ---------------------------------------------------
+     | TABLE (UPDATED FOR TRANSPARENCY & PREMIUM LOOK)
+     |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
+            // 🎨 CSS INJECTION FOR TRANSPARENCY
+            ->heading(new HtmlString('
+                <style>
+                    /* Make the entire table wrapper transparent */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Headers, Toolbars, Footers */
+                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Individual Rows */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        transition: background-color 0.2s ease;
+                    }
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+                    }
+                </style>
+            '))
             ->columns([
                 Tables\Columns\ImageColumn::make('logo_path')
+                    ->label('LOGO')
                     ->disk('public')
                     ->circular(),
 
                 Tables\Columns\TextColumn::make('name')
+                    ->label('NAME')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->weight('bold'), // Bold text matching the UI
 
                 Tables\Columns\TextColumn::make('slug')
+                    ->label('SLUG')
                     ->copyable()
+                    ->color('gray')
                     ->toggleable(),
 
                 Tables\Columns\TextColumn::make('user_limits')
-                    ->label('User Limit')
+                    ->label('USER LIMIT')
                     ->sortable(),
 
                 Tables\Columns\IconColumn::make('is_active')
-                    ->boolean(),
+                    ->label('STATUS')
+                    ->boolean()
+                    ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
+                    ->label('CREATED ON')
+                    ->date('M d, Y') // Clean date format
                     ->sortable()
+                    ->color('gray')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
-
-                // // Optional: Soft disable instead of delete
-                // Tables\Actions\Action::make('Deactivate')
-                //     ->visible(fn ($record) => $record->is_active)
-                //     ->action(fn ($record) => $record->update(['is_active' => false]))
-                //     ->color('danger'),
-                // Tables\Actions\Action::make('Activate')
-                //     ->visible(fn ($record) => ! $record->is_active)
-                //     ->action(fn ($record) => $record->update(['is_active' => true]))
-                //     ->color('success'),
+                // Premium Button Actions (Like UserResource)
+                Tables\Actions\EditAction::make()
+                    ->color('warning')
+                    ->button()
+                    ->outlined(),
+                    
+                Tables\Actions\DeleteAction::make()
+                    ->color('danger')
+                    ->button()
+                    ->outlined(),
             ])
             ->bulkActions([]); // 🚫 no bulk delete
     }

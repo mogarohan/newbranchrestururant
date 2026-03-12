@@ -14,6 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Hash;
 use Filament\Forms\Components\Placeholder;
+use Illuminate\Support\HtmlString;
 
 class UserResource extends Resource
 {
@@ -22,8 +23,7 @@ class UserResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-users';
 
     protected static ?string $navigationGroup = 'Access Control';
-       protected static ?int $navigationSort = -1;
-
+    protected static ?int $navigationSort = -1;
 
     /* ---------------------------------------------------
      | ACCESS CONTROL (WHO CAN SEE THE RESOURCE)
@@ -36,6 +36,7 @@ class UserResource extends Resource
             || auth()->user()->isManager()
         );
     }
+
     protected static function getRestaurantStats(): array
     {
         $user = auth()->user();
@@ -76,59 +77,35 @@ class UserResource extends Resource
     {
         return $form->schema([
 
-            /* =========================
-               RESTAURANT FIELD
-            ========================== */
-
             Forms\Components\Select::make('restaurant_id')
                 ->label('Restaurant')
                 ->options(Restaurant::pluck('name', 'id'))
                 ->searchable()
-                ->reactive() // ✅ VERY IMPORTANT
+                ->reactive()
                 ->visible(fn() => auth()->user()->isSuperAdmin())
                 ->required(fn() => auth()->user()->isSuperAdmin()),
 
-            /* =========================
-               USER LIMIT STATS
-            ========================== */
-
             Placeholder::make('restaurant_user_stats')
                 ->label('Restaurant User Usage')
-                ->reactive() // ✅ VERY IMPORTANT
+                ->reactive()
                 ->content(function (callable $get) {
-
                     $authUser = auth()->user();
 
-                    // 🟢 Super Admin
                     if ($authUser->isSuperAdmin()) {
                         $restaurantId = $get('restaurant_id');
-
-                        if (!$restaurantId) {
+                        if (!$restaurantId)
                             return 'Select a restaurant to see user usage.';
-                        }
-
                         $restaurant = Restaurant::withCount('users')->find($restaurantId);
-
-                        if (!$restaurant) {
+                        if (!$restaurant)
                             return 'Restaurant not found.';
-                        }
-
                         return "{$restaurant->users_count} / {$restaurant->user_limits} users used";
                     }
 
-                    // 🟢 Restaurant Admin / Manager
                     $restaurant = $authUser->restaurant;
-
-                    if (!$restaurant) {
+                    if (!$restaurant)
                         return 'No restaurant assigned.';
-                    }
-
                     return "{$restaurant->users()->count()} / {$restaurant->user_limits} users used";
                 }),
-
-            /* =========================
-               USER FIELDS
-            ========================== */
 
             Forms\Components\TextInput::make('name')
                 ->required()
@@ -156,72 +133,103 @@ class UserResource extends Resource
     }
 
     /* ---------------------------------------------------
-     | TABLE
+     | TABLE (UPDATED FOR TRANSPARENCY & PREMIUM LOOK)
      |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
+            // 🎨 CSS INJECTION FOR TRANSPARENCY
+            ->heading(new HtmlString('
+                <style>
+                    /* Make the entire table wrapper transparent */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Headers, Toolbars, Footers */
+                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Individual Rows */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        transition: background-color 0.2s ease;
+                    }
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+                    }
+                </style>
+            '))
             ->columns([
-                // Avatar (Assuming you have an avatar column or method. If not, Filament handles null gracefully or you can use ui-avatars)
+
+                // 1. Avatar
                 Tables\Columns\ImageColumn::make('avatar_url')
-                    ->label('')
+                    ->label('Avatar')
                     ->circular()
                     ->defaultImageUrl(fn($record) => 'https://ui-avatars.com/api/?name=' . urlencode($record->name) . '&color=FFFFFF&background=111827'),
 
-                // Name & Joined Date stacked
+                // 2. Name & Joined Date stacked
                 Tables\Columns\TextColumn::make('name')
-                    ->label('NAME')
+                    ->label('Name')
                     ->searchable()
+                    ->sortable()
                     ->weight('bold')
                     ->description(fn(User $record): string => 'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')),
 
-                // Role Badge
+                // 3. Email / Contact Info
+                Tables\Columns\TextColumn::make('email')
+                    ->label('Contact Info')
+                    ->searchable()
+                    ->copyable()
+                    ->color('gray'),
+
+                // 4. Role Badge
                 Tables\Columns\TextColumn::make('role.name')
-                    ->label('ROLE')
+                    ->label('Role')
                     ->badge()
                     ->color(fn(string $state): string => match (strtolower($state)) {
                         'chef' => 'warning',
                         'waiter' => 'info',
                         'manager' => 'primary',
+                        'super_admin' => 'gray', // Match image style for SA
                         default => 'gray',
                     })
                     ->formatStateUsing(fn(string $state): string => ucfirst($state)),
 
-                // Status Badge
-                Tables\Columns\TextColumn::make('is_active')
-                    ->label('STATUS')
-                    ->badge()
-                    ->formatStateUsing(fn(bool $state): string => $state ? 'Active' : 'Offline')
-                    ->color(fn(bool $state): string => $state ? 'danger' : 'gray') // Using danger for the orange look
-                    ->icon(fn(bool $state): string => $state ? 'heroicon-m-sparkles' : ''), // Adds a tiny icon to active status
+                // 5. Status (Boolean Outline Icon like image)
+                Tables\Columns\IconColumn::make('is_active')
+                    ->label('Is Active')
+                    ->boolean()
+                    ->alignCenter(),
 
-                // Email
-                Tables\Columns\TextColumn::make('email')
-                    ->label('CONTACT'),
-
-                // Performance Bar
-               
-                // Last Active (Using created_at or updated_at as a fallback if you don't track sessions yet)
+                // 6. Last Active
                 Tables\Columns\TextColumn::make('updated_at')
-                    ->label('LAST ACTIVE')
+                    ->label('Last Active')
                     ->since()
                     ->color('gray'),
             ])
+            ->defaultSort('created_at', 'desc')
             ->actions([
-                // Group actions under the three dots (...)
-                Tables\Actions\ActionGroup::make([
-                    Tables\Actions\EditAction::make(),
-                    Tables\Actions\DeleteAction::make(),
-                ])
-                    ->icon('heroicon-m-ellipsis-horizontal')
-                    ->color('gray'),
-            ]);
+                // Actions moved outside of dropdown, styled exactly like image
+                Tables\Actions\EditAction::make()
+                    ->color('warning') // Yellow/Orange Edit
+                    ->button()         // Make it look like a button or distinct link
+                    ->outlined(),      // Gives it the premium outline look
+
+                Tables\Actions\DeleteAction::make()
+                    ->color('danger')
+                    ->button()
+                    ->outlined(),
+            ])
+            ->bulkActions([]); // Disabled bulk delete as per standard
     }
 
     /* =========================
        ROLE FILTERING LOGIC
     ========================== */
-
     protected static function availableRoles(): array
     {
         $user = auth()->user();

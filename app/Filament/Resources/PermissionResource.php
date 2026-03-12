@@ -22,7 +22,9 @@ class PermissionResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->check() && auth()->user()->is_super_admin;
+        return auth()->check()
+            && auth()->user()->restaurant_id
+            && in_array(auth()->user()->role->name ?? null, [ '']);
     }
 
     public static function form(Form $form): Form

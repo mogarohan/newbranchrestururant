@@ -22,14 +22,15 @@ use App\Services\Restaurant\QrZipService;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\Layout\Split;
+use Illuminate\Support\HtmlString; // 👈 Custom CSS ke liye import kiya
 
 class RestaurantTableResource extends Resource
 {
     protected static ?string $model = RestaurantTable::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-qr-code';
-    protected static ?string $navigationLabel = 'Tables & QR';
-    protected static ?string $navigationGroup = 'Restaurant Setup';
+    protected static ?string $navigationLabel = 'Tables & QR Setup';
+    protected static ?string $navigationGroup = 'Restaurant Table Setup';
 
     public static function canAccess(): bool
     {
@@ -67,6 +68,42 @@ class RestaurantTableResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // 🎨 CSS INJECTION FOR TRANSPARENT GRID CARDS
+            ->heading(new HtmlString('
+                <style>
+                    /* Main Table Container */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: none !important; /* Remove outer border for grid layout */
+                    }
+                    /* Toolbars (Header Search & Footer Pagination) */
+                    .fi-ta-header-toolbar, .fi-ta-footer {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Inner Content wrapper */
+                    .fi-ta-content {
+                        background-color: transparent !important;
+                    }
+                    /* Individual Grid Cards */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        border-radius: 16px !important;
+                        box-shadow: none !important;
+                        transition: all 0.2s ease;
+                    }
+                    /* Card Hover Effect */
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Orange tint */
+                        border-color: rgba(234, 88, 12, 0.4) !important;
+                        transform: translateY(-3px);
+                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+                    }
+                </style>
+                <span style="font-size: 1.25rem; font-weight: 800;">Tables & QR Codes</span>
+            '))
             ->contentGrid([
                 'md' => 2,
                 'xl' => 4,
@@ -79,7 +116,7 @@ class RestaurantTableResource extends Resource
                             Tables\Columns\TextColumn::make('table_number')
                                 ->label('Table No')
                                 ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                ->size('lg'), // Removed searchable() and sortable() from here
+                                ->size('lg'),
 
                         ]),
                         Tables\Columns\IconColumn::make('is_active')
@@ -93,21 +130,25 @@ class RestaurantTableResource extends Resource
                         ->height(200)
                         ->width('100%')
                         ->extraImgAttributes([
+                            // QR code background slightly warm/orange so it scans perfectly
                             'style' => 'background-color: #e8c08d; padding: 2rem; border-radius: 0.5rem; object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem;',
                         ])
                         ->visibility('public'),
                 ])->space(3),
             ])
             ->actions([
+                // Styled Edit button to match Premium UI
                 Tables\Actions\EditAction::make()
                     ->button()
-                    ->color('warning'), // Uses orange color for the design
+                    ->outlined() // Premium Outline look
+                    ->color('warning'), 
             ])
-
             ->headerActions([
                 Tables\Actions\Action::make('download_all_qr')
                     ->label('Download All Table QRs')
                     ->icon('heroicon-o-archive-box-arrow-down')
+                    ->color('gray') // Subtle color for secondary action
+                    ->outlined()
                     ->action(function () {
                         $restaurant = auth()->user()->restaurant;
 
@@ -121,6 +162,7 @@ class RestaurantTableResource extends Resource
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
+                    ->color('warning') // Primary Orange Color
                     ->form([
                         \Filament\Forms\Components\TextInput::make('total_tables')
                             ->numeric()

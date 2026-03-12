@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\TableBillingResource\Pages;
 
 use App\Filament\Resources\TableBillingResource;
+use App\Filament\Resources\TableBillingResource\Widgets\TableBillingStats;
 use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
@@ -13,6 +14,13 @@ class ListTableBillings extends ListRecords
     protected function getHeaderActions(): array
     {
         return [];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            TableBillingStats::class,
+        ];
     }
 
     // 🔥 Listen to the Restaurant's Private Channel for Order Updates

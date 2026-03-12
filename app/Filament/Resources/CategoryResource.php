@@ -10,6 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString; // 👈 CSS Injection ke liye zaroori hai
 
 class CategoryResource extends Resource
 {
@@ -63,31 +64,64 @@ class CategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // 🎨 CSS INJECTION FOR TRANSPARENCY
+            ->heading(new HtmlString('
+                <style>
+                    /* Make the entire table wrapper transparent */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Headers, Toolbars, Footers */
+                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Individual Rows */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        transition: background-color 0.2s ease;
+                    }
+                    /* Row Hover Effect */
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+                    }
+                </style>
+                <span style="font-size: 1.25rem; font-weight: 800;">Menu Categories</span>
+            '))
             ->reorderable('sort_order')
             ->defaultSort('sort_order')
             ->columns([
                 Tables\Columns\TextColumn::make('name')
+                    ->label('CATEGORY NAME')
                     ->weight('bold')
                     ->sortable()
                     ->searchable(),
 
                 // Toggle column matches the orange theme
                 Tables\Columns\ToggleColumn::make('is_active')
-                    ->label('Status')
+                    ->label('STATUS')
                     ->onColor('warning'),
 
                 Tables\Columns\TextColumn::make('created_at')
-                    ->label('Created On')
+                    ->label('CREATED ON')
                     ->dateTime('d M, Y')
                     ->color('gray')
                     ->sortable(),
             ])
             ->actions([
+                // Styled Actions matching Premium UI
                 Tables\Actions\EditAction::make()
-                    ->iconButton(),
+                    ->button()
+                    ->outlined()
+                    ->color('warning'),
 
                 Tables\Actions\DeleteAction::make()
-                    ->iconButton()
+                    ->button()
+                    ->outlined()
+                    ->color('danger')
                     ->visible(fn () => auth()->user()->role->name === 'restaurant_admin'),
             ])
             ->bulkActions([

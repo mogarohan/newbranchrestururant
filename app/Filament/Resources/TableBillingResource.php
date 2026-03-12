@@ -15,7 +15,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString;
+use Illuminate\Support\HtmlString; // 👈 CSS Injection ke liye zaroori hai
 
 class TableBillingResource extends Resource
 {
@@ -46,14 +46,50 @@ class TableBillingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🔥 REMOVED ->poll('5s') to save server load!
+            // 🎨 CSS INJECTION FOR TRANSPARENT GRID CARDS
+            ->heading(new HtmlString('
+                <style>
+                    /* Main Table Container */
+                    .fi-ta-ctn {
+                        background-color: transparent !important;
+                        box-shadow: none !important;
+                        border: none !important; /* Remove outer border for grid layout */
+                    }
+                    /* Toolbars (Header Search & Footer Pagination) */
+                    .fi-ta-header-toolbar, .fi-ta-footer {
+                        background-color: transparent !important;
+                        border-color: rgba(156, 163, 175, 0.2) !important;
+                    }
+                    /* Inner Content wrapper */
+                    .fi-ta-content {
+                        background-color: transparent !important;
+                    }
+                    /* Individual Grid Cards */
+                    .fi-ta-record {
+                        background-color: transparent !important;
+                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        border-radius: 16px !important;
+                        box-shadow: none !important;
+                        transition: all 0.2s ease;
+                    }
+                    /* Card Hover Effect */
+                    .fi-ta-record:hover {
+                        background-color: rgba(234, 88, 12, 0.05) !important; /* Orange tint */
+                        border-color: rgba(234, 88, 12, 0.4) !important;
+                        transform: translateY(-3px);
+                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+                    }
+                </style>
+                <span style="font-size: 1.25rem; font-weight: 800;">Active Tables Checkout</span>
+            '))
             ->contentGrid([
                 'default' => 1,
                 'md' => 2,
                 'xl' => 3,
                 '2xl' => 4,
             ])
-            ->recordClasses(fn (RestaurantTable $record) => 'bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl flex flex-col')
+            // Changed from solid backgrounds to clean flex layout
+            ->recordClasses(fn (RestaurantTable $record) => 'flex flex-col')
             ->columns([
                 Tables\Columns\Layout\Stack::make([
                     
@@ -63,7 +99,8 @@ class TableBillingResource extends Resource
                         ->weight(FontWeight::Black)
                         ->color('primary')
                         ->alignCenter()
-                        ->extraAttributes(['class' => 'text-2xl py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 rounded-t-xl']),
+                        // Replaced solid background with transparent dashed border
+                        ->extraAttributes(['style' => 'font-size: 1.5rem; padding: 1rem; border-bottom: 1px dashed rgba(156, 163, 175, 0.3); background: transparent;']),
 
                     // --- 2. SUMMARY NUMBERS ---
                     Tables\Columns\Layout\Grid::make(2)->schema([
@@ -74,7 +111,7 @@ class TableBillingResource extends Resource
                             })
                             ->money('INR')
                             ->weight(FontWeight::Bold)
-                            ->extraAttributes(['class' => 'text-center p-3']),
+                            ->extraAttributes(['style' => 'text-align: center; padding: 1rem;']),
 
                         Tables\Columns\TextColumn::make('active_customers')
                             ->label('Active Diners')
@@ -83,7 +120,7 @@ class TableBillingResource extends Resource
                             })
                             ->color('info')
                             ->weight(FontWeight::Bold)
-                            ->extraAttributes(['class' => 'text-center p-3']),
+                            ->extraAttributes(['style' => 'text-align: center; padding: 1rem;']),
                     ]),
 
                     // --- 3. BALANCE DUE ---
@@ -101,7 +138,8 @@ class TableBillingResource extends Resource
                         ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
                         ->color(fn ($state) => $state > 0 ? 'danger' : 'gray')
                         ->alignCenter()
-                        ->extraAttributes(['class' => 'py-3 mt-2 bg-gray-50 dark:bg-gray-800 border-y border-gray-100 dark:border-gray-700']),
+                        // Removed solid background
+                        ->extraAttributes(['style' => 'padding: 1rem; margin-top: 0.5rem; border-top: 1px dashed rgba(156, 163, 175, 0.3); background: transparent;']),
 
                 ])->space(0),
             ])
@@ -112,6 +150,7 @@ class TableBillingResource extends Resource
                     ->label('Checkout & Settle')
                     ->icon('heroicon-o-credit-card')
                     ->button()
+                    ->outlined() // 👈 Premium Outline Look added here
                     ->color('success')
                     ->modalHeading(fn (RestaurantTable $record) => "Checkout - Table {$record->table_number}")
                     ->modalWidth('6xl')
@@ -137,9 +176,10 @@ class TableBillingResource extends Resource
                                         ->hiddenLabel()
                                         ->content(function (RestaurantTable $record) {
                                             
-                                            $html = '<div style="max-height: 500px; overflow-y: auto; padding: 20px; background-color: #ffffff; color: #000000; border: 1px solid #e5e7eb; border-radius: 8px; font-family: monospace;">';
-                                            $html .= '<h2 style="text-align: center; font-size: 20px; font-weight: 900; margin-bottom: 5px; color: #000000;">TABLE ' . $record->table_number . '</h2>';
-                                            $html .= '<div style="text-align: center; font-size: 12px; color: #4b5563; border-bottom: 2px dashed #000000; padding-bottom: 15px; margin-bottom: 15px;">FINAL BILLING SUMMARY</div>';
+                                            // Using Tailwind Classes for Dark/Light mode support instead of inline styles
+                                            $html = '<div class="max-h-[500px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
+                                            $html .= '<h2 class="text-center text-2xl font-black text-gray-900 dark:text-white mb-1">TABLE ' . $record->table_number . '</h2>';
+                                            $html .= '<div class="text-center text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 border-b-2 border-dashed border-gray-300 dark:border-gray-600 pb-4 mb-5">FINAL BILLING SUMMARY</div>';
                                             
                                             $hasOrders = false;
                                             $grandTotal = 0;
@@ -153,22 +193,22 @@ class TableBillingResource extends Resource
                                                 $hostOrdersCount = $primarySession->orders->count();
                                                 $hasOrders = $hasOrders || $hostOrdersCount > 0;
 
-                                                $html .= "<div style='margin-bottom: 20px;'>";
-                                                $html .= "<div style='font-size: 16px; font-weight: bold; background-color: #f3f4f6; color: #111827; padding: 8px; border-radius: 5px;'>👑 HOST: {$primarySession->customer_name} <span style='font-weight: normal; font-size: 12px; float: right; color: #4b5563;'>({$hostOrdersCount} Orders)</span></div>";
+                                                $html .= "<div class='mb-6'>";
+                                                $html .= "<div class='text-base font-bold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👑 HOST: {$primarySession->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$hostOrdersCount} Orders)</span></div>";
                                                 
                                                 foreach ($primarySession->orders as $order) {
                                                     $totalOrdersCount++;
-                                                    $html .= "<div style='margin-top: 10px; padding-left: 10px; border-left: 2px solid #e5e7eb;'>";
-                                                    $html .= "<div style='font-size: 12px; color: #6b7280; margin-bottom: 4px;'>Order #{$order->id}</div>";
+                                                    $html .= "<div class='mt-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700'>";
+                                                    $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
                                                     
                                                     foreach ($order->items as $item) {
                                                         $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
                                                         $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
                                                         
                                                         $html .= "
-                                                        <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; color: #111827;'>
-                                                            <span><strong>{$item->quantity}x</strong> {$name} <br><span style='font-size: 10px; color: #6b7280;'>[{$category}]</span></span>
-                                                            <span>₹{$item->total_price}</span>
+                                                        <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
+                                                            <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
+                                                            <span class='font-bold'>₹{$item->total_price}</span>
                                                         </div>";
                                                     }
                                                     $html .= "</div>";
@@ -180,28 +220,28 @@ class TableBillingResource extends Resource
                                                 $guests = $record->sessions->where('host_session_id', $primarySession->id);
                                                 
                                                 if ($guests->isNotEmpty()) {
-                                                    $html .= "<div style='font-size: 14px; font-weight: bold; text-align: center; border-top: 1px dashed #9ca3af; border-bottom: 1px dashed #9ca3af; padding: 5px 0; margin: 15px 0; color: #374151;'>--- JOINED GUESTS ---</div>";
+                                                    $html .= "<div class='text-sm font-bold text-center border-y border-dashed border-gray-300 dark:border-gray-600 py-2 my-6 text-gray-500 dark:text-gray-400 tracking-widest'>--- JOINED GUESTS ---</div>";
 
                                                     foreach ($guests as $guest) {
                                                         $guestOrdersCount = $guest->orders->count();
                                                         $hasOrders = $hasOrders || $guestOrdersCount > 0;
 
-                                                        $html .= "<div style='margin-bottom: 15px;'>";
-                                                        $html .= "<div style='font-size: 14px; font-weight: bold; background-color: #fdfaf5; color: #111827; border: 1px solid #fef3c7; padding: 6px; border-radius: 5px;'>👤 GUEST: {$guest->customer_name} <span style='font-weight: normal; font-size: 12px; float: right; color: #4b5563;'>({$guestOrdersCount} Orders)</span></div>";
+                                                        $html .= "<div class='mb-5'>";
+                                                        $html .= "<div class='text-sm font-bold bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👤 GUEST: {$guest->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$guestOrdersCount} Orders)</span></div>";
                                                         
                                                         foreach ($guest->orders as $order) {
                                                             $totalOrdersCount++;
-                                                            $html .= "<div style='margin-top: 8px; padding-left: 10px; border-left: 2px solid #fde68a;'>";
-                                                            $html .= "<div style='font-size: 11px; color: #6b7280; margin-bottom: 4px;'>Order #{$order->id}</div>";
+                                                            $html .= "<div class='mt-3 pl-3 border-l-2 border-orange-200 dark:border-orange-500/30'>";
+                                                            $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
                                                             
                                                             foreach ($order->items as $item) {
                                                                 $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
                                                                 $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
                                                                 
                                                                 $html .= "
-                                                                <div style='display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; color: #111827;'>
-                                                                    <span><strong>{$item->quantity}x</strong> {$name} <br><span style='font-size: 10px; color: #6b7280;'>[{$category}]</span></span>
-                                                                    <span>₹{$item->total_price}</span>
+                                                                <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
+                                                                    <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
+                                                                    <span class='font-bold'>₹{$item->total_price}</span>
                                                                 </div>";
                                                             }
                                                             $html .= "</div>";
@@ -213,19 +253,19 @@ class TableBillingResource extends Resource
                                             }
 
                                             if (!$hasOrders) {
-                                                return new HtmlString("<div style='text-align: center; padding: 20px; color: #6b7280;'>No valid orders found to bill.</div>");
+                                                return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400'>No valid orders found to bill.</div>");
                                             }
                                             
                                             // Final Summary Footer
                                             $html .= "
-                                                <div style='border-top: 2px solid #000000; margin-top: 20px; padding-top: 10px;'>
-                                                    <div style='display: flex; justify-content: space-between; font-size: 14px; color: #4b5563;'>
+                                                <div class='border-t-2 border-gray-900 dark:border-gray-100 mt-6 pt-4'>
+                                                    <div class='flex justify-between text-sm text-gray-600 dark:text-gray-400'>
                                                         <span>Total Orders Delivered:</span>
                                                         <span>{$totalOrdersCount}</span>
                                                     </div>
-                                                    <div style='display: flex; justify-content: space-between; font-size: 20px; font-weight: 900; color: #000000; margin-top: 10px;'>
+                                                    <div class='flex justify-between text-xl font-black text-gray-900 dark:text-white mt-2'>
                                                         <span>GRAND TOTAL</span>
-                                                        <span>₹" . number_format($grandTotal, 2) . "</span>
+                                                        <span class='text-green-600 dark:text-green-400'>₹" . number_format($grandTotal, 2) . "</span>
                                                     </div>
                                                 </div>
                                             </div>";
@@ -243,7 +283,7 @@ class TableBillingResource extends Resource
                                         ->numeric()
                                         ->prefix('₹')
                                         ->readOnly()
-                                        ->extraInputAttributes(['style' => 'font-weight: bold; font-size: 1.2rem;']),
+                                        ->extraInputAttributes(['class' => 'font-bold text-lg text-gray-900 dark:text-white']),
 
                                     Forms\Components\TextInput::make('tip')
                                         ->label('Add Tip Amount (Optional)')
@@ -256,8 +296,9 @@ class TableBillingResource extends Resource
                                         ->label('Total to Collect')
                                         ->content(function (Forms\Get $get) {
                                             $total = (float) $get('subtotal') + (float) $get('tip');
+                                            // Updated to Tailwind Theme Aware UI
                                             return new HtmlString("
-                                                <div style='font-size: 32px; font-weight: 900; color: #047857; background-color: #ecfdf5; padding: 15px; border-radius: 8px; border: 2px solid #10b981; text-align: center;'>
+                                                <div class='text-3xl font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 text-center shadow-sm'>
                                                     ₹" . number_format($total, 2) . "
                                                 </div>
                                             ");

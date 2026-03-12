@@ -25,6 +25,7 @@ class AdminPanelProvider extends PanelProvider
     {
         return $panel
             ->default()
+
             ->id('admin')
             ->path('admin')
             ->login()
@@ -35,9 +36,9 @@ class AdminPanelProvider extends PanelProvider
 
             ])
             ->navigationGroups([
-
+                'Administration',
                 'Access Control',
-                'Restaurant Setup',
+                'Restaurant Table Setup',
                 'Menu Management',
                 'Finance',       // 👈 Isko list mein sabse pehle rakhein
 
