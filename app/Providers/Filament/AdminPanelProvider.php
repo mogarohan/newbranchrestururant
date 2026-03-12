@@ -32,12 +32,19 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('10.5rem')
             ->colors([
                 'primary' => Color::Amber,
+
+            ])
+            ->navigationGroups([
+
+                'Access Control',
+                'Restaurant Setup',
+                'Menu Management',
+                'Finance',       // 👈 Isko list mein sabse pehle rakhein
+
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Pages\Dashboard::class,
-            ])
+
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
                 // Widgets\AccountWidget::class,
@@ -59,7 +66,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn (): string => Blade::render('@vite([\'resources/js/app.js\'])')
+                fn(): string => Blade::render('@vite([\'resources/js/app.js\'])')
             );
     }
 }

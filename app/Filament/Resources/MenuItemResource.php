@@ -22,9 +22,6 @@ class MenuItemResource extends Resource
     protected static ?string $navigationGroup = 'Menu Management';
     protected static ?int $navigationSort = 2;
 
-    /* -------------------------------------------------
-     | ACCESS CONTROL
-     |--------------------------------------------------*/
     public static function canAccess(): bool
     {
         return auth()->check()
@@ -35,27 +32,19 @@ class MenuItemResource extends Resource
             ]);
     }
 
-    /* -------------------------------------------------
-     | TENANT ISOLATION
-     |--------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id);
     }
 
-    /* -------------------------------------------------
-     | FORM
-     |--------------------------------------------------*/
     public static function form(Form $form): Form
     {
         return $form->schema([
-            // Forced restaurant
             Forms\Components\Hidden::make('restaurant_id')
                 ->default(fn () => auth()->user()->restaurant_id)
                 ->required(),
 
-            // Category (scoped)
             Forms\Components\Select::make('category_id')
                 ->label('Category')
                 ->required()
@@ -84,18 +73,8 @@ class MenuItemResource extends Resource
                 ->image()
                 ->disk('public')
                 ->directory(fn ($get) =>
-                    'restaurants/' .
-                    auth()->user()->restaurant->slug .
-                    '/Categories/' .
-                    Str::slug(
-                        Category::find($get('category_id'))?->name ?? 'uncategorized'
-                    )
+                    'restaurants/' . auth()->user()->restaurant->slug . '/items'
                 )
-                ->getUploadedFileNameForStorageUsing(function ($file, $get) {
-                    $itemName = Str::slug($get('name') ?? 'item');
-                    return $itemName . '.' . $file->getClientOriginalExtension();
-                })
-                ->visibility('public')
                 ->imageEditor()
                 ->maxSize(2048),
 
@@ -104,46 +83,49 @@ class MenuItemResource extends Resource
         ]);
     }
 
-    /* -------------------------------------------------
-     | TABLE
-     |--------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
             ->columns([
                 Tables\Columns\ImageColumn::make('image_path')
                     ->label('Image')
-                    ->square(),
+                    ->circular()
+                    ->size(50),
 
                 Tables\Columns\TextColumn::make('name')
+                    ->label('Item Name')
+                    ->weight('bold')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn (MenuItem $record): string => $record->description ?? ''),
 
                 Tables\Columns\TextColumn::make('category.name')
                     ->label('Category')
-                    ->sortable(),
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'Appetizers' => 'info',
+                        'Main Course' => 'warning',
+                        'Desserts' => 'danger',
+                        'Beverages' => 'success',
+                        default => 'gray',
+                    }),
 
                 Tables\Columns\TextColumn::make('price')
-                    ->money('INR'),
+                    ->label('Price (INR)')
+                    ->money('INR')
+                    ->weight('bold'),
 
-                Tables\Columns\IconColumn::make('is_available')
-                    ->boolean()
-                    ->label('Available'),
-
-                Tables\Columns\TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable(),
+                Tables\Columns\ToggleColumn::make('is_available')
+                    ->label('Availability')
+                    ->onColor('warning'),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\EditAction::make()->iconButton(),
+                Tables\Actions\DeleteAction::make()->iconButton(),
             ])
             ->defaultSort('created_at', 'desc');
     }
 
-    /* -------------------------------------------------
-     | PAGES
-     |--------------------------------------------------*/
     public static function getPages(): array
     {
         return [

@@ -67,7 +67,7 @@ class OrderResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+            && in_array(auth()->user()->role->name, ['']);
     }
 
     public static function getEloquentQuery(): Builder
@@ -162,7 +162,7 @@ class OrderResource extends Resource
                                                 <span style='flex-grow: 1; font-size: 0.9rem; font-weight: 600; color: #374151;'><span style='color: #111827;'>{$qty}x</span> {$name}</span>
                                                 <span style='font-weight: 700; font-size: 0.85rem; margin-left: 10px; text-align: right; color: #4b5563;'>₹{$price}</span>
                                             </div>";
-                                    
+
                                     if ($item->notes) {
                                         $html .= "<div style='font-size: 0.75rem; color: #ef4444; margin-top: 4px; font-style: italic;'>📝 {$item->notes}</div>";
                                     }
@@ -193,12 +193,12 @@ class OrderResource extends Resource
                 ])
                     ->extraAttributes(fn(Order $record): array => [
                         'style' => match ($record->status) {
-                            'placed'    => 'border: 2px solid #ef4444 !important; border-radius: 1rem; background-color: #fef2f2;',
+                            'placed' => 'border: 2px solid #ef4444 !important; border-radius: 1rem; background-color: #fef2f2;',
                             'preparing' => 'border: 2px solid #f97316 !important; border-radius: 1rem; background-color: #fff7ed;',
-                            'ready'     => 'border: 2px solid #10b981 !important; border-radius: 1rem; background-color: #ecfdf5;',
-                            'served'    => 'border: 2px solid #3b82f6 !important; border-radius: 1rem; background-color: #eff6ff;',
+                            'ready' => 'border: 2px solid #10b981 !important; border-radius: 1rem; background-color: #ecfdf5;',
+                            'served' => 'border: 2px solid #3b82f6 !important; border-radius: 1rem; background-color: #eff6ff;',
                             'cancelled' => 'border: 2px solid #9ca3af !important; background-color: #f3f4f6 !important; border-radius: 1rem; opacity: 0.8;',
-                            default     => 'border: 2px solid #9ca3af !important; border-radius: 1rem;',
+                            default => 'border: 2px solid #9ca3af !important; border-radius: 1rem;',
                         },
                         'class' => 'shadow-md hover:shadow-lg transition-all duration-300',
                     ]),
@@ -210,24 +210,24 @@ class OrderResource extends Resource
                     ->color('danger')
                     ->icon('heroicon-m-x-circle')
                     ->requiresConfirmation()
-                    ->visible(fn (Order $record) => $record->status === 'placed')
-                    ->action(fn (Order $record) => static::processOrder($record, 'cancelled')),
+                    ->visible(fn(Order $record) => $record->status === 'placed')
+                    ->action(fn(Order $record) => static::processOrder($record, 'cancelled')),
 
                 Tables\Actions\Action::make('confirm')
                     ->label('Accept')
                     ->button()
                     ->color('warning')
                     ->icon('heroicon-o-fire')
-                    ->visible(fn (Order $record) => $record->status === 'placed')
-                    ->action(fn (Order $record) => static::processOrder($record, 'preparing')),
-                    
-                 Tables\Actions\Action::make('served')
+                    ->visible(fn(Order $record) => $record->status === 'placed')
+                    ->action(fn(Order $record) => static::processOrder($record, 'preparing')),
+
+                Tables\Actions\Action::make('served')
                     ->label('Mark Served')
                     ->button()
                     ->color('success')
                     ->icon('heroicon-m-check-circle')
-                    ->visible(fn (Order $record) => in_array($record->status, ['preparing', 'ready']))
-                    ->action(fn (Order $record) => static::processOrder($record, 'served')),
+                    ->visible(fn(Order $record) => in_array($record->status, ['preparing', 'ready']))
+                    ->action(fn(Order $record) => static::processOrder($record, 'served')),
             ]);
     }
 
