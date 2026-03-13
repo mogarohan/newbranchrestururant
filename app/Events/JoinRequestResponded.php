@@ -3,7 +3,7 @@
 namespace App\Events;
 
 use App\Models\QrSession;
-use Illuminate\Support\Str;
+use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -11,7 +11,7 @@ use Illuminate\Queue\SerializesModels;
 
 class JoinRequestResponded implements ShouldBroadcastNow
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public $guestSession;
     public $status;
@@ -19,13 +19,14 @@ class JoinRequestResponded implements ShouldBroadcastNow
     public function __construct(QrSession $guestSession, $status)
     {
         $this->guestSession = $guestSession;
-        $this->status = $status;
+        $this->status = $status; // 'approved' or 'rejected'
     }
 
     public function broadcastOn(): array
     {
+        // 🔥 CRITICAL: This broadcasts back to the GUEST's session ID!
         return [
-            new PrivateChannel('session.' . $this->guestSession->id)
+            new PrivateChannel('session.' . $this->guestSession->id),
         ];
     }
 
@@ -37,8 +38,7 @@ class JoinRequestResponded implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'event_id' => Str::uuid()->toString(),
-            'status' => $this->status
+            'status' => $this->status, // Maps directly to event.status in React Native
         ];
     }
 }

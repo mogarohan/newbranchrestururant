@@ -3,27 +3,31 @@
 namespace App\Events;
 
 use App\Models\QrSession;
-use Illuminate\Support\Str;
+use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 class GuestJoinRequested implements ShouldBroadcastNow
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $guestSession;
+    public $guest;
+    public $eventId;
 
     public function __construct(QrSession $guestSession)
     {
-        $this->guestSession = $guestSession;
+        $this->guest = $guestSession;
+        $this->eventId = Str::uuid()->toString();
     }
 
     public function broadcastOn(): array
     {
+        // 🔥 CRITICAL: This MUST broadcast to the HOST's session ID, not the guest's!
         return [
-            new PrivateChannel('session.' . $this->guestSession->host_session_id)
+            new PrivateChannel('session.' . $this->guest->host_session_id),
         ];
     }
 
@@ -35,11 +39,8 @@ class GuestJoinRequested implements ShouldBroadcastNow
     public function broadcastWith(): array
     {
         return [
-            'event_id' => Str::uuid()->toString(),
-            'guest' => [
-                'id' => $this->guestSession->id,
-                'customer_name' => $this->guestSession->customer_name
-            ]
+            'event_id' => $this->eventId,
+            'guest' => $this->guest // Maps directly to event.guest in React Native
         ];
     }
 }

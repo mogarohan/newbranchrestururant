@@ -184,13 +184,30 @@ class QrSessionController extends Controller
         $session = QrSession::where('session_token', $request->session_token)->first();
 
         if ($session) {
+            // Deactivate the person leaving
             $session->update(['is_active' => false]);
 
-            // If Host leaves, deactivate their pending/approved guests to prevent ghost sessions
+            // If the HOST leaves, the whole table is cleared
             if ($session->is_primary) {
+                // Kick out all guests
                 QrSession::where('host_session_id', $session->id)->update(['is_active' => false]);
+                
+                // 🔥 Auto-update table status to 'cleaning'
+                $table = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+                
+                if ($table) {
+                    $table->update(['status' => 'cleaning']);
+                    
+                    // 🔥 Broadcast instantly to the Waiter Tablets!
+                    event(new \App\Events\TableStatusUpdated(
+                        $table->id, 
+                        'cleaning', 
+                        $table->restaurant_id
+                    ));
+                }
             }
         }
+        
         return response()->json(['message' => 'Session ended']);
     }
 }
