@@ -9,14 +9,17 @@ use App\Models\OrderStatusLog;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
 use App\Events\OrderStatusUpdated; // 🔥 NEW: Import the Event
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class ManagerDashboard extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-command-line';
     protected static string $view = 'filament.pages.manager-dashboard';
-    protected static ?string $navigationLabel = 'Restaurant Dashboard';
+    protected static ?string $navigationLabel = 'Restaurant Manager Dashboard';
     protected static ?string $title = 'Restaurant Dashboard Control';
-        protected static ?int $navigationSort = 1;
+
+    protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
     // 🔥 Listen to Pusher and instantly refresh the page when an order drops!
@@ -44,7 +47,7 @@ class ManagerDashboard extends Page
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, [ 'manager']);
+            && in_array(auth()->user()->role->name ?? null, ['manager']);
     }
 
     public function openTable($tableId)

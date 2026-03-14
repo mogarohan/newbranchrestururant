@@ -17,6 +17,12 @@ class AdminDashboard extends Page
     protected static ?string $navigationIcon = 'heroicon-o-home';
     protected static string $view = 'filament.pages.admin-dashboard';
     protected static ?string $title = 'Restaurant Admin Dashboard';
+    public static function canAccess(): bool
+    {
+        return auth()->check()
+            && auth()->user()->restaurant_id
+            && in_array(auth()->user()->role->name, ['restaurant_admin']);
+    }
 
     protected function getViewData(): array
     {
