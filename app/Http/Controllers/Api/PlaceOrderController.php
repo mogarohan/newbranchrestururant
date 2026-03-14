@@ -140,26 +140,40 @@ class PlaceOrderController extends Controller
     
     public function getSessionOrders($token)
     {
-        $session = QrSession::where('session_token', $token)->where('is_active', true)->firstOrFail();
+        $session = QrSession::where('session_token', $token)->first();
 
-        // If I am Primary: Get My Orders OR Orders where I am the Host
-        if ($session->is_primary) {
-            $orders = Order::with('items')
-                ->where(function ($query) use ($session) {
-                    $query->where('qr_session_id', $session->id) // My Orders
-                          ->orWhereHas('session', function($q) use ($session) {
-                              $q->where('host_session_id', $session->id); // My Guests' Orders
-                          });
-                })
-                ->latest()
-                ->get();
-        } else {
-            // If I am Guest: I only see my own orders
-            $orders = Order::with('items')
-                ->where('qr_session_id', $session->id)
-                ->latest()
-                ->get();
+        if (!$session) {
+            return response()->json(['message' => 'Session not found'], 404);
         }
+
+        // 🔥 GROUP BILLING LOGIC: Find everyone sharing this table's tab
+        if ($session->is_primary) {
+            // If I am the Host, get my ID + all my Guests' IDs
+            $groupIds = QrSession::where('host_session_id', $session->id)
+                ->orWhere('id', $session->id)
+                ->pluck('id');
+        } else {
+            // If I am a Guest, get my Host's ID + all other Guests' IDs
+            $groupIds = QrSession::where('host_session_id', $session->host_session_id)
+                ->orWhere('id', $session->host_session_id)
+                ->pluck('id');
+        }
+
+        // Fetch all orders for the entire group
+        $orders = Order::with(['items.menuItem'])
+            ->whereIn('qr_session_id', $groupIds)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($order) {
+                return [
+                    'id' => $order->id,
+                    'status' => $order->status,
+                    'total_amount' => $order->total_amount,
+                    'customer_name' => $order->customer_name, // Tells the frontend WHO ordered it!
+                    'created_at' => $order->created_at,
+                    'items' => $order->items
+                ];
+            });
 
         return response()->json($orders);
     }
