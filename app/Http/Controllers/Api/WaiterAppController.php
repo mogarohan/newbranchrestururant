@@ -96,18 +96,22 @@ class WaiterAppController extends Controller
             return response()->json(['message' => 'Order is not ready.'], 400);
         }
 
+        // 1. Update the Main Order Status
         $order->update(['status' => 'served']);
 
-        // Log the status change
+        // 2. 🔥 NEW: Remove the order from the Kitchen Queue!
+        \App\Models\KitchenQueue::where('order_id', $order->id)->delete();
+
+        // 3. Log the status change
         OrderStatusLog::create([
             'order_id' => $order->id,
             'from_status' => 'ready',
             'to_status' => 'served',
-            'changed_by' => $user->id, // Who served it
+            'changed_by' => $user->id,
         ]);
 
-        // 🔥 FIX: Broadcast the event so the Customer App updates instantly!
-        event(new OrderStatusUpdated($order));
+        // 4. 🔥 Notify the Customer AND the Kitchen that it was served!
+        event(new \App\Events\OrderStatusUpdated($order));
 
         return response()->json(['message' => 'Order marked as served successfully.']);
     }
