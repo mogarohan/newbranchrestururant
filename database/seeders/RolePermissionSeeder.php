@@ -28,8 +28,10 @@ class RolePermissionSeeder extends Seeder
 
             // Menu & Table
             ['name' => 'menu.manage', 'label' => 'Manage Menu'],
-            ['name' => 'table.manage', 'label' => 'Manage Tables'],
+            ['name' => 'menu.view', 'label' => 'View Menu'],
             ['name' => 'menu.update_availability', 'label' => 'Update Menu Availability'],
+            ['name' => 'table.manage', 'label' => 'Manage Tables'],
+            ['name' => 'table.view', 'label' => 'View Tables'], // Added this as waiter uses it
 
             // Orders
             ['name' => 'order.view', 'label' => 'View Orders'],
@@ -45,9 +47,6 @@ class RolePermissionSeeder extends Seeder
             ['name' => 'report.view', 'label' => 'View Reports'],
             ['name' => 'activity.view', 'label' => 'View Activity Logs'],
             ['name' => 'kitchen.queue', 'label' => 'Manage Kitchen Queue'],
-
-            // Menu view only
-            ['name' => 'menu.view', 'label' => 'View Menu'],
         ];
 
         // --- Create permissions ---
@@ -61,23 +60,64 @@ class RolePermissionSeeder extends Seeder
         // --- Define default roles and their permissions ---
         $roles = [
             'super_admin' => array_column($permissions, 'name'), // Super Admin gets all
+
             'restaurant_admin' => [
-                'user.manage', 'role.manage', 'permission.manage',
-                'menu.manage', 'table.manage', 'order.view', 'order.update_status',
-                'payment.collect', 'activity.view'
+                'user.manage',
+                'role.manage',
+                'permission.manage',
+                'menu.manage',
+                'table.manage',
+                'order.view',
+                'order.update_status',
+                'payment.collect',
+                'activity.view',
+                'report.view'
             ],
+
+            // --- ADDED: Branch Admin ---
+            // Branch Admin can manage users in their branch, menu, tables, and view reports
+            'branch_admin' => [
+                'user.manage',
+                'menu.manage',
+                'table.manage',
+                'order.view',
+                'order.update_status',
+                'order.create',
+                'order.cancel',
+                'payment.collect',
+                'report.view',
+                'activity.view'
+            ],
+
             'manager' => [
-                'order.view', 'order.update_status', 'menu.update_availability',
-                'table.manage', 'payment.collect', 'report.view'
+                'order.view',
+                'order.update_status',
+                'menu.update_availability',
+                'table.manage',
+                'payment.collect',
+                'report.view'
             ],
+
             'chef' => [
-                'order.view_kitchen', 'order.update_status', 'menu.view', 'kitchen.queue'
+                'order.view_kitchen',
+                'order.update_status',
+                'menu.view',
+                'kitchen.queue'
             ],
+
             'waiter' => [
-                'table.view', 'order.create', 'order.update_status', 'payment.collect', 'order.view'
+                'table.view',
+                'order.create',
+                'order.update_status',
+                'payment.collect',
+                'order.view'
             ],
+
             'customer' => [
-                'order.create', 'order.view', 'order.cancel', 'menu.view'
+                'order.create',
+                'order.view',
+                'order.cancel',
+                'menu.view'
             ],
         ];
 

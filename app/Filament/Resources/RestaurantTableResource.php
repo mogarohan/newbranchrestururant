@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\RestaurantTableResource\Pages;
 use App\Filament\Resources\RestaurantTableResource\RelationManagers;
 use App\Models\RestaurantTable;
+use App\Models\Branch; // 👈 Import Branch model
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -22,7 +23,7 @@ use App\Services\Restaurant\QrZipService;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Columns\Layout\Stack;
 use Filament\Tables\Columns\Layout\Split;
-use Illuminate\Support\HtmlString; // 👈 Custom CSS ke liye import kiya
+use Illuminate\Support\HtmlString;
 
 class RestaurantTableResource extends Resource
 {
@@ -36,19 +37,30 @@ class RestaurantTableResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id !== null
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('restaurant_id', auth()->user()->restaurant_id);
+        $user = auth()->user();
+        $query = parent::getEloquentQuery()
+            ->where('restaurant_id', $user->restaurant_id);
+
+        // 👇 FIX: Branch isolation. Main Restaurant Admin only sees branch_id NULL.
+        if ($user->isRestaurantAdmin()) {
+            $query->whereNull('branch_id');
+        } elseif ($user->isBranchAdmin() || $user->isManager()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+
+        return $query;
     }
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
+                // 👇 Dropdown removed as per request for Main Admin
                 Forms\Components\TextInput::make('table_number')
                     ->label('Table Number')
                     ->required()
@@ -68,16 +80,15 @@ class RestaurantTableResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🎨 CSS INJECTION FOR TRANSPARENT GRID CARDS
             ->heading(new HtmlString('
                 <style>
                     /* Main Table Container */
                     .fi-ta-ctn {
                         background-color: transparent !important;
                         box-shadow: none !important;
-                        border: none !important; /* Remove outer border for grid layout */
+                        border: none !important; 
                     }
-                    /* Toolbars (Header Search & Footer Pagination) */
+                    /* Toolbars */
                     .fi-ta-header-toolbar, .fi-ta-footer {
                         background-color: transparent !important;
                         border-color: rgba(156, 163, 175, 0.2) !important;
@@ -96,7 +107,7 @@ class RestaurantTableResource extends Resource
                     }
                     /* Card Hover Effect */
                     .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important; /* Orange tint */
+                        background-color: rgba(234, 88, 12, 0.05) !important;
                         border-color: rgba(234, 88, 12, 0.4) !important;
                         transform: translateY(-3px);
                         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
@@ -118,6 +129,11 @@ class RestaurantTableResource extends Resource
                                 ->weight(\Filament\Support\Enums\FontWeight::Bold)
                                 ->size('lg'),
 
+                            // Show branch name ONLY if it's not the Main Restaurant admin (optional)
+                            Tables\Columns\TextColumn::make('branch.name')
+                                ->size('sm')
+                                ->color('gray')
+                                ->visible(fn() => auth()->user()->isRestaurantAdmin() && false), // Hidden as per request
                         ]),
                         Tables\Columns\IconColumn::make('is_active')
                             ->boolean()
@@ -130,87 +146,107 @@ class RestaurantTableResource extends Resource
                         ->height(200)
                         ->width('100%')
                         ->extraImgAttributes([
-                            // QR code background slightly warm/orange so it scans perfectly
                             'style' => 'background-color: #e8c08d; padding: 2rem; border-radius: 0.5rem; object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem;',
                         ])
                         ->visibility('public'),
                 ])->space(3),
             ])
             ->actions([
-                // Styled Edit button to match Premium UI
                 Tables\Actions\EditAction::make()
                     ->button()
-                    ->outlined() // Premium Outline look
-                    ->color('warning'), 
+                    ->outlined()
+                    ->color('warning'),
+
+                Tables\Actions\DeleteAction::make()
+                    ->button()
+                    ->outlined()
+                    ->color('danger')
+                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin'])),
             ])
             ->headerActions([
                 Tables\Actions\Action::make('download_all_qr')
                     ->label('Download All Table QRs')
                     ->icon('heroicon-o-archive-box-arrow-down')
-                    ->color('gray') // Subtle color for secondary action
+                    ->color('gray')
                     ->outlined()
                     ->action(function () {
-                        $restaurant = auth()->user()->restaurant;
-
-                        $zipPath = app(QrZipService::class)
-                            ->createForRestaurant($restaurant);
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        // Passing the user object to the service to isolate QRs if needed
+                        $zipPath = app(QrZipService::class)->createForRestaurant($restaurant, $user);
 
                         return response()
                             ->download($zipPath)
                             ->deleteFileAfterSend(true);
                     }),
+
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
-                    ->color('warning') // Primary Orange Color
-                    ->form([
-                        \Filament\Forms\Components\TextInput::make('total_tables')
-                            ->numeric()
-                            ->minValue(1)
-                            ->required(),
+                    ->color('warning')
+                    ->form(function () {
+                        // 👇 Form updated: Select Branch removed for all
+                        return [
+                            \Filament\Forms\Components\TextInput::make('total_tables')
+                                ->numeric()
+                                ->minValue(1)
+                                ->required(),
 
-                        \Filament\Forms\Components\TextInput::make('seating_capacity')
-                            ->numeric()
-                            ->default(1),
-                    ])
+                            \Filament\Forms\Components\TextInput::make('seating_capacity')
+                                ->numeric()
+                                ->default(1),
+                        ];
+                    })
                     ->action(function (array $data) {
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
 
-                        $start = RestaurantTable::where('restaurant_id', $restaurant->id)->count();
+                        // 1. Identify current branch scope
+                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
 
-                        $qrService = app(QrCodeService::class);
+                        // 2. Count tables specifically for THIS branch or MAIN restaurant
+                        $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
 
+                        if ($branchId) {
+                            $startQuery->where('branch_id', $branchId);
+                        } else {
+                            // Agar branch admin nahi hai, toh main restaurant ke null branch wale count karo
+                            $startQuery->whereNull('branch_id');
+                        }
+
+                        $currentCount = $startQuery->count();
+
+                        $qrService = app(\App\Services\Restaurant\QrCodeService::class);
+
+                        // 3. Generate new tables with unique prefix per branch scope
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
-                            $table = RestaurantTable::create([
+                            $table = \App\Models\RestaurantTable::create([
                                 'restaurant_id' => $restaurant->id,
-                                'table_number' => 'T' . ($start + $i),
+                                'branch_id' => $branchId,
+                                'table_number' => 'T' . ($currentCount + $i),
                                 'seating_capacity' => $data['seating_capacity'],
                             ]);
 
                             $qrService->generate($table);
                         }
-                    }),
+                    })
             ]);
     }
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function canCreate(): bool
     {
-        return false; // Disable manual creation
+        return false;
     }
 
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListRestaurantTables::route('/'),
-            // 'create' => Pages\CreateRestaurantTable::route('/create'),
             'edit' => Pages\EditRestaurantTable::route('/{record}/edit'),
         ];
     }

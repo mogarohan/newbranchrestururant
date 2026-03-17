@@ -5,6 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\UserResource\Pages;
 use App\Models\User;
 use App\Models\Restaurant;
+use App\Models\Branch;
 use App\Models\Role;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -21,191 +22,260 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
-
     protected static ?string $navigationGroup = 'Access Control';
     protected static ?int $navigationSort = -1;
 
     /* ---------------------------------------------------
-     | ACCESS CONTROL (WHO CAN SEE THE RESOURCE)
+     | ACCESS CONTROL
      |---------------------------------------------------*/
     public static function canAccess(): bool
     {
         return auth()->check() && (
             auth()->user()->isSuperAdmin()
             || auth()->user()->isRestaurantAdmin()
+            || auth()->user()->isBranchAdmin()
             || auth()->user()->isManager()
         );
     }
 
-    protected static function getRestaurantStats(): array
+    // 👇 YEH 3 FUNCTIONS ADD KIYE HAIN "CREATE/EDIT" BUTTONS KO WAPAS LAANE KE LIYE 👇
+    public static function canCreate(): bool
     {
-        $user = auth()->user();
+        return true; // Force enable Create Button
+    }
 
-        if ($user->isSuperAdmin()) {
-            return [
-                'count' => null,
-                'limit' => null,
-            ];
-        }
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return true; // Force enable Edit Button
+    }
 
-        $restaurant = $user->restaurant;
-
-        return [
-            'count' => $restaurant->users()->count(),
-            'limit' => $restaurant->user_limits,
-        ];
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        // Sirf Super, Restaurant aur Branch admin delete kar sakte hain
+        return auth()->user()->isSuperAdmin()
+            || auth()->user()->isRestaurantAdmin()
+            || auth()->user()->isBranchAdmin();
     }
 
     /* ---------------------------------------------------
-     | DATA ISOLATION (WHO SEES WHICH USERS)
+     | DATA ISOLATION
      |---------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
+        $user = auth()->user();
 
-        if (auth()->user()->isSuperAdmin()) {
+        if ($user->isSuperAdmin()) {
             return $query;
         }
 
-        return $query->where('restaurant_id', auth()->user()->restaurant_id);
+        if ($user->isRestaurantAdmin()) {
+            return $query->where('restaurant_id', $user->restaurant_id);
+        }
+
+        return $query->where('branch_id', $user->branch_id);
     }
 
     /* ---------------------------------------------------
-     | FORM
+     | FORM (DYNAMICALLY BUILT TO FIX 404 BUG)
      |---------------------------------------------------*/
     public static function form(Form $form): Form
     {
-        return $form->schema([
+        $user = auth()->user();
+        $schema = [];
 
-            Forms\Components\Select::make('restaurant_id')
+        /* =========================================================
+           1. DYNAMIC RESTAURANT & BRANCH ASSIGNMENT
+           (Fixed 404 Not Found issue by preventing duplicate fields)
+        ========================================================= */
+
+        if ($user->isSuperAdmin()) {
+            /* SUPER ADMIN CAN SELECT RESTAURANT */
+            $schema[] = Forms\Components\Select::make('restaurant_id')
                 ->label('Restaurant')
                 ->options(Restaurant::pluck('name', 'id'))
                 ->searchable()
-                ->reactive()
-                ->visible(fn() => auth()->user()->isSuperAdmin())
-                ->required(fn() => auth()->user()->isSuperAdmin()),
+                ->reactive() // Triggers update for Branch dropdown & User Stats
+                ->required();
 
-            Placeholder::make('restaurant_user_stats')
+            /* DYNAMIC BRANCH SELECTION FOR SUPER ADMIN */
+            $schema[] = Forms\Components\Select::make('branch_id')
+                ->label('Branch')
+                ->placeholder('Main Restaurant (Leave empty)')
+                ->options(fn(callable $get) => Branch::where('restaurant_id', $get('restaurant_id'))->pluck('name', 'id'))
+                ->searchable()
+                ->visible(fn(callable $get) => Restaurant::find($get('restaurant_id'))?->has_branches ?? false)
+                ->required(function (callable $get) {
+                    $roleId = $get('role_id');
+                    if (!$roleId)
+                        return false;
+                    $role = Role::find($roleId);
+                    return $role && strtolower(str_replace([' ', '-'], '_', $role->name)) === 'branch_admin';
+                });
+
+        } elseif ($user->isRestaurantAdmin()) {
+            /* AUTO ASSIGN RESTAURANT FOR RESTAURANT ADMIN */
+            $schema[] = Forms\Components\Hidden::make('restaurant_id')
+                ->default($user->restaurant_id);
+
+            /* DYNAMIC BRANCH SELECTION FOR RESTAURANT ADMIN */
+            $schema[] = Forms\Components\Select::make('branch_id')
+                ->label('Branch')
+                ->placeholder('Main Restaurant (Leave empty)')
+                ->options(Branch::where('restaurant_id', $user->restaurant_id)->pluck('name', 'id'))
+                ->searchable()
+                ->visible(fn() => $user->restaurant?->has_branches ?? false)
+                ->required(function (callable $get) {
+                    $roleId = $get('role_id');
+                    if (!$roleId)
+                        return false;
+                    $role = Role::find($roleId);
+                    return $role && strtolower(str_replace([' ', '-'], '_', $role->name)) === 'branch_admin';
+                });
+
+        } else {
+            /* AUTO ASSIGN BOTH RESTAURANT AND BRANCH FOR MANAGERS/BRANCH ADMINS */
+            $schema[] = Forms\Components\Hidden::make('restaurant_id')
+                ->default($user->restaurant_id);
+
+            $schema[] = Forms\Components\Hidden::make('branch_id')
+                ->default($user->branch_id);
+        }
+
+        /* =========================================================
+           2. COMMON USER FIELDS
+        ========================================================= */
+        $commonFields = [
+            /* USER LIMIT INFO */
+            Forms\Components\Placeholder::make('restaurant_user_stats')
                 ->label('Restaurant User Usage')
                 ->reactive()
-                ->content(function (callable $get) {
-                    $authUser = auth()->user();
-
-                    if ($authUser->isSuperAdmin()) {
-                        $restaurantId = $get('restaurant_id');
-                        if (!$restaurantId)
-                            return 'Select a restaurant to see user usage.';
-                        $restaurant = Restaurant::withCount('users')->find($restaurantId);
-                        if (!$restaurant)
-                            return 'Restaurant not found.';
-                        return "{$restaurant->users_count} / {$restaurant->user_limits} users used";
+                ->content(function (callable $get) use ($user) {
+                    if ($user->isSuperAdmin()) {
+                        $resId = $get('restaurant_id');
+                        if (!$resId)
+                            return 'Select a restaurant to see usage';
+                        $restaurant = Restaurant::withCount('users')->find($resId);
+                        return $restaurant ? "{$restaurant->users_count} / {$restaurant->user_limits} users used" : 'Restaurant not found';
                     }
-
-                    $restaurant = $authUser->restaurant;
-                    if (!$restaurant)
-                        return 'No restaurant assigned.';
-                    return "{$restaurant->users()->count()} / {$restaurant->user_limits} users used";
+                    $restaurant = $user->restaurant;
+                    return $restaurant ? "{$restaurant->users()->count()} / {$restaurant->user_limits} users used" : 'No restaurant assigned';
                 }),
 
+            /* NAME */
             Forms\Components\TextInput::make('name')
                 ->required()
                 ->maxLength(255),
 
+            /* EMAIL */
             Forms\Components\TextInput::make('email')
                 ->email()
                 ->required()
                 ->unique(ignoreRecord: true),
 
+            /* PASSWORD */
             Forms\Components\TextInput::make('password')
                 ->password()
                 ->required(fn($operation) => $operation === 'create')
                 ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
                 ->dehydrated(fn($state) => filled($state)),
 
+            /* ROLE SELECT */
             Forms\Components\Select::make('role_id')
                 ->label('Role')
                 ->required()
+                ->reactive()
                 ->options(fn() => self::availableRoles()),
 
+            /* ACTIVE STATUS */
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
-        ]);
+        ];
+
+        // Combine dynamic logic with regular fields
+        return $form->schema(array_merge($schema, $commonFields));
     }
 
     /* ---------------------------------------------------
-     | TABLE (UPDATED FOR TRANSPARENCY & PREMIUM LOOK)
+     | TABLE
      |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
-            // 🎨 CSS INJECTION FOR TRANSPARENCY
             ->heading(new HtmlString('
                 <style>
-                    /* Make the entire table wrapper transparent */
                     .fi-ta-ctn {
                         background-color: transparent !important;
                         box-shadow: none !important;
-                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        border: 1px solid rgba(156,163,175,0.2) !important;
                     }
-                    /* Headers, Toolbars, Footers */
-                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
-                        background-color: transparent !important;
-                        border-color: rgba(156, 163, 175, 0.2) !important;
-                    }
-                    /* Individual Rows */
+
                     .fi-ta-record {
                         background-color: transparent !important;
-                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
-                        transition: background-color 0.2s ease;
+                        border-bottom: 1px solid rgba(156,163,175,0.2) !important;
                     }
+
                     .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+                        background-color: rgba(234,88,12,0.05) !important;
                     }
                 </style>
             '))
             ->columns([
 
-                // 1. Avatar
                 Tables\Columns\ImageColumn::make('avatar_url')
                     ->label('Avatar')
                     ->circular()
-                    ->defaultImageUrl(fn($record) => 'https://ui-avatars.com/api/?name=' . urlencode($record->name) . '&color=FFFFFF&background=111827'),
+                    ->defaultImageUrl(fn($record) =>
+                        'https://ui-avatars.com/api/?name='
+                        . urlencode($record->name)
+                        . '&color=FFFFFF&background=111827'),
 
-                // 2. Name & Joined Date stacked
                 Tables\Columns\TextColumn::make('name')
                     ->label('Name')
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->description(fn(User $record): string => 'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')),
+                    ->description(
+                        fn(User $record) =>
+                        'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')
+                    ),
 
-                // 3. Email / Contact Info
                 Tables\Columns\TextColumn::make('email')
                     ->label('Contact Info')
                     ->searchable()
                     ->copyable()
                     ->color('gray'),
 
-                // 4. Role Badge
+                /* BRANCH COLUMN ADDED */
+                Tables\Columns\TextColumn::make('branch.name')
+                    ->label('Branch')
+                    ->default('Main Restaurant') // 👈 Agar branch nahi hai toh dash (-) ki jagah "Main Restaurant" aayega
+                    ->sortable()
+                    ->searchable(),
+
                 Tables\Columns\TextColumn::make('role.name')
                     ->label('Role')
                     ->badge()
-                    ->color(fn(string $state): string => match (strtolower($state)) {
-                        'chef' => 'warning',
-                        'waiter' => 'info',
-                        'manager' => 'primary',
-                        'super_admin' => 'gray', // Match image style for SA
-                        default => 'gray',
+                    ->color(function (string $state) {
+                        // BULLETPROOF BADGE COLORS
+                        $normalized = strtolower(str_replace([' ', '-'], '_', $state));
+                        return match ($normalized) {
+                            'chef' => 'warning',
+                            'waiter' => 'info',
+                            'manager' => 'primary',
+                            'branch_admin' => 'success',
+                            'restaurant_admin' => 'danger',
+                            'super_admin' => 'gray',
+                            default => 'gray',
+                        };
                     })
-                    ->formatStateUsing(fn(string $state): string => ucfirst($state)),
+                    ->formatStateUsing(fn(string $state) => ucfirst($state)),
 
-                // 5. Status (Boolean Outline Icon like image)
                 Tables\Columns\IconColumn::make('is_active')
-                    ->label('Is Active')
+                    ->label('Active')
                     ->boolean()
                     ->alignCenter(),
 
-                // 6. Last Active
                 Tables\Columns\TextColumn::make('updated_at')
                     ->label('Last Active')
                     ->since()
@@ -213,39 +283,61 @@ class UserResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                // Actions moved outside of dropdown, styled exactly like image
                 Tables\Actions\EditAction::make()
-                    ->color('warning') // Yellow/Orange Edit
-                    ->button()         // Make it look like a button or distinct link
-                    ->outlined(),      // Gives it the premium outline look
+                    ->color('warning')
+                    ->button()
+                    ->outlined(),
 
                 Tables\Actions\DeleteAction::make()
                     ->color('danger')
                     ->button()
                     ->outlined(),
             ])
-            ->bulkActions([]); // Disabled bulk delete as per standard
+            ->bulkActions([]);
     }
 
-    /* =========================
-       ROLE FILTERING LOGIC
-    ========================== */
+    /* ---------------------------------------------------
+     | ROLE FILTER (BULLETPROOF)
+     |---------------------------------------------------*/
     protected static function availableRoles(): array
     {
         $user = auth()->user();
+        $allRoles = Role::all(); // Saare roles ek baar DB se nikal liye
 
+        /* SUPER ADMIN → ALL ROLES */
         if ($user->isSuperAdmin()) {
-            return Role::pluck('name', 'id')->toArray();
+            return $allRoles->pluck('name', 'id')->toArray();
         }
 
+        /* RESTAURANT ADMIN */
         if ($user->isRestaurantAdmin()) {
-            return Role::whereIn('name', ['manager', 'chef', 'waiter'])
-                ->pluck('name', 'id')->toArray();
+            $rolesAllowed = ['manager', 'chef', 'waiter'];
+
+            // Agar restaurant me branches allowed hain, tabhi 'branch_admin' role create karne do
+            if ($user->restaurant && $user->restaurant->has_branches) {
+                $rolesAllowed[] = 'branch_admin';
+            }
+
+            // DB ke naam ko match karne ke liye smart filter
+            return $allRoles->filter(function ($r) use ($rolesAllowed) {
+                $normalized = strtolower(str_replace([' ', '-'], '_', $r->name));
+                return in_array($normalized, $rolesAllowed);
+            })->pluck('name', 'id')->toArray();
         }
 
-        if ($user->isManager()) {
-            return Role::whereIn('name', ['chef', 'waiter'])
-                ->pluck('name', 'id')->toArray();
+        /* MANAGER / BRANCH ADMIN */
+        if ($user->isManager() || $user->isBranchAdmin()) {
+            $rolesAllowed = ['chef', 'waiter'];
+
+            // Branch Admin ko apne managers create karne ki permission allow ki gayi hai
+            if ($user->isBranchAdmin()) {
+                $rolesAllowed[] = 'manager';
+            }
+
+            return $allRoles->filter(function ($r) use ($rolesAllowed) {
+                $normalized = strtolower(str_replace([' ', '-'], '_', $r->name));
+                return in_array($normalized, $rolesAllowed);
+            })->pluck('name', 'id')->toArray();
         }
 
         return [];

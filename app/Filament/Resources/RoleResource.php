@@ -26,7 +26,7 @@ class RoleResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, [ '']);
+            && in_array(auth()->user()->role->name ?? null, ['']);
     }
 
     public static function form(Form $form): Form
@@ -73,9 +73,9 @@ class RoleResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => Pages\ListRoles::route('/'),
+            'index' => Pages\ListRoles::route('/'),
             'create' => Pages\CreateRole::route('/create'),
-            'edit'   => Pages\EditRole::route('/{record}/edit'),
+            'edit' => Pages\EditRole::route('/{record}/edit'),
         ];
     }
 }

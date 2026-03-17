@@ -18,6 +18,7 @@ class RestaurantTable extends Model
         'seating_capacity',
         'is_active',
         'status',
+        'branch_id',
     ];
 
     protected static function booted()
@@ -25,7 +26,7 @@ class RestaurantTable extends Model
         static::creating(function ($table) {
             $table->qr_token = Str::uuid()->toString();
         });
-        
+
         static::deleting(function ($table) {
             if ($table->qr_path && Storage::disk('public')->exists($table->qr_path)) {
                 Storage::disk('public')->delete($table->qr_path);

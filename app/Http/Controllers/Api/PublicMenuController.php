@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Restaurant;
 use App\Models\RestaurantTable;
-use App\Services\Restaurant\MenuSessionValidator;
+use App\Models\QrSession;
+use Illuminate\Support\Facades\DB;
 
 class PublicMenuController extends Controller
 {
@@ -15,9 +16,7 @@ class PublicMenuController extends Controller
         RestaurantTable $table,
         string $token,
         Request $request
-        // Removed the MenuSessionValidator injection here
     ) {
-        // 🔐 QR SECURITY
         abort_unless($table->restaurant_id === $restaurant->id, 404);
         abort_unless($table->qr_token === $token, 403);
         abort_unless($table->is_active, 403);
@@ -25,17 +24,14 @@ class PublicMenuController extends Controller
 
         $request->validate(['session_token' => ['required', 'string']]);
 
-        // 🔥 FIX: Explicitly find the session instead of using the old validator
-        $session = \App\Models\QrSession::where('session_token', $request->session_token)
+        $session = QrSession::where('session_token', $request->session_token)
             ->where('restaurant_table_id', $table->id)
             ->first();
 
-        // Check if session actually exists and is active
         if (!$session || !$session->is_active || $session->expires_at < now()) {
             return response()->json(['message' => 'Session expired'], 403);
         }
 
-        // CRITICAL FIX: STOP HERE IF NOT APPROVED
         if (!$session->is_primary && $session->join_status !== 'approved') {
             return response()->json([
                 'message' => 'You are waiting for approval.',
@@ -44,14 +40,64 @@ class PublicMenuController extends Controller
             ], 403); 
         }
 
-        // ... (Keep the rest of your existing code below this line to fetch the menu)
-        // 🔥 GET HOST SESSION FOR DYNAMIC UI
-        $hostSession = \App\Models\QrSession::where('restaurant_table_id', $table->id)
+        $hostSession = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_primary', true)
             ->where('is_active', true)
             ->first();
 
-        // If we get here, the user is allowed to see the menu
+        // 👇 1. FETCH BRANCH SPECIFIC OFF/ON STATUSES FOR BOTH ITEMS AND CATEGORIES
+        $branchItemStatuses = DB::table('branch_menu_item_status')
+            ->where('branch_id', $table->branch_id)
+            ->pluck('is_available', 'menu_item_id');
+
+        $branchCatStatuses = DB::table('branch_category_status')
+            ->where('branch_id', $table->branch_id)
+            ->pluck('is_active', 'category_id');
+
+        // 👇 2. FETCH AND FILTER MENU
+        $categories = $restaurant->categories()
+            ->where('is_active', true)
+            ->whereNull('branch_id') // Main Menu Only
+            ->orderBy('sort_order')
+            ->with([
+                'menuItems' => fn ($q) => $q->whereNull('branch_id')->orderBy('name')
+            ])
+            ->get()
+            // 👇 3. FILTER CATEGORIES BASED ON BRANCH OVERRIDE
+            ->filter(function($category) use ($branchCatStatuses) {
+                // Agar branch ne category OFF ki hai toh hide kar do
+                if ($branchCatStatuses->has($category->id)) {
+                    return (bool) $branchCatStatuses->get($category->id);
+                }
+                return (bool) $category->is_active; // Warna original default chalne do
+            })
+            ->map(function ($category) use ($branchItemStatuses) {
+                
+                // 👇 4. FILTER ITEMS INSIDE CATEGORY BASED ON BRANCH OVERRIDE
+                $filteredItems = $category->menuItems->filter(function($item) use ($branchItemStatuses) {
+                    return $branchItemStatuses->has($item->id) 
+                        ? (bool) $branchItemStatuses->get($item->id) 
+                        : (bool) $item->is_available;
+                })->values();
+
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'items' => $filteredItems->map(fn ($item) => [
+                        'id' => $item->id,
+                        'name' => $item->name,
+                        'description' => $item->description,
+                        'price' => $item->price,
+                        'image' => $item->image_path
+                            ? asset('storage/' . $item->image_path)
+                            : null,
+                    ]),
+                ];
+            })
+            // Remove categories that have 0 items available
+            ->filter(fn($cat) => count($cat['items']) > 0)
+            ->values();
+
         return response()->json([
             'session' => [
                 'id' => $session->id, 
@@ -61,7 +107,6 @@ class PublicMenuController extends Controller
                 'is_primary' => $session->is_primary,
                 'host_name' => $hostSession ? $hostSession->customer_name : 'Unknown',
             ],
-
             'restaurant' => [
                 'id' => $restaurant->id,
                 'name' => $restaurant->name,
@@ -69,35 +114,12 @@ class PublicMenuController extends Controller
                     ? asset('storage/' . $restaurant->logo_path)
                     : null,
             ],
-
             'table' => [
                 'id' => $table->id,
                 'number' => $table->table_number,
                 'capacity' => $table->seating_capacity, 
             ],
-
-            'categories' => $restaurant->categories()
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->with([
-                    'menuItems' => fn ($q) =>
-                        $q->where('is_available', true)
-                        ->orderBy('name')
-                ])
-                ->get()
-                ->map(fn ($category) => [
-                    'id' => $category->id,
-                    'name' => $category->name,
-                    'items' => $category->menuItems->map(fn ($item) => [
-                        'id' => $item->id,
-                        'name' => $item->name,
-                        'description' => $item->description,
-                        'price' => $item->price,
-                        'image' => $item->image_path
-                            ? asset('storage/' . $item->image_path)
-                            : null,
-                    ]),
-                ]),
+            'categories' => $categories,
         ]);
     }
 }

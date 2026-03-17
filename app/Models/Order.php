@@ -17,6 +17,7 @@ class Order extends Model
         'notes',
         //'subtotal',
         'total_amount',
+        'branch_id',
     ];
 
     public function restaurant(): BelongsTo
@@ -43,7 +44,7 @@ class Order extends Model
     {
         return $this->hasMany(Payment::class);
     }
-     public function kitchenQueue()
+    public function kitchenQueue()
     {
         return $this->hasOne(KitchenQueue::class);
     }

@@ -19,6 +19,8 @@ class Restaurant extends Model
         'user_limits',
         'is_active',
         'created_by',
+        'has_branches',
+        'max_branches',
     ];
 
     /**

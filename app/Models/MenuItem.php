@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Storage;
 
 class MenuItem extends Model
 {
-    
+
     protected $fillable = [
         'restaurant_id',
         'category_id',
@@ -18,14 +18,15 @@ class MenuItem extends Model
         'price',
         'image_path',
         'is_available',
+        'branch_id',
     ];
     protected $casts = [
         'price' => 'decimal:2',
         'is_available' => 'boolean',
     ];
-     protected static function booted()
+    protected static function booted()
     {
-         static::deleting(function (MenuItem $item) {
+        static::deleting(function (MenuItem $item) {
             if ($item->image_path && Storage::disk('public')->exists($item->image_path)) {
                 Storage::disk('public')->delete($item->image_path);
             }

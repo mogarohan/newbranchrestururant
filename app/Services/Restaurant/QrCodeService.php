@@ -9,47 +9,53 @@ use Illuminate\Support\Facades\Route;
 
 class QrCodeService
 {
-   public function generate(RestaurantTable $table): string
-{
-    $restaurant = $table->restaurant;
+    public function generate(RestaurantTable $table): string
+    {
+        $restaurant = $table->restaurant;
 
-    $folder = "restaurants/{$restaurant->slug}/TablesQR";
-    $filename = "table-{$table->table_number}.svg";
+        // 👇 Yahan check hoga ki Table Branch ki hai ya Main Restaurant ki
+        if ($table->branch_id) {
+            $folder = "restaurants/{$restaurant->slug}/branches/branch-{$table->branch_id}/TablesQR";
+        } else {
+            $folder = "restaurants/{$restaurant->slug}/TablesQR";
+        }
 
-    Storage::disk('public')->makeDirectory($folder);
+        $filename = "table-{$table->table_number}.svg";
 
-    //$url = "http://192.168.1.32:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
-    $url = "https://rest-menu-smoky.vercel.app/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
-    //$url = "http://192.168.1.41:8081/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
+        Storage::disk('public')->makeDirectory($folder);
 
-    /**
-     * 1️⃣ Generate QR SVG
-     */
-    $qrSvg = QrCode::format('svg')
-        ->size(220)
-        ->margin(1)
-        ->generate($url);
+        //$url = "http://192.168.1.32:8081/menu/{$restaurant->id}/{$table->id}/{$table->qr_token}";
+        //$url = "https://rest-menu-smoky.vercel.app/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
+        $url = "http://192.168.1.39:8081/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
 
-    $qrSvg = preg_replace('/<\?xml.*?\?>/', '', $qrSvg);
+        /**
+         * 1️⃣ Generate QR SVG
+         */
+        $qrSvg = QrCode::format('svg')
+            ->size(220)
+            ->margin(1)
+            ->generate($url);
 
-    /**
-     * 2️⃣ Embed Logo as Base64 (CRITICAL FIX)
-     */
-    $logoSvg = '';
-    if ($restaurant->logo_path && Storage::disk('public')->exists($restaurant->logo_path)) {
+        $qrSvg = preg_replace('/<\?xml.*?\?>/', '', $qrSvg);
 
-        $logoBinary = Storage::disk('public')->get($restaurant->logo_path);
-        $extension  = pathinfo($restaurant->logo_path, PATHINFO_EXTENSION);
-        $mime       = match ($extension) {
-            'png'  => 'image/png',
-            'jpg', 'jpeg' => 'image/jpeg',
-            'svg'  => 'image/svg+xml',
-            default => 'image/png',
-        };
+        /**
+         * 2️⃣ Embed Logo as Base64 (CRITICAL FIX)
+         */
+        $logoSvg = '';
+        if ($restaurant->logo_path && Storage::disk('public')->exists($restaurant->logo_path)) {
 
-        $logoBase64 = base64_encode($logoBinary);
+            $logoBinary = Storage::disk('public')->get($restaurant->logo_path);
+            $extension = pathinfo($restaurant->logo_path, PATHINFO_EXTENSION);
+            $mime = match ($extension) {
+                'png' => 'image/png',
+                'jpg', 'jpeg' => 'image/jpeg',
+                'svg' => 'image/svg+xml',
+                default => 'image/png',
+            };
 
-        $logoSvg = <<<SVG
+            $logoBase64 = base64_encode($logoBinary);
+
+            $logoSvg = <<<SVG
     <image href="data:{$mime};base64,{$logoBase64}"
         x="20"
         y="20"
@@ -68,7 +74,6 @@ class QrCodeService
 
         {$logoSvg}
 
-        <!-- Restaurant Name -->
         <text x="130"
             y="40"
             font-size="18"
@@ -77,7 +82,6 @@ class QrCodeService
             {$restaurant->name}
         </text>
 
-        <!-- Table Number -->
         <text x="130"
             y="65"
             font-size="14"
@@ -85,7 +89,6 @@ class QrCodeService
             Table {$table->table_number}
         </text>
 
-        <!-- QR Code -->
         <g transform="translate(100,90)">
             {$qrSvg}
         </g>
@@ -94,13 +97,13 @@ class QrCodeService
     </svg>
     SVG;
 
-    Storage::disk('public')->put("{$folder}/{$filename}", $finalSvg);
+        Storage::disk('public')->put("{$folder}/{$filename}", $finalSvg);
 
-    $table->updateQuietly([
-        'qr_path' => "{$folder}/{$filename}",
-    ]);
+        $table->updateQuietly([
+            'qr_path' => "{$folder}/{$filename}",
+        ]);
 
-    return "{$folder}/{$filename}";
-}
+        return "{$folder}/{$filename}";
+    }
 
 }

@@ -28,19 +28,28 @@ class TableBillingResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('restaurant_id', auth()->user()->restaurant_id)
-            ->with([
-                'sessions' => fn($q) => $q->where('is_active', true),
-                'sessions.orders' => fn($q) => $q->where('status', '!=', 'cancelled'),
-                'sessions.orders.items.menuItem.category', 
-                'sessions.guests' => fn($q) => $q->where('is_active', true),
-            ]);
+        $user = auth()->user();
+        $query = parent::getEloquentQuery()
+            ->where('restaurant_id', $user->restaurant_id);
+
+        // 👇 BRANCH ISOLATION: Main Restaurant admin sees only branch_id NULL, Branch admin sees only their ID
+        if ($user->isRestaurantAdmin()) {
+            $query->whereNull('branch_id');
+        } elseif ($user->isBranchAdmin() || $user->isManager()) {
+            $query->where('branch_id', $user->branch_id);
+        }
+
+        return $query->with([
+            'sessions' => fn($q) => $q->where('is_active', true),
+            'sessions.orders' => fn($q) => $q->where('status', '!=', 'cancelled'),
+            'sessions.orders.items.menuItem.category',
+            'sessions.guests' => fn($q) => $q->where('is_active', true),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -89,13 +98,13 @@ class TableBillingResource extends Resource
                 '2xl' => 4,
             ])
             // Changed from solid backgrounds to clean flex layout
-            ->recordClasses(fn (RestaurantTable $record) => 'flex flex-col')
+            ->recordClasses(fn(RestaurantTable $record) => 'flex flex-col')
             ->columns([
                 Tables\Columns\Layout\Stack::make([
-                    
+
                     // --- 1. TABLE HEADER ---
                     Tables\Columns\TextColumn::make('table_number')
-                        ->formatStateUsing(fn ($state) => "Table {$state}")
+                        ->formatStateUsing(fn($state) => "Table {$state}")
                         ->weight(FontWeight::Black)
                         ->color('primary')
                         ->alignCenter()
@@ -130,13 +139,13 @@ class TableBillingResource extends Resource
                             $total = $record->sessions->flatMap->orders->sum('total_amount');
                             $orderIds = $record->sessions->flatMap->orders->pluck('id');
                             $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
-                            
+
                             return max(0, $total - $paid);
                         })
                         ->money('INR')
                         ->weight(FontWeight::Black)
                         ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
-                        ->color(fn ($state) => $state > 0 ? 'danger' : 'gray')
+                        ->color(fn($state) => $state > 0 ? 'danger' : 'gray')
                         ->alignCenter()
                         // Removed solid background
                         ->extraAttributes(['style' => 'padding: 1rem; margin-top: 0.5rem; border-top: 1px dashed rgba(156, 163, 175, 0.3); background: transparent;']),
@@ -152,22 +161,22 @@ class TableBillingResource extends Resource
                     ->button()
                     ->outlined() // 👈 Premium Outline Look added here
                     ->color('success')
-                    ->modalHeading(fn (RestaurantTable $record) => "Checkout - Table {$record->table_number}")
+                    ->modalHeading(fn(RestaurantTable $record) => "Checkout - Table {$record->table_number}")
                     ->modalWidth('6xl')
                     ->modalSubmitActionLabel('Confirm Payment & Clear Table')
                     ->fillForm(function (RestaurantTable $record): array {
                         $total = $record->sessions->flatMap->orders->sum('total_amount');
                         $orderIds = $record->sessions->flatMap->orders->pluck('id');
                         $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
-                        
+
                         return [
                             'subtotal' => max(0, $total - $paid),
-                            'tip' => 0, 
+                            'tip' => 0,
                         ];
                     })
                     ->form([
                         Forms\Components\Grid::make(12)->schema([
-                            
+
                             // 📜 LEFT COLUMN: DETAILED MASTER RECEIPT
                             Forms\Components\Section::make('Master Order History')
                                 ->columnSpan(7)
@@ -175,12 +184,12 @@ class TableBillingResource extends Resource
                                     Forms\Components\Placeholder::make('receipt')
                                         ->hiddenLabel()
                                         ->content(function (RestaurantTable $record) {
-                                            
+
                                             // Using Tailwind Classes for Dark/Light mode support instead of inline styles
                                             $html = '<div class="max-h-[500px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
                                             $html .= '<h2 class="text-center text-2xl font-black text-gray-900 dark:text-white mb-1">TABLE ' . $record->table_number . '</h2>';
                                             $html .= '<div class="text-center text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 border-b-2 border-dashed border-gray-300 dark:border-gray-600 pb-4 mb-5">FINAL BILLING SUMMARY</div>';
-                                            
+
                                             $hasOrders = false;
                                             $grandTotal = 0;
                                             $totalOrdersCount = 0;
@@ -195,16 +204,16 @@ class TableBillingResource extends Resource
 
                                                 $html .= "<div class='mb-6'>";
                                                 $html .= "<div class='text-base font-bold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👑 HOST: {$primarySession->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$hostOrdersCount} Orders)</span></div>";
-                                                
+
                                                 foreach ($primarySession->orders as $order) {
                                                     $totalOrdersCount++;
                                                     $html .= "<div class='mt-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700'>";
                                                     $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
-                                                    
+
                                                     foreach ($order->items as $item) {
                                                         $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
                                                         $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
-                                                        
+
                                                         $html .= "
                                                         <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
                                                             <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
@@ -218,7 +227,7 @@ class TableBillingResource extends Resource
 
                                                 // --- GUEST ORDERS ---
                                                 $guests = $record->sessions->where('host_session_id', $primarySession->id);
-                                                
+
                                                 if ($guests->isNotEmpty()) {
                                                     $html .= "<div class='text-sm font-bold text-center border-y border-dashed border-gray-300 dark:border-gray-600 py-2 my-6 text-gray-500 dark:text-gray-400 tracking-widest'>--- JOINED GUESTS ---</div>";
 
@@ -228,16 +237,16 @@ class TableBillingResource extends Resource
 
                                                         $html .= "<div class='mb-5'>";
                                                         $html .= "<div class='text-sm font-bold bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👤 GUEST: {$guest->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$guestOrdersCount} Orders)</span></div>";
-                                                        
+
                                                         foreach ($guest->orders as $order) {
                                                             $totalOrdersCount++;
                                                             $html .= "<div class='mt-3 pl-3 border-l-2 border-orange-200 dark:border-orange-500/30'>";
                                                             $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
-                                                            
+
                                                             foreach ($order->items as $item) {
                                                                 $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
                                                                 $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
-                                                                
+
                                                                 $html .= "
                                                                 <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
                                                                     <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
@@ -255,7 +264,7 @@ class TableBillingResource extends Resource
                                             if (!$hasOrders) {
                                                 return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400'>No valid orders found to bill.</div>");
                                             }
-                                            
+
                                             // Final Summary Footer
                                             $html .= "
                                                 <div class='border-t-2 border-gray-900 dark:border-gray-100 mt-6 pt-4'>
@@ -328,27 +337,29 @@ class TableBillingResource extends Resource
                                     Forms\Components\TextInput::make('transaction_reference')
                                         ->label('Transaction ID / UTR')
                                         ->placeholder('Required for Online Payments')
-                                        ->required(fn (Forms\Get $get) => in_array($get('payment_method'), ['upi', 'card']))
-                                        ->visible(fn (Forms\Get $get) => $get('payment_method') !== 'cash'),
-                                        
+                                        ->required(fn(Forms\Get $get) => in_array($get('payment_method'), ['upi', 'card']))
+                                        ->visible(fn(Forms\Get $get) => $get('payment_method') !== 'cash'),
+
                                 ]),
                         ]),
                     ])
                     ->action(function (RestaurantTable $record, array $data) {
-                        
+
                         $activeSessions = $record->sessions()->where('is_active', true)->get();
                         $sessionIds = $activeSessions->pluck('id')->toArray();
 
                         $validOrders = Order::whereIn('qr_session_id', $sessionIds)
                             ->where('status', '!=', 'cancelled')
                             ->get();
-                        
+
                         $orderIds = $validOrders->pluck('id')->toArray();
                         $latestOrderId = collect($orderIds)->last();
                         $totalAmountToRecord = (float) $data['subtotal'] + (float) $data['tip'];
 
                         if ($latestOrderId && $totalAmountToRecord > 0) {
                             Payment::create([
+                                'restaurant_id' => $record->restaurant_id,
+                                'branch_id' => $record->branch_id,
                                 'order_id' => $latestOrderId,
                                 'amount' => $totalAmountToRecord,
                                 'payment_method' => $data['payment_method'],
@@ -360,11 +371,11 @@ class TableBillingResource extends Resource
 
                         if (!empty($orderIds)) {
                             Order::whereIn('id', $orderIds)->update(['status' => 'completed']);
-                            
+
                             foreach ($orderIds as $oId) {
                                 OrderStatusLog::create([
                                     'order_id' => $oId,
-                                    'from_status' => 'served', 
+                                    'from_status' => 'served',
                                     'to_status' => 'completed',
                                     'changed_by' => auth()->id(),
                                 ]);
@@ -378,15 +389,19 @@ class TableBillingResource extends Resource
                         }
                     }),
             ])
-            ->recordAction(null) 
+            ->recordAction(null)
             ->recordUrl(null);
     }
 
-    public static function form(Form $form): Form { return $form->schema([]); }
-    
-    public static function getPages(): array { 
+    public static function form(Form $form): Form
+    {
+        return $form->schema([]);
+    }
+
+    public static function getPages(): array
+    {
         return [
             'index' => Pages\ListTableBillings::route('/')
-        ]; 
+        ];
     }
 }

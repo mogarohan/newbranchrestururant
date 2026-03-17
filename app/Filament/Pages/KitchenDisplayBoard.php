@@ -16,16 +16,15 @@ class KitchenDisplayBoard extends Page
     protected static ?string $navigationLabel = 'Kitchen Command';
     protected static ?string $title = 'Kitchen Command';
     protected static ?string $navigationGroup = 'Kitchen';
-    
-    // 🔥 Make the page take up the full width of the monitor
+
     protected ?string $maxWidth = 'full';
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->role?->name === 'chef';
+        // 🔥 Updated: Chef ke saath Manager aur Admin bhi dekh sakte hain
+        return auth()->check() && in_array(auth()->user()->role->name ?? null, ['chef']);
     }
 
-    // 🔥 Listen for WebSockets to instantly refresh the board
     public function getListeners(): array
     {
         $restaurantId = auth()->user()->restaurant_id;
@@ -34,12 +33,32 @@ class KitchenDisplayBoard extends Page
         ];
     }
 
+    // --- HELPER FOR ISOLATION ---
+
+    protected function getBaseQueueQuery()
+    {
+        $user = auth()->user();
+
+        $query = KitchenQueue::with(['order.items', 'order.table'])
+            ->whereHas('order', function ($q) use ($user) {
+                $q->where('restaurant_id', $user->restaurant_id);
+
+                // 👇 FIX: Branch Isolation Logic
+                if ($user->branch_id) {
+                    $q->where('branch_id', $user->branch_id);
+                } else {
+                    $q->whereNull('branch_id'); // Main Restaurant area
+                }
+            });
+
+        return $query;
+    }
+
     // --- COLUMN DATA FETCHERS ---
 
     public function getPlacedOrdersProperty()
     {
-        return KitchenQueue::with(['order.items', 'order.table'])
-            ->whereHas('order', fn($q) => $q->where('restaurant_id', auth()->user()->restaurant_id))
+        return $this->getBaseQueueQuery()
             ->where('current_status', 'placed')
             ->orderBy('created_at', 'asc')
             ->get();
@@ -47,8 +66,7 @@ class KitchenDisplayBoard extends Page
 
     public function getPreparingOrdersProperty()
     {
-        return KitchenQueue::with(['order.items', 'order.table'])
-            ->whereHas('order', fn($q) => $q->where('restaurant_id', auth()->user()->restaurant_id))
+        return $this->getBaseQueueQuery()
             ->where('current_status', 'preparing')
             ->orderBy('created_at', 'asc')
             ->get();
@@ -56,8 +74,7 @@ class KitchenDisplayBoard extends Page
 
     public function getReadyOrdersProperty()
     {
-        return KitchenQueue::with(['order.items', 'order.table'])
-            ->whereHas('order', fn($q) => $q->where('restaurant_id', auth()->user()->restaurant_id))
+        return $this->getBaseQueueQuery()
             ->where('current_status', 'ready')
             ->orderBy('created_at', 'asc')
             ->get();

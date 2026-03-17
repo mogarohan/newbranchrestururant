@@ -4,9 +4,9 @@ namespace App\Filament\Pages;
 
 use App\Models\Restaurant;
 use App\Models\User;
-use App\Models\Order;       // 👈 Isko add karein
+use App\Models\Order;
 use App\Models\QrSession;
-use App\Models\Payment; // 👈 Isko add karein
+use App\Models\Payment;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\Auth;
 
@@ -35,11 +35,10 @@ class SuperAdminDashboard extends Page
             return $rest;
         });
 
-        // 2. DYNAMIC GROWTH CALCULATION LAYA GAYA HAI 👇
+        // 2. DYNAMIC GROWTH CALCULATION
 
         // --- RESTAURANT GROWTH ---
         $totalRestaurants = Restaurant::count();
-        // Pichle mahine ki shuruwat tak kitne restaurants the
         $oldRestaurants = Restaurant::where('created_at', '<', now()->startOfMonth())->count();
 
         $restaurantGrowth = $oldRestaurants > 0
@@ -48,7 +47,6 @@ class SuperAdminDashboard extends Page
 
         // --- USER GROWTH ---
         $totalUsers = User::count();
-        // Pichle mahine ki shuruwat tak kitne users the
         $oldUsers = User::where('created_at', '<', now()->startOfMonth())->count();
 
         $userGrowth = $oldUsers > 0
@@ -62,21 +60,21 @@ class SuperAdminDashboard extends Page
 
         $totalCustomers = QrSession::count();
         $todayCustomers = QrSession::whereDate('created_at', today())->count();
+
         // --- TOTAL REVENUE CALCULATION ---
-        // Sirf 'paid' status wale payments ka amount sum karega
         $totalRevenue = Payment::where('status', 'paid')->sum('amount');
 
-        // Aaj ki revenue
         $todayRevenue = Payment::where('status', 'paid')
             ->whereDate('paid_at', today())
             ->sum('amount');
+
         return [
             'restaurants' => $restaurants,
             'totalRestaurants' => $totalRestaurants,
-            'restaurantGrowth' => $restaurantGrowth, // 👈 Blade ke liye pass kiya
+            'restaurantGrowth' => $restaurantGrowth,
 
             'totalUsers' => $totalUsers,
-            'userGrowth' => $userGrowth, // 👈 Blade ke liye pass kiya
+            'userGrowth' => $userGrowth,
 
             'totalOrders' => number_format($totalOrders),
             'todayOrders' => number_format($todayOrders),

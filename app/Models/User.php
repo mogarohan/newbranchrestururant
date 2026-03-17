@@ -15,10 +15,12 @@ use Filament\Panel;
 
 class User extends Authenticatable implements FilamentUser
 {
-    
+
     use HasFactory, Notifiable, HasApiTokens;
+
     protected $fillable = [
         'restaurant_id',
+        'branch_id',      // 👈 ADDED: Branch ID for mass assignment (seeder aur form ke liye zaroori hai)
         'role_id',
         'name',
         'email',
@@ -27,24 +29,38 @@ class User extends Authenticatable implements FilamentUser
         'is_active',
     ];
 
-     protected $casts = [
+    protected $casts = [
         'is_super_admin' => 'boolean',
         'is_active' => 'boolean',
     ];
+
     protected $hidden = ['password'];
 
+    /* ---------------------------------------------------
+     | FILAMENT PANEL ACCESS
+     |---------------------------------------------------*/
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->is_super_admin
             || $this->role?->name === 'restaurant_admin'
+            || $this->role?->name === 'branch_admin' // 👈 ADDED: Iske bina branch admin login nahi kar sakta
             || $this->role?->name === 'manager'
             || $this->role?->name === 'waiter'
             || $this->role?->name === 'chef';
     }
 
+    /* ---------------------------------------------------
+     | RELATIONSHIPS
+     |---------------------------------------------------*/
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);
+    }
+
+    // 👈 ADDED: Branch ki relationship taaki user.branch se data nikal sakein
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function role(): BelongsTo
@@ -56,7 +72,7 @@ class User extends Authenticatable implements FilamentUser
     {
         return $this->hasMany(Order::class);
     }
-    
+
     /* ---------- ROLE CHECKS ---------- */
 
     // public function isSuperAdmin() { return $this->role->name === RoleEnum::SUPER_ADMIN->value; }
@@ -65,7 +81,7 @@ class User extends Authenticatable implements FilamentUser
     // public function isChef() { return $this->role->name === RoleEnum::CHEF->value; }
     // public function isWaiter() { return $this->role->name === RoleEnum::WAITER->value; }
 
-     public function isSuperAdmin(): bool
+    public function isSuperAdmin(): bool
     {
         return (bool) $this->is_super_admin;
     }
@@ -75,9 +91,14 @@ class User extends Authenticatable implements FilamentUser
         return $this->role?->name === 'restaurant_admin';
     }
 
+    // 👈 ADDED: isBranchAdmin helper for Filament Role checks
+    public function isBranchAdmin(): bool
+    {
+        return $this->role?->name === 'branch_admin';
+    }
+
     public function isManager(): bool
     {
         return $this->role?->name === 'manager';
     }
 }
-

@@ -14,6 +14,7 @@ class Payment extends Model
         'status',
         'transaction_reference',
         'paid_at',
+        'branch_id',
     ];
 
     protected $casts = ['paid_at' => 'datetime'];

@@ -136,7 +136,8 @@
                 <div class="stat-value">{{ $totalItems }}</div>
                 <div class="stat-desc text-blue-500">Total Dishes</div>
             </div>
-                {{-- Today's Orders (From orders table) --}}
+
+            {{-- Today's Orders (From orders table) --}}
             <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-red) !important;">
                 <div class="stat-header">
                     <span class="stat-label">Today's Orders</span>
@@ -148,6 +149,7 @@
                 <div class="text-orange-500 text-[0.65rem] font-black uppercase tracking-widest mt-2">Trending High 🔥
                 </div>
             </div>
+
             {{-- Total Revenue (From payments or orders table) --}}
             <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-green) !important;">
                 <div class="stat-header">
@@ -160,8 +162,22 @@
                 <div class="stat-desc text-emerald-500">Lifetime Income</div>
             </div>
 
-            
-            
+            {{-- 5TH WIDGET: Total Branches (Clickable, Only for Restaurant Admin) --}}
+            @if($showBranchesWidget)
+                <a href="{{ App\Filament\Resources\BranchResource::getUrl('index') }}"
+                    class="glass-panel stat-box block cursor-pointer transition-transform hover:scale-105"
+                    style="border-bottom: 4px solid #8b5cf6 !important; text-decoration: none;">
+                    <div class="stat-header">
+                        <span class="stat-label">Total Branches</span>
+                        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+                            <x-heroicon-s-building-storefront class="w-5 h-5" />
+                        </div>
+                    </div>
+                    <div class="stat-value">{{ $totalBranches }}</div>
+                    <div class="stat-desc text-purple-500 font-bold mt-1">Manage Locations &rarr;</div>
+                </a>
+            @endif
+
         </div>
 
         {{-- 3. MIDDLE SECTION (CHARTS) --}}
@@ -183,7 +199,7 @@
 
     </div>
 
-   <script>
+    <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Theme check dynamically for ApexCharts
             const isDark = document.documentElement.classList.contains('dark');
@@ -201,7 +217,7 @@
             }).render();
 
             // Generate 24-hour labels (12 AM, 1 AM ... 11 PM) for the X-axis
-            const hourLabels = Array.from({length: 24}, (_, i) => {
+            const hourLabels = Array.from({ length: 24 }, (_, i) => {
                 const ampm = i >= 12 ? 'PM' : 'AM';
                 const hour = i % 12 || 12;
                 return `${hour} ${ampm}`;
@@ -213,9 +229,9 @@
                 chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent' },
                 plotOptions: { bar: { borderRadius: 6, columnWidth: '45%' } },
                 colors: ['#3b82f6'],
-                xaxis: { 
-                    categories: hourLabels, 
-                    labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } } 
+                xaxis: {
+                    categories: hourLabels,
+                    labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } }
                 },
                 yaxis: { labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } } },
                 grid: { borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },

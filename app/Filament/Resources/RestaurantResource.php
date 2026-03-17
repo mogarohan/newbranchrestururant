@@ -19,7 +19,7 @@ class RestaurantResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = 'Restaurants';
     protected static ?string $navigationGroup = 'Administration';
-    
+
 
     /**
      * 🔐 Only Super Admin can see this resource
@@ -77,6 +77,22 @@ class RestaurantResource extends Resource
                 ->minValue(1)
                 ->required(),
 
+            /* --- MULTI-BRANCH FEATURE TOGGLE --- */
+            Forms\Components\Toggle::make('has_branches')
+                ->label('Enable Multiple Branches')
+                ->live() // Triggers UI update immediately when toggled
+                ->default(false),
+
+            /* --- MAX BRANCHES INPUT (Conditional) --- */
+            Forms\Components\TextInput::make('max_branches')
+                ->label('Maximum Branches Allowed')
+                ->numeric()
+                ->minValue(1)
+                // Visible only if the toggle is ON
+                ->visible(fn(callable $get) => $get('has_branches'))
+                // Required only if the toggle is ON
+                ->required(fn(callable $get) => $get('has_branches')),
+
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
         ]);
@@ -131,6 +147,18 @@ class RestaurantResource extends Resource
                     ->color('gray')
                     ->toggleable(),
 
+                /* --- MULTI-BRANCH STATUS ON TABLE --- */
+                Tables\Columns\IconColumn::make('has_branches')
+                    ->label('MULTI-BRANCH')
+                    ->boolean()
+                    ->alignCenter(),
+
+                /* --- MAX BRANCHES ON TABLE --- */
+                Tables\Columns\TextColumn::make('max_branches')
+                    ->label('MAX BRANCHES')
+                    ->placeholder('-') // Shows dash if null/empty
+                    ->alignCenter(),
+
                 Tables\Columns\TextColumn::make('user_limits')
                     ->label('USER LIMIT')
                     ->sortable(),
@@ -154,7 +182,7 @@ class RestaurantResource extends Resource
                     ->color('warning')
                     ->button()
                     ->outlined(),
-                    
+
                 Tables\Actions\DeleteAction::make()
                     ->color('danger')
                     ->button()

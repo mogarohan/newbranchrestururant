@@ -1,4 +1,5 @@
 <?php
+namespace App\Services\Restaurant;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
 use App\Models\KitchenQueue;
@@ -23,7 +24,7 @@ class OrderStatusService
 
     public static function transition(Order $order, string $to, string $actor): void
     {
-        if (! self::canTransition($order->status, $to)) {
+        if (!self::canTransition($order->status, $to)) {
             throw new \RuntimeException('Invalid order status transition');
         }
 

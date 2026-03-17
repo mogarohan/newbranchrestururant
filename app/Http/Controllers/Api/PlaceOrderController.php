@@ -14,7 +14,7 @@ use App\Models\MenuItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use App\Events\OrderStatusUpdated; // 🔥 NEW: Import the Event
+use App\Events\OrderStatusUpdated; 
 
 class PlaceOrderController extends Controller
 {
@@ -34,14 +34,12 @@ class PlaceOrderController extends Controller
         $restaurant = Restaurant::findOrFail($validated['restaurant_id']);
         $table = RestaurantTable::findOrFail($validated['table_id']);
 
-        // Ensure table belongs to restaurant
         if ($table->restaurant_id !== $restaurant->id) {
             throw ValidationException::withMessages([
                 'table_id' => ['Table does not belong to this restaurant.']
             ]);
         }
 
-        // Validate session
         $session = QrSession::where('session_token', $validated['session_token'])
             ->where('restaurant_table_id', $table->id)
             ->where('is_active', true)
@@ -53,27 +51,37 @@ class PlaceOrderController extends Controller
             ]);
         }
         
-        // 🔒 Restrict ordering for non-primary users
         if (!$session->is_primary && $session->join_status !== 'approved') {
             throw ValidationException::withMessages([
                 'session_token' => ['Waiting for primary approval.']
             ]);
         }
 
-
-        // Validate and prepare items
         $subtotal = 0;
         $preparedItems = [];
 
         foreach ($validated['items'] as $item) {
             $menuItem = MenuItem::where('id', $item['menu_item_id'])
                 ->where('restaurant_id', $restaurant->id)
-                ->where('is_available', true)
                 ->first();
 
             if (!$menuItem) {
                 throw ValidationException::withMessages([
-                    'items' => ['One or more items are invalid or unavailable.']
+                    'items' => ['One or more items are invalid.']
+                ]);
+            }
+
+            // 👇 SAFETY FIX: Check branch availability override
+            $branchStatus = DB::table('branch_menu_item_status')
+                ->where('menu_item_id', $menuItem->id)
+                ->where('branch_id', $table->branch_id)
+                ->first();
+                
+            $isAvailable = $branchStatus ? (bool) $branchStatus->is_available : (bool) $menuItem->is_available;
+
+            if (!$isAvailable) {
+                throw ValidationException::withMessages([
+                    'items' => ["{$menuItem->name} is currently unavailable at this branch."]
                 ]);
             }
 
@@ -90,8 +98,8 @@ class PlaceOrderController extends Controller
             ];
         }
 
-        $totalAmount = $subtotal; // tax = 0
-        $order = null; // 🔥 NEW: Define outside to use in event dispatch
+        $totalAmount = $subtotal; 
+        $order = null; 
 
         DB::transaction(function () use (
             $restaurant,
@@ -100,11 +108,12 @@ class PlaceOrderController extends Controller
             $validated,
             $preparedItems,
             $totalAmount,
-            &$order // 🔥 NEW: Pass by reference
+            &$order 
         ) {
 
             $order = Order::create([
                 'restaurant_id' => $restaurant->id,
+                'branch_id' => $table->branch_id, 
                 'restaurant_table_id' => $table->id,
                 'qr_session_id' => $session->id,
                 'customer_name' => $session->customer_name,
@@ -127,7 +136,6 @@ class PlaceOrderController extends Controller
             ]);
         });
 
-        // 🔥 NEW: Dispatch Event to update Manager Dashboard in real-time
         if ($order) {
             OrderStatusUpdated::dispatch($order);
         }
@@ -146,20 +154,16 @@ class PlaceOrderController extends Controller
             return response()->json(['message' => 'Session not found'], 404);
         }
 
-        // 🔥 GROUP BILLING LOGIC: Find everyone sharing this table's tab
         if ($session->is_primary) {
-            // If I am the Host, get my ID + all my Guests' IDs
             $groupIds = QrSession::where('host_session_id', $session->id)
                 ->orWhere('id', $session->id)
                 ->pluck('id');
         } else {
-            // If I am a Guest, get my Host's ID + all other Guests' IDs
             $groupIds = QrSession::where('host_session_id', $session->host_session_id)
                 ->orWhere('id', $session->host_session_id)
                 ->pluck('id');
         }
 
-        // Fetch all orders for the entire group
         $orders = Order::with(['items.menuItem'])
             ->whereIn('qr_session_id', $groupIds)
             ->orderBy('created_at', 'desc')
@@ -169,7 +173,7 @@ class PlaceOrderController extends Controller
                     'id' => $order->id,
                     'status' => $order->status,
                     'total_amount' => $order->total_amount,
-                    'customer_name' => $order->customer_name, // Tells the frontend WHO ordered it!
+                    'customer_name' => $order->customer_name,
                     'created_at' => $order->created_at,
                     'items' => $order->items
                 ];

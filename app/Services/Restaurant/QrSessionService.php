@@ -31,7 +31,7 @@ class QrSessionService
             ->first();
 
         if ($existing) {
-            if ($customerName && ! $existing->customer_name) {
+            if ($customerName && !$existing->customer_name) {
                 $existing->update(['customer_name' => $customerName]);
             }
 
@@ -40,13 +40,14 @@ class QrSessionService
 
         // Create fresh session
         return QrSession::create([
-            'restaurant_id'        => $restaurant->id,
-            'restaurant_table_id'  => $table->id,
-            'session_token'        => Str::uuid(),
-            'customer_name'        => $customerName,
-            'is_primary'           => true,
-            'is_active'            => true,
-            'expires_at'           => now()->addHours(3),
+            'restaurant_id' => $restaurant->id,
+            'branch_id' => $table->branch_id, // 👈 YAHAN BRANCH ID ADD KIYA GAYA HAI
+            'restaurant_table_id' => $table->id,
+            'session_token' => Str::uuid(),
+            'customer_name' => $customerName,
+            'is_primary' => true,
+            'is_active' => true,
+            'expires_at' => now()->addHours(3),
         ]);
     }
 }

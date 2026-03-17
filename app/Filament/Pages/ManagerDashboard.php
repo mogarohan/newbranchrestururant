@@ -8,7 +8,7 @@ use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
-use App\Events\OrderStatusUpdated; // 🔥 NEW: Import the Event
+use App\Events\OrderStatusUpdated;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 
@@ -22,32 +22,27 @@ class ManagerDashboard extends Page
     protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
-    // 🔥 Listen to Pusher and instantly refresh the page when an order drops!
+
     public function getListeners(): array
     {
         $restaurantId = auth()->user()->restaurant_id;
 
         return [
             // Notice the leading dot (.) before OrderStatusUpdated! 
-            // It tells Livewire this is a custom broadcast name, not a namespace.
             "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
         ];
     }
 
-    private function getRestaurantId()
-    {
-        return auth()->user()->restaurant_id;
-    }
     public function getMaxContentWidth(): MaxWidth|string|null
     {
-        return MaxWidth::Full; // Force full width for 200 tables
+        return MaxWidth::Full;
     }
 
     public static function canAccess(): bool
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, ['manager']);
+            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin']); // Added branch_admin for flexibility
     }
 
     public function openTable($tableId)
@@ -65,7 +60,6 @@ class ManagerDashboard extends Page
         $oldStatus = $order->status;
         $order->update(['status' => $status]);
 
-        // Send to kitchen when 'accepted', not 'preparing'
         if ($status === 'accepted') {
             KitchenQueue::firstOrCreate(
                 ['order_id' => $order->id],
@@ -80,16 +74,27 @@ class ManagerDashboard extends Page
             'changed_by' => auth()->id(),
         ]);
 
-        // 🔥 NEW: Dispatch Event to update Customer's Phone in real-time
         OrderStatusUpdated::dispatch($order);
     }
 
     protected function getViewData(): array
     {
-        $restaurantId = auth()->user()->restaurant_id;
+        $user = auth()->user();
+        $restaurantId = $user->restaurant_id;
+        $branchId = $user->branch_id;
 
-        // 1. MASSIVE SCALE OPTIMIZATION: Dense Floor Plan counts and sums.
-        $tables = RestaurantTable::where('restaurant_id', $restaurantId)
+        // --- 1. TABLES QUERY WITH BRANCH ISOLATION ---
+        $tablesQuery = RestaurantTable::where('restaurant_id', $restaurantId);
+
+        // 👇 FIX: If manager belongs to a branch, show only branch tables. 
+        // If it's a main restaurant manager, show only branch_id NULL tables.
+        if ($branchId) {
+            $tablesQuery->where('branch_id', $branchId);
+        } else {
+            $tablesQuery->whereNull('branch_id');
+        }
+
+        $tables = $tablesQuery
             ->withCount([
                 'qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true),
                 'orders as preparing_count' => fn($q) => $q->where('status', 'preparing'),
@@ -98,7 +103,7 @@ class ManagerDashboard extends Page
             ->withSum([
                 'orders as total_bill' => fn($q) => $q->whereIn('status', ['preparing', 'ready', 'served'])
             ], 'total_amount')
-            ->orderBy('table_number', 'asc') // Fixed order for map mapping
+            ->orderBy('table_number', 'asc')
             ->get();
 
         $totalTables = $tables->count();
@@ -107,7 +112,7 @@ class ManagerDashboard extends Page
         $freeTables = $totalTables - $activeTables;
         $activeSessions = $tables->sum('active_sessions_count');
 
-        // 2. ONLY fetch heavy item data for the 1 table currently clicked
+        // --- 2. SELECTED TABLE DATA ---
         $selectedTableData = null;
         if ($this->selectedTableId) {
             $selectedTableData = RestaurantTable::with([
@@ -119,9 +124,18 @@ class ManagerDashboard extends Page
             ])->find($this->selectedTableId);
         }
 
-        // 3. Fetch Incoming Orders
-        $incomingOrders = Order::where('restaurant_id', $restaurantId)
-            ->where('status', 'placed')
+        // --- 3. INCOMING ORDERS WITH BRANCH ISOLATION ---
+        $ordersQuery = Order::where('restaurant_id', $restaurantId)
+            ->where('status', 'placed');
+
+        // 👇 FIX: Isolate incoming orders so Branch Manager doesn't see Main Restaurant orders
+        if ($branchId) {
+            $ordersQuery->where('branch_id', $branchId);
+        } else {
+            $ordersQuery->whereNull('branch_id');
+        }
+
+        $incomingOrders = $ordersQuery
             ->with(['items.menuItem.category', 'restaurantTable'])
             ->orderBy('created_at', 'asc')
             ->get();

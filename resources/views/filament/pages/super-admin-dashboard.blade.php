@@ -357,6 +357,8 @@
                         <tr>
                             <th>Restaurant ID</th>
                             <th>Restaurant Name</th>
+                            <th style="text-align: center;">Multi-Branch</th>
+                            <th style="text-align: center;">Max Branches</th>
                             <th>Max User Limit</th>
                             <th>Active Users</th>
                             <th>Remaining Capacity</th>
@@ -368,6 +370,21 @@
                             <tr>
                                 <td style="color: var(--text-sub); font-family: monospace;">{{ $restaurant->id }}</td>
                                 <td style="font-weight: 700; color: var(--text-main);">{{ $restaurant->name }}</td>
+
+                                <td style="text-align: center;">
+                                    @if($restaurant->has_branches)
+                                        <x-heroicon-o-check-circle
+                                            style="width: 24px; height: 24px; color: var(--brand-green); margin: 0 auto;" />
+                                    @else
+                                        <x-heroicon-o-minus-circle
+                                            style="width: 24px; height: 24px; color: var(--text-sub); margin: 0 auto;" />
+                                    @endif
+                                </td>
+
+                                <td style="text-align: center; font-weight: 600; font-size: 1rem;">
+                                    {{ $restaurant->has_branches ? ($restaurant->max_branches ?? '∞') : '-' }}
+                                </td>
+
                                 <td>{{ $restaurant->user_limits }}</td>
                                 <td>
                                     {{ $restaurant->active_users_count }}

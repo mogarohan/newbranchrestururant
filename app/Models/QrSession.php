@@ -18,6 +18,7 @@ class QrSession extends Model
         'is_active',
         'host_session_id',
         'expires_at',
+        'branch_id',
     ];
 
     protected $casts = [

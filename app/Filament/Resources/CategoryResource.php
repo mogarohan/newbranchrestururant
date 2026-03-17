@@ -10,7 +10,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString; // 👈 CSS Injection ke liye zaroori hai
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\DB; // 👈 IMPORT DB FOR PIVOT TABLE
 
 class CategoryResource extends Resource
 {
@@ -25,21 +26,56 @@ class CategoryResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id !== null
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager']);
+            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
+    // 👇 Branch Admin / Manager naya nahi bana sakte
+    public static function canCreate(): bool
+    {
+        return !auth()->user()->isBranchAdmin() && !auth()->user()->isManager(); 
+    }
+
+    // 👇 Edit ko TRUE karna zaroori hai, warna Filament Toggle button ko disable kar dega!
+    public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return true;
+    }
+
+    // 👇 Branch Admin delete nahi kar sakte
+    public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
+    {
+        return !auth()->user()->isBranchAdmin() && !auth()->user()->isManager();
+    }
+
+    /* -----------------------------------------------------------
+       DATA ISOLATION (FIXED)
+    ------------------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
-            ->where('restaurant_id', auth()->user()->restaurant_id);
+        $user = auth()->user();
+
+        // 👇 FIX: withoutGlobalScopes() add kiya 
+        $query = parent::getEloquentQuery()->withoutGlobalScopes(); 
+
+        $query->where('restaurant_id', $user->restaurant_id);
+
+        // 👇 Sirf Main Restaurant (null branch_id) ki categories dikhengi
+        if ($user->isBranchAdmin() || $user->isManager()) {
+            $query->whereNull('branch_id');
+        }
+
+        return $query;
     }
 
     public static function form(Form $form): Form
     {
         return $form->schema([
             Forms\Components\Hidden::make('restaurant_id')
-                ->default(fn () => auth()->user()->restaurant_id)
+                ->default(fn() => auth()->user()->restaurant_id)
                 ->required(),
+
+            Forms\Components\Hidden::make('branch_id')
+                ->default(fn() => auth()->user()->branch_id),
 
             Forms\Components\TextInput::make('name')
                 ->required()
@@ -48,7 +84,16 @@ class CategoryResource extends Resource
                     table: 'categories',
                     column: 'name',
                     ignoreRecord: true,
-                    modifyRuleUsing: fn ($rule) => $rule->where('restaurant_id', auth()->user()->restaurant_id)
+                    modifyRuleUsing: function ($rule) {
+                        $user = auth()->user();
+                        $rule->where('restaurant_id', $user->restaurant_id);
+
+                        if ($user->isBranchAdmin() || $user->isManager()) {
+                            $rule->where('branch_id', $user->branch_id);
+                        }
+
+                        return $rule;
+                    }
                 ),
 
             Forms\Components\TextInput::make('sort_order')
@@ -64,30 +109,12 @@ class CategoryResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🎨 CSS INJECTION FOR TRANSPARENCY
             ->heading(new HtmlString('
                 <style>
-                    /* Make the entire table wrapper transparent */
-                    .fi-ta-ctn {
-                        background-color: transparent !important;
-                        box-shadow: none !important;
-                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
-                    }
-                    /* Headers, Toolbars, Footers */
-                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
-                        background-color: transparent !important;
-                        border-color: rgba(156, 163, 175, 0.2) !important;
-                    }
-                    /* Individual Rows */
-                    .fi-ta-record {
-                        background-color: transparent !important;
-                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
-                        transition: background-color 0.2s ease;
-                    }
-                    /* Row Hover Effect */
-                    .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
-                    }
+                    .fi-ta-ctn { background-color: transparent !important; box-shadow: none !important; border: 1px solid rgba(156, 163, 175, 0.2) !important; }
+                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th { background-color: transparent !important; border-color: rgba(156, 163, 175, 0.2) !important; }
+                    .fi-ta-record { background-color: transparent !important; border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important; transition: background-color 0.2s ease; }
+                    .fi-ta-record:hover { background-color: rgba(234, 88, 12, 0.05) !important; }
                 </style>
                 <span style="font-size: 1.25rem; font-weight: 800;">Menu Categories</span>
             '))
@@ -100,10 +127,39 @@ class CategoryResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                // Toggle column matches the orange theme
+                Tables\Columns\TextColumn::make('branch.name')
+                    ->label('SOURCE')
+                    ->default('Main Restaurant')
+                    ->sortable()
+                    ->color('gray'),
+
+                // 👇 JADOO: Independent Category Toggle
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->label('STATUS')
-                    ->onColor('warning'),
+                    ->onColor('warning')
+                    // Disabled property hata di taaki click ho sake
+                    ->getStateUsing(function (Category $record) {
+                        $user = auth()->user();
+                        if ($user->isBranchAdmin() || $user->isManager()) {
+                            $status = DB::table('branch_category_status')
+                                ->where('category_id', $record->id)
+                                ->where('branch_id', $user->branch_id)
+                                ->first();
+                            return $status ? (bool) $status->is_active : (bool) $record->is_active;
+                        }
+                        return (bool) $record->is_active;
+                    })
+                    ->updateStateUsing(function (Category $record, $state) {
+                        $user = auth()->user();
+                        if ($user->isBranchAdmin() || $user->isManager()) {
+                            DB::table('branch_category_status')->updateOrInsert(
+                                ['category_id' => $record->id, 'branch_id' => $user->branch_id],
+                                ['is_active' => $state, 'updated_at' => now()]
+                            );
+                        } else {
+                            $record->update(['is_active' => $state]);
+                        }
+                    }),
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('CREATED ON')
@@ -112,21 +168,22 @@ class CategoryResource extends Resource
                     ->sortable(),
             ])
             ->actions([
-                // Styled Actions matching Premium UI
                 Tables\Actions\EditAction::make()
                     ->button()
                     ->outlined()
-                    ->color('warning'),
+                    ->color('warning')
+                    // 👇 Edit permission ON hone ke bawajood, button ko HIDE kar diya Branch Admin ke liye
+                    ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
 
                 Tables\Actions\DeleteAction::make()
                     ->button()
                     ->outlined()
                     ->color('danger')
-                    ->visible(fn () => auth()->user()->role->name === 'restaurant_admin'),
+                    ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
             ])
             ->bulkActions([
                 Tables\Actions\DeleteBulkAction::make()
-                    ->visible(fn () => auth()->user()->role->name === 'restaurant_admin'),
+                    ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
             ]);
     }
 
