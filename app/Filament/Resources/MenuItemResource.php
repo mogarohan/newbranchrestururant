@@ -115,22 +115,36 @@ class MenuItemResource extends Resource
                 ->required(),
 
             Forms\Components\FileUpload::make('image_path')
-                ->label('Item Image')
-                ->image()
-                ->disk('public')
-                ->directory(function (callable $get) {
-                    $user = auth()->user();
-                    $restaurantSlug = $user->restaurant->slug;
-                    $branchId = $get('branch_id');
+    ->label('Item Image')
+    ->image()
+    ->disk('public')
+    ->directory(function (callable $get) {
+        $user = auth()->user();
+        $restaurantSlug = $user->restaurant->slug ?? 'default';
+        $branchId = $get('branch_id');
 
-                    if ($branchId) {
-                        return "restaurants/{$restaurantSlug}/branches/branch-{$branchId}/items";
-                    }
+        // Route to the branch folder if branch_id is present, otherwise main restaurant
+        if ($branchId) {
+            return "restaurants/{$restaurantSlug}/branches/branch-{$branchId}/items";
+        }
 
-                    return "restaurants/{$restaurantSlug}/items";
-                })
-                ->imageEditor()
-                ->maxSize(2048),
+        return "restaurants/{$restaurantSlug}/items";
+    })
+    ->getUploadedFileNameForStorageUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file, callable $get): string {
+        // Fetch the value from the 'name' field in the form
+        $itemName = $get('name');
+        
+        // Clean the string (e.g., "Truffle Burger" becomes "truffle-burger")
+        $cleanName = $itemName ? \Illuminate\Support\Str::slug($itemName) : 'item';
+        
+        // Get the original file extension (.jpg, .png, etc.)
+        $extension = $file->getClientOriginalExtension();
+        
+        // Return the new safe filename with a unique ID appended
+        return "{$cleanName}-" . uniqid() . ".{$extension}";
+    })
+    ->imageEditor()
+    ->maxSize(2048),
 
             Forms\Components\Toggle::make('is_available')
                 ->default(true),

@@ -14,6 +14,7 @@ class Payment extends Model
         'status',
         'transaction_reference',
         'paid_at',
+        'restaurant_id',
         'branch_id',
     ];
 
