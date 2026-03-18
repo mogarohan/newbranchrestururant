@@ -111,7 +111,7 @@
 
     <div class="sa-scope">
 
-        {{-- 2. TOP 4 WIDGETS (Strictly 1 line on Desktop) --}}
+       {{-- 2. TOP WIDGETS (Grid Layout) --}}
         <div class="sa-stats-grid">
             {{-- Total Staff (From users table) --}}
             <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-orange) !important;">
@@ -177,6 +177,31 @@
                     <div class="stat-desc text-purple-500 font-bold mt-1">Manage Locations &rarr;</div>
                 </a>
             @endif
+
+            {{-- 👇 NAYA: BRANCH REVENUES (Same Grid ke andar add hoga) 👇 --}}
+            @if($showBranchesWidget && count($branchRevenues) > 0)
+                @php
+                    $colors = ['#ec4899', '#14b8a6', '#eab308', '#0ea5e9', '#f43f5e', '#8b5cf6'];
+                @endphp
+                
+                @foreach($branchRevenues as $index => $br)
+                    @php 
+                        $color = $colors[$index % count($colors)]; 
+                    @endphp
+                    <div class="glass-panel stat-box" style="border-bottom: 4px solid {{ $color }} !important;">
+                        <div class="stat-header">
+                            {{-- Branch ka naam heading me aayega --}}
+                            <span class="stat-label" style="color: {{ $color }};">{{ $br['name'] }} Revenue</span>
+                            <div class="stat-icon" style="background: {{ $color }}20; color: {{ $color }};">
+                                <x-heroicon-s-building-storefront class="w-5 h-5" />
+                            </div>
+                        </div>
+                        <div class="stat-value">₹{{ number_format($br['revenue'], 0) }}</div>
+                        <div class="stat-desc" style="color: {{ $color }} opacity: 0.8;">Branch Earnings</div>
+                    </div>
+                @endforeach
+            @endif
+            {{-- 👆 NAYA: BRANCH REVENUES END 👆 --}}
 
         </div>
 

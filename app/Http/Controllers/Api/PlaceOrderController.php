@@ -14,7 +14,7 @@ use App\Models\MenuItem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use App\Events\OrderStatusUpdated; 
+use App\Events\OrderStatusUpdated;
 
 class PlaceOrderController extends Controller
 {
@@ -50,7 +50,7 @@ class PlaceOrderController extends Controller
                 'session_token' => ['Session expired or invalid.']
             ]);
         }
-        
+
         if (!$session->is_primary && $session->join_status !== 'approved') {
             throw ValidationException::withMessages([
                 'session_token' => ['Waiting for primary approval.']
@@ -76,7 +76,7 @@ class PlaceOrderController extends Controller
                 ->where('menu_item_id', $menuItem->id)
                 ->where('branch_id', $table->branch_id)
                 ->first();
-                
+
             $isAvailable = $branchStatus ? (bool) $branchStatus->is_available : (bool) $menuItem->is_available;
 
             if (!$isAvailable) {
@@ -98,22 +98,14 @@ class PlaceOrderController extends Controller
             ];
         }
 
-        $totalAmount = $subtotal; 
-        $order = null; 
+        $totalAmount = $subtotal;
+        $order = null;
 
-        DB::transaction(function () use (
-            $restaurant,
-            $table,
-            $session,
-            $validated,
-            $preparedItems,
-            $totalAmount,
-            &$order 
-        ) {
+        DB::transaction(function () use ($restaurant, $table, $session, $validated, $preparedItems, $totalAmount, &$order) {
 
             $order = Order::create([
                 'restaurant_id' => $restaurant->id,
-                'branch_id' => $table->branch_id, 
+                'branch_id' => $table->branch_id,
                 'restaurant_table_id' => $table->id,
                 'qr_session_id' => $session->id,
                 'customer_name' => $session->customer_name,
@@ -145,7 +137,7 @@ class PlaceOrderController extends Controller
             'total_amount' => $totalAmount
         ], 201);
     }
-    
+
     public function getSessionOrders($token)
     {
         $session = QrSession::where('session_token', $token)->first();
