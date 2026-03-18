@@ -8,7 +8,7 @@ use App\Models\MenuItem;
 use App\Models\Payment;
 use App\Models\Order;
 use App\Models\Category;
-use App\Models\Branch; // 👈 Naya Import: Branch model add kiya
+use App\Models\Branch;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -33,7 +33,7 @@ class AdminDashboard extends Page
         $rid = $user->restaurant_id;
         $bid = $user->branch_id;
         $isBranchAdmin = $user->isBranchAdmin();
-        $isRestaurantAdmin = $user->isRestaurantAdmin(); // 👈 Naya check add kiya
+        $isRestaurantAdmin = $user->isRestaurantAdmin();
 
         /* ---------------------------------------------------
          | 1. STATS DATA (Isolated for Branch Admin)
@@ -50,6 +50,7 @@ class AdminDashboard extends Page
         if ($showBranchesWidget) {
             $totalBranches = Branch::where('restaurant_id', $rid)->count();
         }
+
         // STAFF COUNT
         $staffQuery = User::where('restaurant_id', $rid);
         if ($isBranchAdmin) {
@@ -80,6 +81,24 @@ class AdminDashboard extends Page
             $orderQuery->where('branch_id', $bid);
         }
         $todayOrders = $orderQuery->count();
+
+        /* 👇 NAYA LOGIC: BRANCH-WISE REVENUE CALCULATION 👇 */
+        $branchRevenues = [];
+        if ($showBranchesWidget) {
+            $branches = Branch::where('restaurant_id', $rid)->get();
+            foreach ($branches as $branch) {
+                $bRevenue = Payment::whereHas('order', function ($query) use ($rid, $branch) {
+                    $query->where('restaurant_id', $rid)
+                        ->where('branch_id', $branch->id);
+                })->where('status', 'paid')->sum('amount');
+
+                $branchRevenues[] = [
+                    'name' => $branch->name,
+                    'revenue' => $bRevenue,
+                ];
+            }
+        }
+        /* 👆 END NAYA LOGIC 👆 */
 
         /* ---------------------------------------------------
          | 2. CHART DATA: Orders Volume (Isolated)
@@ -124,9 +143,10 @@ class AdminDashboard extends Page
             ->get();
 
         return [
-            'totalBranches' => $totalBranches,       // 👈 Data pass kiya blade me
+            'totalBranches' => $totalBranches,
             'isRestaurantAdmin' => $isRestaurantAdmin,
-            'showBranchesWidget' => $showBranchesWidget,// 👈 Blade me IF condition lagane ke liye
+            'showBranchesWidget' => $showBranchesWidget,
+            'branchRevenues' => $branchRevenues, // 👈 Blade me pass kiya
             'totalStaff' => $totalStaff,
             'totalItems' => $totalItems,
             'totalRevenue' => $totalRevenue,
@@ -138,3 +158,4 @@ class AdminDashboard extends Page
         ];
     }
 }
+?>

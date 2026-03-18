@@ -10,7 +10,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
-use Illuminate\Support\HtmlString; // 👈 Custom CSS ke liye import kiya gaya hai
+use Illuminate\Support\HtmlString;
 
 class RestaurantResource extends Resource
 {
@@ -19,7 +19,6 @@ class RestaurantResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = 'Restaurants';
     protected static ?string $navigationGroup = 'Administration';
-
 
     /**
      * 🔐 Only Super Admin can see this resource
@@ -80,7 +79,7 @@ class RestaurantResource extends Resource
             /* --- MULTI-BRANCH FEATURE TOGGLE --- */
             Forms\Components\Toggle::make('has_branches')
                 ->label('Enable Multiple Branches')
-                ->live() // Triggers UI update immediately when toggled
+                ->live()
                 ->default(false),
 
             /* --- MAX BRANCHES INPUT (Conditional) --- */
@@ -88,13 +87,36 @@ class RestaurantResource extends Resource
                 ->label('Maximum Branches Allowed')
                 ->numeric()
                 ->minValue(1)
-                // Visible only if the toggle is ON
                 ->visible(fn(callable $get) => $get('has_branches'))
-                // Required only if the toggle is ON
                 ->required(fn(callable $get) => $get('has_branches')),
 
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
+
+            /* 👇 NAYI RESTAURANT BANATE WAQT RESTAURANT ADMIN CREATE KARNE KE LIYE FIELDS 👇 */
+            Forms\Components\Section::make('Create Restaurant Admin')
+                ->description('These credentials will be used by the restaurant admin to log in.')
+                ->schema([
+                    Forms\Components\TextInput::make('admin_name')
+                        ->label('Admin Name')
+                        ->required()
+                        ->dehydrated(false), // Isko Restaurant table me save nahi karna hai
+
+                    Forms\Components\TextInput::make('admin_email')
+                        ->label('Admin Email')
+                        ->email()
+                        ->required()
+                        ->unique('users', 'email') // User table me unique hona chahiye
+                        ->dehydrated(false),
+
+                    Forms\Components\TextInput::make('admin_password')
+                        ->label('Admin Password')
+                        ->password()
+                        ->required()
+                        ->dehydrated(false),
+                ])
+                // YEH SECTION SIRF CREATE WALE PAGE PAR DIKHEGA
+                ->visible(fn($livewire) => $livewire instanceof Pages\CreateRestaurant),
         ]);
     }
 
@@ -104,7 +126,6 @@ class RestaurantResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🎨 CSS INJECTION FOR TRANSPARENCY
             ->heading(new HtmlString('
                 <style>
                     /* Make the entire table wrapper transparent */
@@ -139,7 +160,7 @@ class RestaurantResource extends Resource
                     ->label('NAME')
                     ->searchable()
                     ->sortable()
-                    ->weight('bold'), // Bold text matching the UI
+                    ->weight('bold'),
 
                 Tables\Columns\TextColumn::make('slug')
                     ->label('SLUG')
@@ -147,16 +168,14 @@ class RestaurantResource extends Resource
                     ->color('gray')
                     ->toggleable(),
 
-                /* --- MULTI-BRANCH STATUS ON TABLE --- */
                 Tables\Columns\IconColumn::make('has_branches')
                     ->label('MULTI-BRANCH')
                     ->boolean()
                     ->alignCenter(),
 
-                /* --- MAX BRANCHES ON TABLE --- */
                 Tables\Columns\TextColumn::make('max_branches')
                     ->label('MAX BRANCHES')
-                    ->placeholder('-') // Shows dash if null/empty
+                    ->placeholder('-')
                     ->alignCenter(),
 
                 Tables\Columns\TextColumn::make('user_limits')
@@ -170,14 +189,13 @@ class RestaurantResource extends Resource
 
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('CREATED ON')
-                    ->date('M d, Y') // Clean date format
+                    ->date('M d, Y')
                     ->sortable()
                     ->color('gray')
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                // Premium Button Actions (Like UserResource)
                 Tables\Actions\EditAction::make()
                     ->color('warning')
                     ->button()
@@ -188,9 +206,8 @@ class RestaurantResource extends Resource
                     ->button()
                     ->outlined(),
             ])
-            ->bulkActions([]); // 🚫 no bulk delete
+            ->bulkActions([]);
     }
-
 
     public static function getPages(): array
     {

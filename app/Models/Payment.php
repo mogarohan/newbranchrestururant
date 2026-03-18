@@ -15,6 +15,8 @@ class Payment extends Model
         'transaction_reference',
         'paid_at',
         'branch_id',
+        'restaurant_id', // 👈 Isko add karna sabse zaroori hai
+
     ];
 
     protected $casts = ['paid_at' => 'datetime'];

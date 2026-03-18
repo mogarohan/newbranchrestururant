@@ -12,6 +12,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\HtmlString;
 
 class BranchResource extends Resource
 {
@@ -31,12 +32,10 @@ class BranchResource extends Resource
             return false;
         }
 
-        // 1. Super Admin hamesha dekh sakta hai
         if ($user->isSuperAdmin()) {
             return true;
         }
 
-        // 2. Restaurant Admin sirf tabhi dekh sakta hai jab uske restaurant ka 'has_branches' TRUE ho
         if ($user->isRestaurantAdmin()) {
             return $user->restaurant && $user->restaurant->has_branches == true;
         }
@@ -52,17 +51,14 @@ class BranchResource extends Resource
         $query = parent::getEloquentQuery();
         $user = auth()->user();
 
-        // 1. Super Admin ko saari branches dikhengi
         if ($user->isSuperAdmin()) {
             return $query;
         }
 
-        // 2. Restaurant Admin ko sirf apne restaurant ki branches dikhengi
         if ($user->isRestaurantAdmin()) {
             return $query->where('restaurant_id', $user->restaurant_id);
         }
 
-        // 3. Manager/Branch Admin ko sirf unki specific branch dikhegi (Optional safety)
         return $query->where('id', $user->branch_id);
     }
 
@@ -73,20 +69,70 @@ class BranchResource extends Resource
     {
         return $form->schema([
 
-            /* 👇 FIX: Dono fields ko combine kar diya taaki same naam se clash na ho 👇 */
             auth()->user()->isSuperAdmin()
             ? Forms\Components\Select::make('restaurant_id')
                 ->label('Restaurant')
                 ->options(Restaurant::where('has_branches', true)->pluck('name', 'id'))
                 ->searchable()
                 ->required()
+                ->live()
             : Forms\Components\Hidden::make('restaurant_id')
                 ->default(fn() => Auth::user()->restaurant_id),
+
+            /* 👇 NAYA: BRANCH USAGE DISPLAY WITH ALERT MESSAGE 👇 */
+            Forms\Components\Placeholder::make('branch_usage')
+                ->label('Restaurant Branch Usage')
+                ->visible(function (Forms\Get $get) {
+                    $user = auth()->user();
+                    if ($user->isSuperAdmin()) {
+                        return filled($get('restaurant_id'));
+                    }
+                    return true;
+                })
+                ->content(function (Forms\Get $get) {
+                    $user = auth()->user();
+                    $restaurantId = $user->isSuperAdmin() ? $get('restaurant_id') : $user->restaurant_id;
+
+                    $limit = 3; // 👈 Aap is limit ko apne hisaab se change kar sakte hain
+                    $count = Branch::where('restaurant_id', $restaurantId)->count();
+
+                    // Agar limit poori ho gayi hai, toh ek bada Red Warning Box dikhega
+                    if ($count >= $limit) {
+                        return new HtmlString("
+                            <div class='p-4 mb-2 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800' role='alert'>
+                                <span class='font-black text-base'>⚠️ Limit Reached!</span><br>
+                                {$count} / {$limit} branches used. <br>
+                                <strong>Contact Super Admin to add more branches.</strong>
+                            </div>
+                        ");
+                    }
+
+                    // Agar limit bachi hai, toh normal text dikhega
+                    return new HtmlString("<span class='text-gray-700 dark:text-gray-300 font-bold'>{$count} / {$limit} branches used</span>");
+                })
+                ->columnSpanFull(),
 
             Forms\Components\TextInput::make('name')
                 ->label('Branch Name')
                 ->required()
-                ->maxLength(255),
+                ->maxLength(255)
+                /* 👇 FIX: SAVE KARNE SE ROKNE KE LIYE VALIDATION 👇 */
+                ->rule(function (Forms\Get $get) {
+                    return function (string $attribute, $value, \Closure $fail) use ($get) {
+                        $user = auth()->user();
+                        $restaurantId = $user->isSuperAdmin() ? $get('restaurant_id') : $user->restaurant_id;
+
+                        if ($restaurantId) {
+                            $limit = 3; // Same limit yahan bhi rakhein
+                            $count = Branch::where('restaurant_id', $restaurantId)->count();
+
+                            // Agar naya record create ho raha hai aur limit cross ho gayi hai
+                            if ($count >= $limit && request()->routeIs('filament.*.resources.branches.create')) {
+                                $fail('Branch limit reached! Contact Super Admin to add more branches.');
+                            }
+                        }
+                    };
+                }),
 
             Forms\Components\TextInput::make('phone')
                 ->tel()
@@ -107,13 +153,13 @@ class BranchResource extends Resource
                     Forms\Components\TextInput::make('admin_name')
                         ->label('Branch Admin Name')
                         ->required()
-                        ->dehydrated(false), // dehydrated(false) ensures ye Branch table me save hone ki koshish na kare
+                        ->dehydrated(false),
 
                     Forms\Components\TextInput::make('admin_email')
                         ->label('Branch Admin Email')
                         ->email()
                         ->required()
-                        ->unique('users', 'email') // Email pehle se na ho
+                        ->unique('users', 'email')
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('admin_password')
@@ -122,7 +168,6 @@ class BranchResource extends Resource
                         ->required()
                         ->dehydrated(false),
                 ])
-                // YEH SECTION SIRF CREATE WALE PAGE PAR DIKHEGA
                 ->visible(fn($livewire) => $livewire instanceof Pages\CreateBranch),
 
         ]);
@@ -139,7 +184,6 @@ class BranchResource extends Resource
                 Tables\Columns\TextColumn::make('id')
                     ->sortable(),
 
-                // Super Admin ko pata chalna chahiye ye branch kis restaurant ki hai
                 Tables\Columns\TextColumn::make('restaurant.name')
                     ->label('Restaurant Brand')
                     ->sortable()
