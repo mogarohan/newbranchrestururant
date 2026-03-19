@@ -185,7 +185,17 @@ class UserResource extends Resource
                 ->label('Role')
                 ->required()
                 ->reactive()
-                ->options(fn() => self::availableRoles()),
+                ->options(fn() => self::availableRoles())
+                ->default(function () {
+                    $requestedRole = request()->query('role'); // Get '?role=xxx' from URL
+                    
+                    if ($requestedRole) {
+                        // Fetch the ID directly from the DB
+                        return \App\Models\Role::where('name', $requestedRole)->value('id');
+                    }
+                    
+                    return null;
+                }),
 
             /* ACTIVE STATUS */
             Forms\Components\Toggle::make('is_active')

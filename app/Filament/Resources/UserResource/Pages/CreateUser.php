@@ -8,10 +8,26 @@ use Filament\Resources\Pages\CreateRecord;
 use LogicException;
 use App\Services\Restaurant\UserLimitService;
 use Filament\Notifications\Notification;
+use App\Models\Role;
 
 class CreateUser extends CreateRecord
 {
     protected static string $resource = UserResource::class;
+
+    
+    // protected function mutateFormDataBeforeFill(array $data): array
+    // {
+    //     $requestedRole = request()->query('role');
+
+    //     if ($requestedRole) {
+    //         $role = Role::where('name', $requestedRole)->first();
+    //         if ($role) {
+    //             $data['role_id'] = $role->id;
+    //         }
+    //     }
+
+    //     return $data;
+    // }
      protected function mutateFormDataBeforeCreate(array $data): array
     {
         $authUser = auth()->user();

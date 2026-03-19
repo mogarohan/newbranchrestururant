@@ -24,9 +24,10 @@ class CategoryResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->check()
-            && auth()->user()->restaurant_id !== null
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
+        return false;
+        // return auth()->check()
+        //     && auth()->user()->restaurant_id !== null
+        //     && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
     // 👇 Branch Admin / Manager naya nahi bana sakte

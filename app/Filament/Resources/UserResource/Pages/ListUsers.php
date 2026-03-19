@@ -15,10 +15,10 @@ class ListUsers extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make()
-                ->label('Create User')
-                ->icon('heroicon-o-user-plus')
-                ->color('danger'), // Matches the orange button in your UI
+            // Actions\CreateAction::make()
+            //     ->label('Create User')
+            //     ->icon('heroicon-o-user-plus')
+            //     ->color('danger'), // Matches the orange button in your UI
         ];
     }
 
