@@ -27,6 +27,7 @@ class User extends Authenticatable implements FilamentUser
         'is_super_admin',
         'password',
         'is_active',
+        'total_served',
     ];
 
     protected $casts = [
