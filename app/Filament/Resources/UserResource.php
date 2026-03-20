@@ -188,12 +188,12 @@ class UserResource extends Resource
                 ->options(fn() => self::availableRoles())
                 ->default(function () {
                     $requestedRole = request()->query('role'); // Get '?role=xxx' from URL
-                    
+        
                     if ($requestedRole) {
                         // Fetch the ID directly from the DB
                         return \App\Models\Role::where('name', $requestedRole)->value('id');
                     }
-                    
+
                     return null;
                 }),
 
@@ -209,102 +209,117 @@ class UserResource extends Resource
     /* ---------------------------------------------------
      | TABLE
      |---------------------------------------------------*/
-    public static function table(Table $table): Table
-    {
-        return $table
-            ->heading(new HtmlString('
-                <style>
-                    .fi-ta-ctn {
-                        background-color: transparent !important;
-                        box-shadow: none !important;
-                        border: 1px solid rgba(156,163,175,0.2) !important;
-                    }
+public static function table(Table $table): Table
+{
+    return $table
+        ->heading(new HtmlString('
+            <style>
+                /* --- LIGHT THEME (BLUE) --- */
+                .fi-ta-ctn {
+                    background-color: transparent !important;
+                    box-shadow: none !important;
+                    border: 1px solid rgba(156,163,175,0.2) !important;
+                    color: #000000 !important;
+                }
 
-                    .fi-ta-record {
-                        background-color: transparent !important;
-                        border-bottom: 1px solid rgba(156,163,175,0.2) !important;
-                    }
+                .fi-ta-cell-content, 
+                .fi-ta-text-item-label,
+                .fi-ta-text-item-description,
+                .fi-ta-header-cell-label {
+                    color: #000000 !important;
+                }
 
-                    .fi-ta-record:hover {
-                        background-color: rgba(234,88,12,0.05) !important;
-                    }
-                </style>
-            '))
-            ->columns([
+                .fi-ta-header-cell-label { font-weight: 800 !important; }
 
-                Tables\Columns\ImageColumn::make('avatar_url')
-                    ->label('Avatar')
-                    ->circular()
-                    ->defaultImageUrl(fn($record) =>
-                        'https://ui-avatars.com/api/?name='
-                        . urlencode($record->name)
-                        . '&color=FFFFFF&background=111827'),
+                /* Row Hover - Blue with low opacity */
+                .fi-ta-record:hover {
+                    background-color: rgba(30, 64, 175, 0.1) !important;
+                }
 
-                Tables\Columns\TextColumn::make('name')
-                    ->label('Name')
-                    ->searchable()
-                    ->sortable()
-                    ->weight('bold')
-                    ->description(
-                        fn(User $record) =>
-                        'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')
-                    ),
+                /* Active Icon - Green */
+                .fi-ta-icon-item {
+                    color: #20af1e !important;
+                }
 
-                Tables\Columns\TextColumn::make('email')
-                    ->label('Contact Info')
-                    ->searchable()
-                    ->copyable()
-                    ->color('gray'),
+                /* --- DARK THEME (WHITE TEXT) --- */
+                .dark .fi-ta-ctn,
+                .dark .fi-ta-cell-content, 
+                .dark .fi-ta-text-item-label,
+                .dark .fi-ta-text-item-description,
+                .dark .fi-ta-header-cell-label {
+                    color: #ffffff !important;
+                }
 
-                /* BRANCH COLUMN ADDED */
-                Tables\Columns\TextColumn::make('branch.name')
-                    ->label('Branch')
-                    ->default('Main Restaurant') // 👈 Agar branch nahi hai toh dash (-) ki jagah "Main Restaurant" aayega
-                    ->sortable()
-                    ->searchable(),
+                .dark .fi-ta-record:hover {
+                    background-color: rgba(255, 255, 255, 0.1) !important;
+                }
+            </style>
+        '))
+        ->columns([
+            Tables\Columns\ImageColumn::make('avatar_url')
+                ->label('Avatar')
+                ->circular()
+                ->defaultImageUrl(fn($record) =>
+                    'https://ui-avatars.com/api/?name='
+                    . urlencode($record->name)
+                    . '&color=FFFFFF&background=000000'), 
 
-                Tables\Columns\TextColumn::make('role.name')
-                    ->label('Role')
-                    ->badge()
-                    ->color(function (string $state) {
-                        // BULLETPROOF BADGE COLORS
-                        $normalized = strtolower(str_replace([' ', '-'], '_', $state));
-                        return match ($normalized) {
-                            'chef' => 'warning',
-                            'waiter' => 'info',
-                            'manager' => 'primary',
-                            'branch_admin' => 'success',
-                            'restaurant_admin' => 'danger',
-                            'super_admin' => 'gray',
-                            default => 'gray',
-                        };
-                    })
-                    ->formatStateUsing(fn(string $state) => ucfirst($state)),
+            Tables\Columns\TextColumn::make('name')
+                ->label('Name')
+                ->searchable()
+                ->sortable()
+                ->weight('bold')
+                ->description(
+                    fn(User $record) =>
+                    'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')
+                ),
 
-                Tables\Columns\IconColumn::make('is_active')
-                    ->label('Active')
-                    ->boolean()
-                    ->alignCenter(),
+            Tables\Columns\TextColumn::make('email')
+                ->label('Contact Info')
+                ->searchable()
+                ->copyable()
+                ->color('primary'), 
 
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->label('Last Active')
-                    ->since()
-                    ->color('gray'),
-            ])
-            ->defaultSort('created_at', 'desc')
-            ->actions([
-                Tables\Actions\EditAction::make()
-                    ->color('warning')
-                    ->button()
-                    ->outlined(),
+            Tables\Columns\TextColumn::make('branch.name')
+                ->label('Branch')
+                ->default('Main Restaurant') 
+                ->sortable()
+                ->searchable(),
 
-                Tables\Actions\DeleteAction::make()
-                    ->color('danger')
-                    ->button()
-                    ->outlined(),
-            ])
-            ->bulkActions([]);
-    }
+            Tables\Columns\TextColumn::make('role.name')
+                ->label('Role')
+                ->badge()
+                ->color(function (string $state) {
+                    $normalized = strtolower(str_replace([' ', '-'], '_', $state));
+                    return match ($normalized) {
+                        'chef', 'waiter', 'manager', 'branch_admin', 'restaurant_admin' => 'warning',
+                        default => 'gray',
+                    };
+                })
+                ->formatStateUsing(fn(string $state) => ucfirst($state)),
+
+            Tables\Columns\IconColumn::make('is_active')
+                ->label('Active')
+                ->boolean()
+                ->alignCenter(),
+
+            Tables\Columns\TextColumn::make('updated_at')
+                ->label('Last Active')
+                ->since()
+                ->color('primary'),
+        ])
+        ->actions([
+            Tables\Actions\EditAction::make()
+                ->color('warning')
+                ->button()
+                ->outlined(),
+
+            Tables\Actions\DeleteAction::make()
+                ->color('danger')
+                ->button()
+                ->outlined(),
+        ]);
+}
 
     /* ---------------------------------------------------
      | ROLE FILTER (BULLETPROOF)
