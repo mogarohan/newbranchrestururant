@@ -74,12 +74,63 @@
             background-color: #c2410c;
         }
 
-        /* Stats Grid - Updated for 5 Columns */
+        /* IN-CARD ACTION BUTTONS */
+        .sa-card-btn {
+            display: inline-block;
+            margin-top: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.35rem 0.75rem;
+            border-radius: 0.375rem;
+            text-decoration: none;
+            transition: background-color 0.2s ease;
+        }
+        
+        .sa-card-btn-orange {
+            color: var(--brand-orange);
+            background-color: rgba(234, 88, 12, 0.1);
+            border: 1px solid rgba(234, 88, 12, 0.2);
+        }
+        
+        .sa-card-btn-orange:hover {
+            background-color: rgba(234, 88, 12, 0.2);
+        }
+
+        .sa-card-btn-blue {
+            color: var(--brand-blue);
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .sa-card-btn-blue:hover {
+            background-color: rgba(59, 130, 246, 0.2);
+        }
+
+        /* 👇 ADDED PURPLE BUTTON FOR BRANCHES 👇 */
+        .sa-card-btn-purple {
+            color: var(--brand-purple);
+            background-color: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        .sa-card-btn-purple:hover {
+            background-color: rgba(139, 92, 246, 0.2);
+        }
+
+        /* Stats Grid */
         .sa-stats-grid {
             display: grid;
             grid-template-columns: repeat(1, 1fr);
             gap: 1.5rem;
             margin-top: 2rem;
+            margin-bottom: 2.5rem;
+        }
+
+        /* 👇 NEW GRID FOR RESTAURANT CARDS 👇 */
+        .sa-restaurant-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1.5rem;
             margin-bottom: 2.5rem;
         }
 
@@ -133,6 +184,7 @@
         .sa-stat-desc {
             font-size: 0.75rem;
             font-weight: 500;
+            display: block;
         }
 
         .sa-stat-icon {
@@ -275,12 +327,12 @@
                 <h1 class="sa-title">Super Admin Dashboard</h1>
                 <p class="sa-subtitle">Platform-wide overview and restaurant management</p>
             </div>
-            <div style="display: flex; align-items: center; gap: 1rem;">
+            <!-- <div style="display: flex; align-items: center; gap: 1rem;">
                 <span class="sa-date-badge">{{ $currentDate }}</span>
                 <a href="{{ \App\Filament\Resources\RestaurantResource::getUrl('create') }}" class="sa-btn-primary">
                     + Add New Restaurant
                 </a>
-            </div>
+            </div> -->
         </div>
 
         {{-- 5 STATS CARDS --}}
@@ -297,6 +349,10 @@
                 <div class="sa-stat-icon" style="color: var(--brand-orange); background-color: rgba(234, 88, 12, 0.1);">
                     <x-heroicon-o-building-storefront style="width: 20px; height: 20px;" />
                 </div>
+                
+                <a href="{{ \App\Filament\Resources\RestaurantResource::getUrl('create') }}" class="sa-card-btn sa-card-btn-orange">
+                    + Add Restaurant
+                </a>
             </div>
 
             {{-- Card 2: Users --}}
@@ -310,6 +366,10 @@
                 <div class="sa-stat-icon" style="color: var(--brand-blue); background-color: rgba(59, 130, 246, 0.1);">
                     <x-heroicon-o-users style="width: 20px; height: 20px;" />
                 </div>
+                
+                <a href="{{ \App\Filament\Resources\UserResource::getUrl('create') }}" class="sa-card-btn sa-card-btn-blue">
+                    + Add User
+                </a>
             </div>
 
             {{-- Card 3: Total Orders --}}
@@ -343,6 +403,63 @@
                 </div>
             </div>
         </div>
+
+        {{-- 👇 NEW SECTION: RESTAURANT CARDS WITH BRANCH INFO 👇 --}}
+        @if($restaurants->count() > 0)
+        <div>
+            <h2 style="font-size: 1.125rem; font-weight: 700; color: var(--text-main); margin-bottom: 1rem;">Restaurant Branch Management</h2>
+            
+            <div class="sa-restaurant-grid">
+                @foreach($restaurants as $rest)
+                <div class="sa-stat-card" style="padding: 1.25rem;">
+                    
+                    {{-- Header Area with Logo and Name --}}
+                    <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
+                        @if($rest->logo_path)
+                            <img src="{{ Storage::url($rest->logo_path) }}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color);">
+                        @else
+                            <div style="width: 48px; height: 48px; border-radius: 50%; background-color: var(--bg-badge); display: flex; align-items: center; justify-content: center; font-weight: 800; color: var(--text-sub); font-size: 1.2rem;">
+                                {{ strtoupper(substr($rest->name, 0, 1)) }}
+                            </div>
+                        @endif
+                        
+                        <div style="flex: 1;">
+                            <span style="font-weight: 800; font-size: 1.1rem; color: var(--text-main); display: block; line-height: 1.2;">{{ $rest->name }}</span>
+                            <span style="font-size: 0.75rem; color: var(--text-sub); font-weight: 500;">ID: {{ $rest->id }}</span>
+                        </div>
+                    </div>
+
+                    {{-- Footer Area with Branch Count and Conditional Button --}}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                        <div style="display: flex; flex-direction: column;">
+                            <span style="font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Branches</span>
+                            <span style="font-size: 1rem; font-weight: 800; color: var(--text-main);">
+                                {{ $rest->current_branch_count }} 
+                                @if($rest->has_branches)
+                                    <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: 500;">/ {{ $rest->max_branches ?? '∞' }}</span>
+                                @else
+                                    <span style="font-size: 0.8rem; color: var(--text-sub); font-weight: 500;">/ 0</span>
+                                @endif
+                            </span>
+                        </div>
+                        
+                        {{-- Conditional Button Logic --}}
+                        @if($rest->has_branches)
+                            <a href="{{ \App\Filament\Resources\BranchResource::getUrl('create', ['restaurant_id' => $rest->id]) }}" class="sa-card-btn sa-card-btn-purple" style="margin-top: 0;">
+                                + Add Branch
+                            </a>
+                        @else
+                            <span style="margin-top: 0; font-size: 0.7rem; font-weight: 600; padding: 0.35rem 0.75rem; border-radius: 0.375rem; background-color: var(--bg-badge); color: var(--text-sub);">
+                                Multi-Branch Disabled
+                            </span>
+                        @endif
+                    </div>
+                    
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
 
         {{-- RESTAURANT TABLE SECTION --}}
         <div class="sa-table-container">

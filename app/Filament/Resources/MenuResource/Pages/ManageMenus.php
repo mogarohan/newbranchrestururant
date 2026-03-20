@@ -23,7 +23,7 @@ class ManageMenus extends ManageRecords
     {
         return [
             MenuResource\Widgets\MenuDashboardStats::class,
-           // MenuResource\Widgets\CategoryManagerWidget::class,
+           MenuResource\Widgets\CategoryManagerWidget::class,
         ];
     }
 

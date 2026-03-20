@@ -31,6 +31,11 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->brandLogo(asset('img/TsLogo.png'))
             ->brandLogoHeight('10.5rem')
+            ->sidebarCollapsibleOnDesktop()
+            ->sidebarWidth('16rem')
+            ->collapsedSidebarWidth('4.5rem')
+             // ✅ FULL WIDTH CONTENT
+            ->maxContentWidth('full')
             ->colors([
                 'primary' => Color::Amber,
 
