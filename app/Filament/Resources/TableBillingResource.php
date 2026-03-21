@@ -15,7 +15,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\HtmlString; // 👈 CSS Injection ke liye zaroori hai
+use Illuminate\Support\HtmlString;
 
 class TableBillingResource extends Resource
 {
@@ -28,7 +28,7 @@ class TableBillingResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
+            && in_array(auth()->user()->role->name ?? '', ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
     public static function getEloquentQuery(): Builder
@@ -37,7 +37,6 @@ class TableBillingResource extends Resource
         $query = parent::getEloquentQuery()
             ->where('restaurant_id', $user->restaurant_id);
 
-        // 👇 BRANCH ISOLATION: Main Restaurant admin sees only branch_id NULL, Branch admin sees only their ID
         if ($user->isRestaurantAdmin()) {
             $query->whereNull('branch_id');
         } elseif ($user->isBranchAdmin() || $user->isManager()) {
@@ -55,38 +54,40 @@ class TableBillingResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            // 🎨 CSS INJECTION FOR TRANSPARENT GRID CARDS
             ->heading(new HtmlString('
                 <style>
-                    /* Main Table Container */
+                    /* Hides outer table borders and makes it transparent */
                     .fi-ta-ctn {
                         background-color: transparent !important;
                         box-shadow: none !important;
-                        border: none !important; /* Remove outer border for grid layout */
+                        border: none !important;
                     }
-                    /* Toolbars (Header Search & Footer Pagination) */
                     .fi-ta-header-toolbar, .fi-ta-footer {
                         background-color: transparent !important;
                         border-color: rgba(156, 163, 175, 0.2) !important;
                     }
-                    /* Inner Content wrapper */
                     .fi-ta-content {
                         background-color: transparent !important;
                     }
-                    /* Individual Grid Cards */
+                    
+                    /* Clean Box Layout for Cards */
                     .fi-ta-record {
-                        background-color: transparent !important;
-                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
-                        border-radius: 16px !important;
-                        box-shadow: none !important;
+                        background-color: #ffffff !important;
+                        border: 1px solid rgba(156, 163, 175, 0.3) !important;
+                        border-radius: 12px !important;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
                         transition: all 0.2s ease;
+                        cursor: pointer; /* Pointer to indicate full card is clickable */
+                        overflow: hidden;
                     }
-                    /* Card Hover Effect */
+                    .dark .fi-ta-record {
+                        background-color: #1e293b !important;
+                        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                    }
                     .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important; /* Orange tint */
-                        border-color: rgba(234, 88, 12, 0.4) !important;
-                        transform: translateY(-3px);
-                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+                        transform: translateY(-2px);
+                        box-shadow: 0 6px 15px rgba(244, 125, 32, 0.15) !important;
+                        border-color: rgba(244, 125, 32, 0.5) !important; /* Orange hover border */
                     }
                 </style>
                 <span style="font-size: 1.25rem; font-weight: 800;">Active Tables Checkout</span>
@@ -97,80 +98,87 @@ class TableBillingResource extends Resource
                 'xl' => 3,
                 '2xl' => 4,
             ])
-            // Changed from solid backgrounds to clean flex layout
-            ->recordClasses(fn(RestaurantTable $record) => 'flex flex-col')
+            ->recordClasses(fn(RestaurantTable $record) => 'flex flex-col h-full justify-between')
             ->columns([
                 Tables\Columns\Layout\Stack::make([
 
-                    // --- 1. TABLE HEADER (DYNAMIC NAME LAA RAHA HAI YAHAN) ---
+                    // --- 1. PREFIXED TITLE (TABLE NO + HOST NAME) ---
                     Tables\Columns\TextColumn::make('table_number')
                         ->formatStateUsing(function ($state, RestaurantTable $record) {
-                            // Find active primary session (host)
-                            $hostSession = $record->sessions->where('is_primary', true)->first();
+                            $primarySession = $record->sessions->where('is_primary', true)->first();
 
-                            // Agar host ka naam maujood hai, toh usko return karo, warna "Table {X}"
-                            if ($hostSession && !empty($hostSession->customer_name)) {
-                                return $hostSession->customer_name;
-                            }
+                            $hostName = ($primarySession && !empty($primarySession->customer_name))
+                                ? $primarySession->customer_name
+                                : '-';
 
-                            return "Table {$state}";
+                            // Clean stacked layout with prefixes on top
+                            return new HtmlString("
+                                <div style='display: flex; align-items: center; justify-content: center; gap: 1.5rem; width: 100%; line-height: 1.2;'>
+                                    <div style='display: flex; flex-direction: column; align-items: center;'>
+                                        <span style='font-size: 0.65rem; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Table</span>
+                                        <span style='color: #F47D20; font-size: 1.1rem; font-weight: 900;'>{$state}</span>
+                                    </div>
+                                    
+                                    <div style='width: 1px; height: 28px; background-color: rgba(156, 163, 175, 0.3);'></div>
+                                    
+                                    <div style='display: flex; flex-direction: column; align-items: center;'>
+                                        <span style='font-size: 0.65rem; font-weight: 800; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Customer</span>
+                                        <span style='color: #3B82F6; font-size: 1.1rem; font-weight: 900;'>{$hostName}</span>
+                                    </div>
+                                </div>
+                            ");
                         })
-                        ->weight(FontWeight::Black)
-                        ->color('primary')
                         ->alignCenter()
-                        // Replaced solid background with transparent dashed border
-                        ->extraAttributes(['style' => 'font-size: 1.5rem; padding: 1rem; border-bottom: 1px dashed rgba(156, 163, 175, 0.3); background: transparent; text-transform: uppercase;']),
+                        ->extraAttributes(['style' => 'padding: 0.75rem; border-bottom: 1px solid rgba(156, 163, 175, 0.2); background: rgba(244, 125, 32, 0.03);']),
 
-                    // --- 2. SUMMARY NUMBERS ---
+                    // --- 2. SUMMARY (ACTIVE DINERS & BILL) ---
                     Tables\Columns\Layout\Grid::make(2)->schema([
-                        Tables\Columns\TextColumn::make('total_bill')
-                            ->label('Total Bill')
-                            ->state(function (RestaurantTable $record) {
-                                return $record->sessions->flatMap->orders->sum('total_amount');
-                            })
-                            ->money('INR')
-                            ->weight(FontWeight::Bold)
-                            ->extraAttributes(['style' => 'text-align: center; padding: 1rem;']),
-
                         Tables\Columns\TextColumn::make('active_customers')
                             ->label('Active Diners')
                             ->state(function (RestaurantTable $record) {
-                                return $record->sessions->count() . ' People';
+                                $count = $record->sessions->count();
+                                return $count > 0 ? "{$count} People" : "Empty";
                             })
                             ->color('info')
                             ->weight(FontWeight::Bold)
                             ->extraAttributes(['style' => 'text-align: center; padding: 1rem;']),
+
+                        Tables\Columns\TextColumn::make('due_amount')
+                            ->label('Balance Due')
+                            ->state(function (RestaurantTable $record) {
+                                $total = $record->sessions->flatMap->orders->sum('total_amount');
+                                $orderIds = $record->sessions->flatMap->orders->pluck('id');
+                                $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
+                                return max(0, $total - $paid);
+                            })
+                            ->money('INR')
+                            ->weight(FontWeight::Black)
+                            ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
+                            ->color(fn($state) => $state > 0 ? 'danger' : 'gray')
+                            ->extraAttributes(['style' => 'text-align: center; padding: 1rem; border-left: 1px solid rgba(156, 163, 175, 0.2);']),
                     ]),
 
-                    // --- 3. BALANCE DUE ---
-                    Tables\Columns\TextColumn::make('due_amount')
-                        ->label('Balance Due')
-                        ->state(function (RestaurantTable $record) {
-                            $total = $record->sessions->flatMap->orders->sum('total_amount');
-                            $orderIds = $record->sessions->flatMap->orders->pluck('id');
-                            $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
-
-                            return max(0, $total - $paid);
+                    // --- 3. CLICK TO SETTLE INDICATOR ---
+                    Tables\Columns\TextColumn::make('checkout_hint')
+                        ->state(function () {
+                            return new HtmlString("
+                                <div style='background-color: rgba(244, 125, 32, 0.1); color: #F47D20; border: 1px solid rgba(244, 125, 32, 0.2); border-radius: 8px; padding: 0.5rem; text-align: center; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 1rem 1rem 1rem;'>
+                                    Click to Settle &rarr;
+                                </div>
+                            ");
                         })
-                        ->money('INR')
-                        ->weight(FontWeight::Black)
-                        ->size(Tables\Columns\TextColumn\TextColumnSize::Large)
-                        ->color(fn($state) => $state > 0 ? 'danger' : 'gray')
-                        ->alignCenter()
-                        // Removed solid background
-                        ->extraAttributes(['style' => 'padding: 1rem; margin-top: 0.5rem; border-top: 1px dashed rgba(156, 163, 175, 0.3); background: transparent;']),
+                        ->extraAttributes(['style' => 'padding: 0;'])
+                        ->alignCenter(),
+                    // ❌ Yahan se maine `->action('checkout')` hata diya hai
 
                 ])->space(0),
             ])
+            // 👇 YEH LINE POORE CARD KO CLICKABLE BANA DEGI 👇
+            ->recordAction('checkout')
             ->actions([
-
-                /* ================= CHECKOUT ACTION ================= */
                 Tables\Actions\Action::make('checkout')
-                    ->label('Checkout & Settle')
-                    ->icon('heroicon-o-credit-card')
-                    ->button()
-                    ->outlined() // 👈 Premium Outline Look added here
-                    ->color('success')
+                    ->label('Checkout')
+                    ->hiddenLabel()
                     ->modalHeading(fn(RestaurantTable $record) => "Checkout - Table {$record->table_number}")
                     ->modalWidth('6xl')
                     ->modalSubmitActionLabel('Confirm Payment & Clear Table')
@@ -194,8 +202,6 @@ class TableBillingResource extends Resource
                                     Forms\Components\Placeholder::make('receipt')
                                         ->hiddenLabel()
                                         ->content(function (RestaurantTable $record) {
-
-                                            // Using Tailwind Classes for Dark/Light mode support instead of inline styles
                                             $html = '<div class="max-h-[500px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
                                             $html .= '<h2 class="text-center text-2xl font-black text-gray-900 dark:text-white mb-1">TABLE ' . $record->table_number . '</h2>';
                                             $html .= '<div class="text-center text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 border-b-2 border-dashed border-gray-300 dark:border-gray-600 pb-4 mb-5">FINAL BILLING SUMMARY</div>';
@@ -204,7 +210,6 @@ class TableBillingResource extends Resource
                                             $grandTotal = 0;
                                             $totalOrdersCount = 0;
 
-                                            // 1. Identify the Primary Host Session
                                             $primarySession = $record->sessions->where('is_primary', true)->first();
 
                                             if ($primarySession) {
@@ -275,7 +280,6 @@ class TableBillingResource extends Resource
                                                 return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400'>No valid orders found to bill.</div>");
                                             }
 
-                                            // Final Summary Footer
                                             $html .= "
                                                 <div class='border-t-2 border-gray-900 dark:border-gray-100 mt-6 pt-4'>
                                                     <div class='flex justify-between text-sm text-gray-600 dark:text-gray-400'>
@@ -315,7 +319,6 @@ class TableBillingResource extends Resource
                                         ->label('Total to Collect')
                                         ->content(function (Forms\Get $get) {
                                             $total = (float) $get('subtotal') + (float) $get('tip');
-                                            // Updated to Tailwind Theme Aware UI
                                             return new HtmlString("
                                                 <div class='text-3xl font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 text-center shadow-sm'>
                                                     ₹" . number_format($total, 2) . "
@@ -349,12 +352,10 @@ class TableBillingResource extends Resource
                                         ->placeholder('Required for Online Payments')
                                         ->required(fn(Forms\Get $get) => in_array($get('payment_method'), ['upi', 'card']))
                                         ->visible(fn(Forms\Get $get) => $get('payment_method') !== 'cash'),
-
                                 ]),
                         ]),
                     ])
                     ->action(function (RestaurantTable $record, array $data) {
-
                         $activeSessions = $record->sessions()->where('is_active', true)->get();
                         $sessionIds = $activeSessions->pluck('id')->toArray();
 
@@ -398,9 +399,7 @@ class TableBillingResource extends Resource
                             ]);
                         }
                     }),
-            ])
-            ->recordAction(null)
-            ->recordUrl(null);
+            ]);
     }
 
     public static function form(Form $form): Form
