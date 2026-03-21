@@ -52,8 +52,13 @@
 
             --accent-pink: #f395a3;
             /* Reserved (Baby Pink) */
+<<<<<<< HEAD
             --accent-pink-light: rgba(255, 182, 193, 0.15);
 
+=======
+            --accent-pink-light: rgba(255, 182, 193, 0.3);
+            --accent-pink-light-1: rgba(255, 182, 193, 1);
+>>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
             --accent-red: #ef4444;
 
             --card-radius: 12px;
@@ -75,7 +80,7 @@
             --brand-orange-light: rgba(244, 125, 32, 0.15);
             --accent-green-light: rgba(16, 185, 129, 0.15);
             --accent-pink-light: rgba(255, 182, 193, 0.15);
-
+            --accent-pink-light-1: rgba(255, 182, 193, 1);
             --shadow-sm: none;
             --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.2);
         }
@@ -264,7 +269,11 @@
         .badge-reserved {
             background-color: var(--accent-pink-light);
             color: var(--accent-pink);
+<<<<<<< HEAD
             border: 1px solid rgba(255, 182, 193, 0.5);
+=======
+            border: 1px solid rgba(255, 182, 193, 100);
+>>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
         }
 
         /* Body Info */
@@ -563,7 +572,7 @@
                                         </div>
                                     @elseif($isReserved)
                                         <div class="ts-info-row justify-center mt-2">
-                                            <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink-light);" />
+                                            <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink-light-1);" />
                                         </div>
                                         <div class="text-center mt-2"
                                             style="font-size: 0.85rem; font-weight: 800; color: var(--accent-pink);">
@@ -590,7 +599,7 @@
             {{-- RIGHT COLUMN: DIGITAL RECEIPT SIDEBAR --}}
             {{-- ========================================== --}}
             <div class="w-full lg:w-auto">
-                @if($selectedTableData)
+                @if($selectedTableData && $selectedTableData->active_sessions_count > 0)
                     @php
                         $groupedOrders = $selectedTableData->orders->groupBy('status');
                         $runningTotal = $selectedTableData->orders->sum('total_amount');
@@ -706,19 +715,48 @@
 
                     </div>
                 @else
-                    {{-- Empty State Sidebar (EXACT IMAGE MATCH) --}}
-                    <div class="pos-receipt justify-center items-center p-8 text-center"
-                        style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
-                        <div
-                            style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm);">
-                            <x-heroicon-o-hand-raised style="width: 40px; height: 40px; color: var(--text-muted);" />
+                    {{-- Empty State Sidebar --}}
+                    @if($this->selectedTableId)
+                        @php 
+                            $tableInfo = $tables->firstWhere('id', $this->selectedTableId); 
+                            $isRes = $tableInfo && ($tableInfo->status === 'reserved');
+                        @endphp
+                        
+                        <div class="pos-receipt justify-center items-center p-8 text-center"
+                            style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
+                            
+                            <div style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                                <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: {{ $isRes ? 'var(--accent-pink)' : 'var(--accent-green)' }};" />
+                            </div>
+                            
+                            <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
+                                Table {{ $tableInfo->table_number ?? '' }} is {{ $isRes ? 'Reserved' : 'Empty' }}
+                            </h3>
+                            
+                            <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5; margin-bottom: 2rem;">
+                                {{ $isRes ? 'This table is currently reserved for upcoming guests.' : 'This table is clean and ready for new guests.' }}
+                            </p>
+
+                            {{-- THE RESERVATION TOGGLE BUTTON --}}
+                            <button wire:click="toggleReservation({{ $this->selectedTableId }})"
+                                style="background: {{ $isRes ? 'var(--surface-card)' : 'var(--accent-pink)' }}; color: {{ $isRes ? 'var(--text-primary)' : 'white' }}; border: 1px solid {{ $isRes ? 'var(--border-strong)' : 'var(--accent-pink)' }}; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 800; font-size: 0.85rem; width: 100%; transition: all 0.2s;">
+                                {{ $isRes ? 'Remove Reservation' : 'Make Reservation' }}
+                            </button>
                         </div>
-                        <h3
-                            style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
-                            Select a Table</h3>
-                        <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5;">Click
-                            on any occupied table from the layout to view active orders and process checkout.</p>
-                    </div>
+                    @else
+                        <div class="pos-receipt justify-center items-center p-8 text-center"
+                            style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
+                            <div
+                                style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                                <x-heroicon-o-hand-raised style="width: 40px; height: 40px; color: var(--text-muted);" />
+                            </div>
+                            <h3
+                                style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
+                                Select a Table</h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5;">Click
+                                on any occupied table from the layout to view active orders and process checkout.</p>
+                        </div>
+                    @endif
                 @endif
             </div>
 
