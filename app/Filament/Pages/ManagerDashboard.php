@@ -11,6 +11,7 @@ use Filament\Support\Enums\MaxWidth;
 use App\Events\OrderStatusUpdated;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
+use Filament\Notifications\Notification;
 
 class ManagerDashboard extends Page
 {
@@ -28,7 +29,6 @@ class ManagerDashboard extends Page
         $restaurantId = auth()->user()->restaurant_id;
 
         return [
-            // Notice the leading dot (.) before OrderStatusUpdated! 
             "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
         ];
     }
@@ -42,7 +42,7 @@ class ManagerDashboard extends Page
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin']); // Added branch_admin for flexibility
+            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin']);
     }
 
     public function openTable($tableId)
@@ -52,6 +52,33 @@ class ManagerDashboard extends Page
         } else {
             $this->selectedTableId = $tableId;
         }
+    }
+
+    // 👇 NEW: Toggle Reservation Method
+    public function toggleReservation($tableId)
+    {
+        $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
+        
+        // Don't allow reserving an occupied table
+        if ($table->qrSessions()->where('is_active', true)->count() > 0) {
+            Notification::make()
+                ->title('Table is occupied')
+                ->body('Cannot reserve a table that is currently in use.')
+                ->danger()
+                ->send();
+            return;
+        }
+
+        // Toggle logic based on string status
+        if ($table->status === 'reserved') {
+            $table->update(['status' => 'available']);
+            Notification::make()->title("Table {$table->table_number} is now Available")->success()->send();
+        } else {
+            $table->update(['status' => 'reserved']);
+            Notification::make()->title("Table {$table->table_number} is Reserved")->success()->send();
+        }
+        
+        $this->selectedTableId = null; // Close the right panel to refresh view
     }
 
     public function updateStatus($orderId, $status)
@@ -83,11 +110,8 @@ class ManagerDashboard extends Page
         $restaurantId = $user->restaurant_id;
         $branchId = $user->branch_id;
 
-        // --- 1. TABLES QUERY WITH BRANCH ISOLATION ---
         $tablesQuery = RestaurantTable::where('restaurant_id', $restaurantId);
 
-        // 👇 FIX: If manager belongs to a branch, show only branch tables. 
-        // If it's a main restaurant manager, show only branch_id NULL tables.
         if ($branchId) {
             $tablesQuery->where('branch_id', $branchId);
         } else {
@@ -112,7 +136,6 @@ class ManagerDashboard extends Page
         $freeTables = $totalTables - $activeTables;
         $activeSessions = $tables->sum('active_sessions_count');
 
-        // --- 2. SELECTED TABLE DATA ---
         $selectedTableData = null;
         if ($this->selectedTableId) {
             $selectedTableData = RestaurantTable::with([
@@ -124,11 +147,9 @@ class ManagerDashboard extends Page
             ])->find($this->selectedTableId);
         }
 
-        // --- 3. INCOMING ORDERS WITH BRANCH ISOLATION ---
         $ordersQuery = Order::where('restaurant_id', $restaurantId)
             ->where('status', 'placed');
 
-        // 👇 FIX: Isolate incoming orders so Branch Manager doesn't see Main Restaurant orders
         if ($branchId) {
             $ordersQuery->where('branch_id', $branchId);
         } else {
