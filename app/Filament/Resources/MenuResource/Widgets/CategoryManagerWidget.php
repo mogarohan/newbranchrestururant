@@ -13,6 +13,15 @@ class CategoryManagerWidget extends BaseWidget
 {
     protected int | string | array $columnSpan = 'full';
 
+    // 👇 UPDATED: Added display: none so it is hidden the second the page loads
+    protected function getExtraAttributes(): array
+    {
+        return [
+            'id' => 'category-table-wrapper',
+            'style' => 'display: none;', 
+        ];
+    }
+
     public function table(Table $table): Table
     {
         return $table
@@ -27,29 +36,16 @@ class CategoryManagerWidget extends BaseWidget
 
                 return $query;
             })
-            // 👇 THE JAVASCRIPT MAGIC: Custom Heading + Auto-Hide Script
+            // 👇 UPDATED: Cleaned up heading. The Close button just hides the div again.
             ->heading(new HtmlString('
                 <div id="category-manager-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <span>Manage Categories</span>
-                    <button type="button" onclick="window.categoryWidgetOpen = false; document.getElementById(\'category-manager-header\').closest(\'.fi-wi\').style.display = \'none\';" style="color: #9ca3af; padding: 4px; border-radius: 6px; transition: all 0.2s; cursor: pointer;" onmouseover="this.style.color=\'#ef4444\'; this.style.backgroundColor=\'rgba(239, 68, 68, 0.1)\'" onmouseout="this.style.color=\'#9ca3af\'; this.style.backgroundColor=\'transparent\'" title="Close">
+                    <button type="button" onclick="document.getElementById(\'category-table-wrapper\').style.display = \'none\';" style="color: #9ca3af; padding: 4px; border-radius: 6px; transition: all 0.2s; cursor: pointer;" onmouseover="this.style.color=\'#ef4444\'; this.style.backgroundColor=\'rgba(239, 68, 68, 0.1)\'" onmouseout="this.style.color=\'#9ca3af\'; this.style.backgroundColor=\'transparent\'" title="Close">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 20px; height: 20px;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
                 </div>
-                <script>
-                    // Wait a tiny fraction of a second to ensure Filament has painted the DOM, then hide ONLY this widget.
-                    setTimeout(function() {
-                        let header = document.getElementById("category-manager-header");
-                        if (header) {
-                            let widget = header.closest(".fi-wi");
-                            // Don\'t hide it if the user just manually opened it and Livewire re-rendered the table
-                            if (widget && window.categoryWidgetOpen !== true) {
-                                widget.style.display = "none";
-                            }
-                        }
-                    }, 10);
-                </script>
             '))
             ->description('Active categories will appear as filters for your menu items.')
             ->defaultPaginationPageOption(5)

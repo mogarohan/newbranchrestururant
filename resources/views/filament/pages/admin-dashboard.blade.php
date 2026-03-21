@@ -34,7 +34,6 @@
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
         }
 
-        /* Stats Grid - Tighter gaps for smaller cards */
         .sa-stats-grid {
             display: grid;
             grid-template-columns: repeat(1, 1fr);
@@ -43,10 +42,8 @@
         }
 
         @media (min-width: 640px) { .sa-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-        /* Fitting 5 or 6 cards cleanly on large screens */
         @media (min-width: 1024px) { .sa-stats-grid { grid-template-columns: repeat(5, 1fr); } }
 
-        /* Smaller Card Padding */
         .stat-box {
             padding: 1.25rem; 
             display: flex;
@@ -80,22 +77,20 @@
         }
 
         .stat-value {
-            font-size: 1.75rem; /* Slightly smaller text */
+            font-size: 1.75rem; 
             font-weight: 900;
             line-height: 1;
             color: var(--text-main);
             margin-bottom: 1rem;
         }
 
-        /* Container for multiple buttons */
         .sa-card-actions {
             display: flex;
             gap: 0.5rem;
             margin-top: 1rem;
-            flex-wrap: wrap; /* Wraps cleanly if screen is too small */
+            flex-wrap: wrap; 
         }
 
-        /* Buttons inside Cards */
         .sa-card-btn {
             display: inline-block;
             font-size: 0.7rem;
@@ -105,9 +100,10 @@
             text-decoration: none;
             transition: background-color 0.2s ease;
             text-align: center;
+            cursor: pointer;
+            border: none; /* In case it's a button element */
         }
 
-        /* Solid styles for primary actions (Add) */
         .sa-card-btn.orange-solid {
             color: white;
             background-color: var(--brand-orange);
@@ -122,7 +118,6 @@
         }
         .sa-card-btn.blue-solid:hover { background-color: #2563eb; border-color: #2563eb; }
 
-        /* Outline styles for secondary actions (Manage) */
         .sa-card-btn.orange-outline {
             color: var(--brand-orange);
             background-color: rgba(234, 88, 12, 0.1);
@@ -154,7 +149,9 @@
                 </div>
                 <div class="stat-value">{{ $totalStaff }}</div>
                 <div class="sa-card-actions">
-                    <a href="{{ App\Filament\Resources\UserResource::getUrl('create') }}" class="sa-card-btn blue-solid">+ Add</a>
+                    @if($isRestaurantAdmin)
+                        <a href="{{ App\Filament\Resources\UserResource::getUrl('create') }}" class="sa-card-btn blue-solid">+ Add</a>
+                    @endif
                     <a href="{{ App\Filament\Resources\UserResource::getUrl('index') }}" class="sa-card-btn blue-outline">Manage</a>
                 </div>
             </div>
@@ -168,8 +165,12 @@
                     </div>
                 </div>
                 <div class="stat-value">{{ $totalCategories }}</div>
-                {{-- Categories are managed via MenuResource --}}
                 <div class="sa-card-actions">
+                    {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
+                    @if($isRestaurantAdmin)
+                        <button wire:click="mountAction('addCategory')" type="button" class="sa-card-btn orange-solid">+ Add</button>
+                    @endif
+                    {{-- The categories manage link still goes to menus because of the unified page --}}
                     <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn orange-outline">Manage</a>
                 </div>
             </div>
@@ -184,7 +185,11 @@
                 </div>
                 <div class="stat-value">{{ $totalItems }}</div>
                 <div class="sa-card-actions">
-                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn blue-solid">+ Add Item</a>
+                    {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
+                    @if($isRestaurantAdmin)
+                        <button wire:click="mountAction('addItem')" type="button" class="sa-card-btn blue-solid">+ Add</button>
+                    @endif
+                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn blue-outline">Manage</a>
                 </div>
             </div>
 
@@ -235,7 +240,7 @@
 
         </div>
 
-        {{-- NEW MIDDLE SECTION: REVENUE LINE CHART --}}
+        {{-- REVENUE LINE CHART --}}
         <div class="glass-panel p-6 mb-8">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="font-black text-sm uppercase tracking-widest" style="color: var(--text-main);">
@@ -247,6 +252,9 @@
 
     </div>
 
+    {{-- This invisible div is necessary for Filament to mount and render the slide-over forms! --}}
+    <x-filament-actions::modals />
+
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const isDark = document.documentElement.classList.contains('dark');
@@ -257,7 +265,7 @@
             const chartOptions = {
                 series: {!! json_encode($chartSeries) !!},
                 chart: { 
-                    type: 'area', // Area chart looks more premium than a simple line
+                    type: 'area', 
                     height: 350, 
                     toolbar: { show: false }, 
                     background: 'transparent',
@@ -274,7 +282,7 @@
                     }
                 },
                 dataLabels: { enabled: false },
-                stroke: { curve: 'smooth', width: 3 }, // Smooth curves are very modern
+                stroke: { curve: 'smooth', width: 3 }, 
                 xaxis: {
                     categories: {!! json_encode($chartDates) !!},
                     labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } },
@@ -291,7 +299,7 @@
                 },
                 grid: { 
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-                    strokeDashArray: 4, // Dashed lines look cleaner
+                    strokeDashArray: 4, 
                     yaxis: { lines: { show: true } },
                     xaxis: { lines: { show: false } }
                 },

@@ -12,6 +12,8 @@ use App\Models\Branch;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Filament\Actions; // 👈 Import Filament Actions
+use Filament\Forms;   // 👈 Import Filament Forms
 
 class AdminDashboard extends Page
 {
@@ -24,6 +26,45 @@ class AdminDashboard extends Page
         return auth()->check()
             && auth()->user()->restaurant_id
             && in_array(auth()->user()->role?->name, ['restaurant_admin', 'branch_admin']);
+    }
+
+    // 👇 ADD THESE ACTIONS TO THE DASHBOARD 👇
+    protected function getHeaderActions(): array
+    {
+        return [
+            // 1. ADD CATEGORY SLIDE-OVER
+            Actions\Action::make('addCategory')
+                ->label('Add Category')
+                ->model(Category::class)
+                
+                ->form([
+                    Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
+                    Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
+                    Forms\Components\TextInput::make('name')->required()->maxLength(100),
+                    Forms\Components\Toggle::make('is_active')->default(true)->label('Active'),
+                ])
+                ->action(function (array $data) {
+                    Category::create($data);
+                    \Filament\Notifications\Notification::make()->title('Category Added')->success()->send();
+                })
+                // Only Restaurant Admins can see/use this
+                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+
+            // 2. ADD ITEM SLIDE-OVER (Requires MenuItem form fields)
+            Actions\CreateAction::make('addItem')
+                ->label('Add Item')
+                ->model(MenuItem::class)
+                
+                // We use your exact form from MenuResource
+                ->form(\App\Filament\Resources\MenuResource::form(new \Filament\Forms\Form($this))->getComponents())
+                ->action(function (array $data) {
+                    $data['restaurant_id'] = auth()->user()->restaurant_id;
+                    MenuItem::create($data);
+                    \Filament\Notifications\Notification::make()->title('Item Added')->success()->send();
+                })
+                // Only Restaurant Admins can see/use this
+                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+        ];
     }
 
     protected function getViewData(): array
@@ -76,7 +117,6 @@ class AdminDashboard extends Page
         // CHART DATA: 30-Day Revenue Trend (Line Graph)
         // ---------------------------------------------------
         
-        // 1. Generate the last 30 days as an array of dates (Y-m-d)
         $dates = [];
         $startDate = Carbon::today()->subDays(29);
         for ($i = 0; $i < 30; $i++) {
@@ -86,11 +126,9 @@ class AdminDashboard extends Page
         $chartSeries = [];
 
         if ($showBranchesWidget) {
-            // MULTI-BRANCH: One line per branch
             $branches = Branch::where('restaurant_id', $rid)->get();
             
             foreach ($branches as $branch) {
-                // Get daily revenue for this specific branch
                 $dailyRevenue = Payment::whereHas('order', function ($query) use ($rid, $branch) {
                         $query->where('restaurant_id', $rid)
                               ->where('branch_id', $branch->id);
@@ -102,7 +140,6 @@ class AdminDashboard extends Page
                     ->pluck('total', 'date')
                     ->toArray();
 
-                // Map it to the 30-day timeline
                 $dataPoints = [];
                 foreach ($dates as $date) {
                     $dataPoints[] = $dailyRevenue[$date] ?? 0;
@@ -114,7 +151,6 @@ class AdminDashboard extends Page
                 ];
             }
         } else {
-            // SINGLE RESTAURANT or BRANCH ADMIN: Just one "Total Revenue" line
             $dailyRevenueQuery = Payment::whereHas('order', function ($query) use ($rid, $bid, $isBranchAdmin) {
                     $query->where('restaurant_id', $rid);
                     if ($isBranchAdmin) {
@@ -139,7 +175,6 @@ class AdminDashboard extends Page
             ];
         }
 
-        // Format dates nicely for the X-axis (e.g., "12 Oct")
         $formattedDates = array_map(function($date) {
             return Carbon::parse($date)->format('d M');
         }, $dates);
@@ -153,8 +188,6 @@ class AdminDashboard extends Page
             'totalItems' => $totalItems,
             'totalRevenue' => $totalRevenue,
             'todayOrders' => $todayOrders,
-            
-            // Passing the new line chart data to Blade
             'chartDates' => $formattedDates,
             'chartSeries' => $chartSeries,
         ];

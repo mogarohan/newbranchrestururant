@@ -26,13 +26,12 @@ class MenuDashboardStats extends BaseWidget
         // 1. Add Category Button
         $addCategoryBtn = "<button type='button' onclick=\"document.querySelector('.hidden-add-category').click()\" style='display: inline-block; margin-top: 10px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: rgba(234, 88, 12, 0.1); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.2); cursor: pointer;'>+ Add Category</button>";
         
-        // 👇 2. NEW: Manage Categories Button (Opens the hidden Category Widget)
-        $manageCatBtn = "<button type='button' onclick=\"window.categoryWidgetOpen = true; let el = document.getElementById('category-manager-header'); if(el) el.closest('.fi-wi').style.display = '';\" style='display: inline-block; margin-top: 10px; margin-left: 8px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: transparent; color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.3); cursor: pointer; transition: 0.2s;' onmouseover=\"this.style.backgroundColor='rgba(107, 114, 128, 0.1)'\" onmouseout=\"this.style.backgroundColor='transparent'\">Manage Categories</button>";
+        // 👇 UPDATED: Targets the specific wrapper ID instead of traversing the DOM
+        $manageCatBtn = "<button type='button' onclick=\"window.categoryWidgetOpen = true; let el = document.getElementById('category-table-wrapper'); if(el) el.style.display = 'block';\" style='display: inline-block; margin-top: 10px; margin-left: 8px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: transparent; color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.3); cursor: pointer; transition: 0.2s;' onmouseover=\"this.style.backgroundColor='rgba(107, 114, 128, 0.1)'\" onmouseout=\"this.style.backgroundColor='transparent'\">Manage Categories</button>";
 
         // 3. Add Item Button
         $addItemBtn = "<button type='button' onclick=\"document.querySelector('.hidden-add-item').click()\" style='display: inline-block; margin-top: 10px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); cursor: pointer;'>+ Add Item</button>";
 
-        // Branch Admins don't get the buttons
         if ($user->isBranchAdmin() || $user->isManager()) {
             $addCategoryBtn = '';
             $manageCatBtn = '';
@@ -48,7 +47,6 @@ class MenuDashboardStats extends BaseWidget
                 new HtmlString("<span style='{$labelBaseStyle} color: #ea580c !important;'>Total Categories</span>"),
                 new HtmlString("<span style='{$numberBaseStyle}' class='text-gray-900 dark:text-white'>{$totalCategories}</span>" . $iconFolder)
             )
-            // 👇 Placed BOTH buttons inside the first Stat Card
             ->description(new HtmlString($addCategoryBtn . $manageCatBtn))
             ->extraAttributes(['style' => $cardBaseStyle]),
 

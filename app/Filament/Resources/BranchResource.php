@@ -62,7 +62,7 @@ class BranchResource extends Resource
         return $query->where('id', $user->branch_id);
     }
 
-    /* -----------------------------------------------------------
+   /* -----------------------------------------------------------
        FORM
     ------------------------------------------------------------*/
     public static function form(Form $form): Form
@@ -76,7 +76,6 @@ class BranchResource extends Resource
                 ->searchable()
                 ->required()
                 ->live()
-                // 👇 YAHAN PE URL SE ID GRAB KARNE WALA LOGIC ADD KIYA 👇
                 ->default(function () {
                     $requestedRestaurantId = request()->query('restaurant_id');
                     
@@ -89,7 +88,7 @@ class BranchResource extends Resource
             : Forms\Components\Hidden::make('restaurant_id')
                 ->default(fn() => Auth::user()->restaurant_id),
 
-            /* 👇 BRANCH USAGE DISPLAY WITH ALERT MESSAGE 👇 */
+            /* 👇 BRANCH USAGE DISPLAY WITH DYNAMIC LIMIT 👇 */
             Forms\Components\Placeholder::make('branch_usage')
                 ->label('Restaurant Branch Usage')
                 ->visible(function (Forms\Get $get) {
@@ -103,10 +102,20 @@ class BranchResource extends Resource
                     $user = auth()->user();
                     $restaurantId = $user->isSuperAdmin() ? $get('restaurant_id') : $user->restaurant_id;
 
-                    $limit = 3; // Aap is limit ko apne hisaab se change kar sakte hain
+                    if (!$restaurantId) return null;
+
+                    // 👇 Get the dynamic limit from the database 👇
+                    $restaurant = Restaurant::find($restaurantId);
+                    if (!$restaurant) return null;
+                    
+                    $limit = $restaurant->max_branches; // Pulls from DB instead of hardcoded 3
                     $count = Branch::where('restaurant_id', $restaurantId)->count();
 
-                    // Agar limit poori ho gayi hai, toh ek bada Red Warning Box dikhega
+                    // If max_branches is null, it means unlimited
+                    if ($limit === null) {
+                         return new HtmlString("<span class='text-gray-700 dark:text-gray-300 font-bold'>{$count} branches used (Unlimited allowed)</span>");
+                    }
+
                     if ($count >= $limit) {
                         return new HtmlString("
                             <div class='p-4 mb-2 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800' role='alert'>
@@ -117,7 +126,6 @@ class BranchResource extends Resource
                         ");
                     }
 
-                    // Agar limit bachi hai, toh normal text dikhega
                     return new HtmlString("<span class='text-gray-700 dark:text-gray-300 font-bold'>{$count} / {$limit} branches used</span>");
                 })
                 ->columnSpanFull(),
@@ -126,19 +134,23 @@ class BranchResource extends Resource
                 ->label('Branch Name')
                 ->required()
                 ->maxLength(255)
-                /* 👇 SAVE KARNE SE ROKNE KE LIYE VALIDATION 👇 */
+                /* 👇 DYNAMIC VALIDATION LIMIT 👇 */
                 ->rule(function (Forms\Get $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $user = auth()->user();
                         $restaurantId = $user->isSuperAdmin() ? $get('restaurant_id') : $user->restaurant_id;
 
                         if ($restaurantId) {
-                            $limit = 3; // Same limit yahan bhi rakhein
+                            $restaurant = Restaurant::find($restaurantId);
+                            if (!$restaurant || $restaurant->max_branches === null) {
+                                return; // Unlimited allowed
+                            }
+
+                            $limit = $restaurant->max_branches; // Pulls from DB
                             $count = Branch::where('restaurant_id', $restaurantId)->count();
 
-                            // Agar naya record create ho raha hai aur limit cross ho gayi hai
                             if ($count >= $limit && request()->routeIs('filament.*.resources.branches.create')) {
-                                $fail('Branch limit reached! Contact Super Admin to add more branches.');
+                                $fail("Branch limit reached! Maximum allowed is {$limit}.");
                             }
                         }
                     };
@@ -156,7 +168,7 @@ class BranchResource extends Resource
                 ->label('Active')
                 ->default(true),
 
-            /* 👇 NAYI BRANCH BANATE WAQT BRANCH ADMIN CREATE KARNE KE LIYE FIELDS 👇 */
+            /* 👇 ADMIN CREATION SECTION 👇 */
             Forms\Components\Section::make('Create Branch Admin')
                 ->description('These credentials will be used by the branch admin to log in.')
                 ->schema([

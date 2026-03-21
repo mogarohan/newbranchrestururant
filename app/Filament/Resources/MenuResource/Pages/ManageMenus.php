@@ -35,7 +35,6 @@ class ManageMenus extends ManageRecords
                 ->label('Add Category')
                 ->model(Category::class)
                 ->extraAttributes(['class' => 'hidden-add-category hidden'])
-                ->slideOver()
                 ->form([
                     Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
                     Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
@@ -52,7 +51,6 @@ class ManageMenus extends ManageRecords
             Actions\CreateAction::make('addItem')
                 ->label('Add Item')
                 ->extraAttributes(['class' => 'hidden-add-item hidden'])
-                ->slideOver()
                 ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
                 
             // 3. VISIBLE MANAGE CATEGORIES BUTTON (Top Right)

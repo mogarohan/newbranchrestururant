@@ -46,7 +46,33 @@ class UserResource extends Resource
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return true; // Force enable Edit Button
+        $currentUser = auth()->user();
+
+        // 1. Super Admin can edit absolutely anyone
+        if ($currentUser->isSuperAdmin()) {
+            return true;
+        }
+
+        // Safely get the normalized role name of the user being edited
+        $targetRole = strtolower(str_replace([' ', '-'], '_', $record->role?->name ?? ''));
+
+        // 2. Restaurant Admin cannot edit Super Admins
+        if ($currentUser->isRestaurantAdmin()) {
+            return $targetRole !== 'super_admin';
+        }
+
+        // 3. Branch Admin cannot edit Super Admins or Restaurant Admins
+        if ($currentUser->isBranchAdmin()) {
+            return !in_array($targetRole, ['super_admin', 'restaurant_admin']);
+        }
+
+        // 👇 4. Manager cannot edit Super Admins, Restaurant Admins, or Branch Admins 👇
+        if ($currentUser->isManager()) {
+            return !in_array($targetRole, ['super_admin', 'restaurant_admin', 'branch_admin']);
+        }
+
+        // Default fallback (Waiters, Chefs, etc. cannot edit anyone)
+        return false;
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
@@ -57,23 +83,32 @@ class UserResource extends Resource
             || auth()->user()->isBranchAdmin();
     }
 
-    /* ---------------------------------------------------
-     | DATA ISOLATION
+  /* ---------------------------------------------------
+     | DATA ISOLATION (FIXED)
      |---------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
         $user = auth()->user();
 
+        // 1. Super Admin sees everyone
         if ($user->isSuperAdmin()) {
             return $query;
         }
 
+        // 2. Restaurant Admin sees everyone IN THEIR RESTAURANT
         if ($user->isRestaurantAdmin()) {
             return $query->where('restaurant_id', $user->restaurant_id);
         }
 
-        return $query->where('branch_id', $user->branch_id);
+        // 3. Branch Admin and Manager see everyone IN THEIR RESTAURANT AND THEIR SPECIFIC BRANCH
+        if ($user->isBranchAdmin() || $user->isManager()) {
+            return $query->where('restaurant_id', $user->restaurant_id)
+                         ->where('branch_id', $user->branch_id);
+        }
+
+        // 4. Fallback security: If somehow a lower level user gets here, show them nothing.
+        return $query->where('id', -1); 
     }
 
     /* ---------------------------------------------------
