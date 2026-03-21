@@ -76,10 +76,20 @@ class BranchResource extends Resource
                 ->searchable()
                 ->required()
                 ->live()
+                // 👇 YAHAN PE URL SE ID GRAB KARNE WALA LOGIC ADD KIYA 👇
+                ->default(function () {
+                    $requestedRestaurantId = request()->query('restaurant_id');
+                    
+                    if ($requestedRestaurantId) {
+                        return $requestedRestaurantId;
+                    }
+                    
+                    return null;
+                })
             : Forms\Components\Hidden::make('restaurant_id')
                 ->default(fn() => Auth::user()->restaurant_id),
 
-            /* 👇 NAYA: BRANCH USAGE DISPLAY WITH ALERT MESSAGE 👇 */
+            /* 👇 BRANCH USAGE DISPLAY WITH ALERT MESSAGE 👇 */
             Forms\Components\Placeholder::make('branch_usage')
                 ->label('Restaurant Branch Usage')
                 ->visible(function (Forms\Get $get) {
@@ -93,7 +103,7 @@ class BranchResource extends Resource
                     $user = auth()->user();
                     $restaurantId = $user->isSuperAdmin() ? $get('restaurant_id') : $user->restaurant_id;
 
-                    $limit = 3; // 👈 Aap is limit ko apne hisaab se change kar sakte hain
+                    $limit = 3; // Aap is limit ko apne hisaab se change kar sakte hain
                     $count = Branch::where('restaurant_id', $restaurantId)->count();
 
                     // Agar limit poori ho gayi hai, toh ek bada Red Warning Box dikhega
@@ -116,7 +126,7 @@ class BranchResource extends Resource
                 ->label('Branch Name')
                 ->required()
                 ->maxLength(255)
-                /* 👇 FIX: SAVE KARNE SE ROKNE KE LIYE VALIDATION 👇 */
+                /* 👇 SAVE KARNE SE ROKNE KE LIYE VALIDATION 👇 */
                 ->rule(function (Forms\Get $get) {
                     return function (string $attribute, $value, \Closure $fail) use ($get) {
                         $user = auth()->user();
@@ -180,7 +190,6 @@ class BranchResource extends Resource
     {
         return $table
             ->columns([
-
                 Tables\Columns\TextColumn::make('id')
                     ->sortable(),
 

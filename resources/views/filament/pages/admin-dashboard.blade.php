@@ -1,36 +1,30 @@
 <x-filament-panels::page>
-    {{-- ApexCharts for Professional Visuals --}}
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
 
     <style>
-        /* 🎨 ULTRA-PREMIUM TRANSPARENT POS UI */
+        /* 🎨 ULTRA-PREMIUM TRANSPARENT POS UI (ORANGE & BLUE STRICT THEME) */
         .sa-scope {
-            /* Light Theme - Glass Look */
             --surface-card: rgba(255, 255, 255, 0.45);
             --border-light: rgba(156, 163, 175, 0.2);
             --text-main: #111827;
             --text-sub: #6b7280;
-            --brand-orange: #f97316;
+            --brand-orange: #ea580c;
             --brand-blue: #3b82f6;
-            --brand-green: #10b981;
-            --brand-red: #ef4444;
         }
 
         .dark .sa-scope {
-            /* Dark Theme - Premium Glass Look */
             --surface-card: rgba(31, 41, 55, 0.5);
             --border-light: rgba(75, 85, 99, 0.3);
             --text-main: #f9fafb;
             --text-sub: #9ca3af;
         }
 
-        /* Glass Effect Base */
         .glass-panel {
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             background-color: var(--surface-card) !important;
             border: 1px solid var(--border-light) !important;
-            border-radius: 20px !important;
+            border-radius: 16px !important;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
             transition: all 0.3s ease;
         }
@@ -40,7 +34,7 @@
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
         }
 
-        /* Stats Cards Styling (FIXED: Horizontal 4 Columns) */
+        /* Stats Grid - Tighter gaps for smaller cards */
         .sa-stats-grid {
             display: grid;
             grid-template-columns: repeat(1, 1fr);
@@ -48,20 +42,13 @@
             margin-bottom: 2rem;
         }
 
-        @media (min-width: 640px) {
-            .sa-stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
+        @media (min-width: 640px) { .sa-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        /* Fitting 5 or 6 cards cleanly on large screens */
+        @media (min-width: 1024px) { .sa-stats-grid { grid-template-columns: repeat(5, 1fr); } }
 
-        @media (min-width: 1024px) {
-            .sa-stats-grid {
-                grid-template-columns: repeat(4, 1fr);
-            }
-        }
-
+        /* Smaller Card Padding */
         .stat-box {
-            padding: 1.5rem;
+            padding: 1.25rem; 
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -73,11 +60,11 @@
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
         }
 
         .stat-label {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: 800;
             text-transform: uppercase;
             color: var(--text-sub);
@@ -85,7 +72,7 @@
         }
 
         .stat-icon {
-            padding: 0.5rem;
+            padding: 0.4rem;
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -93,39 +80,101 @@
         }
 
         .stat-value {
-            font-size: 2.25rem;
+            font-size: 1.75rem; /* Slightly smaller text */
             font-weight: 900;
             line-height: 1;
             color: var(--text-main);
-            margin-bottom: 0.5rem;
+            margin-bottom: 1rem;
         }
 
-        .stat-desc {
-            font-size: 0.75rem;
-            font-weight: 600;
+        /* Container for multiple buttons */
+        .sa-card-actions {
             display: flex;
-            align-items: center;
-            gap: 4px;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap; /* Wraps cleanly if screen is too small */
         }
+
+        /* Buttons inside Cards */
+        .sa-card-btn {
+            display: inline-block;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.35rem 0.75rem;
+            border-radius: 0.375rem;
+            text-decoration: none;
+            transition: background-color 0.2s ease;
+            text-align: center;
+        }
+
+        /* Solid styles for primary actions (Add) */
+        .sa-card-btn.orange-solid {
+            color: white;
+            background-color: var(--brand-orange);
+            border: 1px solid var(--brand-orange);
+        }
+        .sa-card-btn.orange-solid:hover { background-color: #c2410c; border-color: #c2410c; }
+
+        .sa-card-btn.blue-solid {
+            color: white;
+            background-color: var(--brand-blue);
+            border: 1px solid var(--brand-blue);
+        }
+        .sa-card-btn.blue-solid:hover { background-color: #2563eb; border-color: #2563eb; }
+
+        /* Outline styles for secondary actions (Manage) */
+        .sa-card-btn.orange-outline {
+            color: var(--brand-orange);
+            background-color: rgba(234, 88, 12, 0.1);
+            border: 1px solid rgba(234, 88, 12, 0.2);
+        }
+        .sa-card-btn.orange-outline:hover { background-color: rgba(234, 88, 12, 0.2); }
+
+        .sa-card-btn.blue-outline {
+            color: var(--brand-blue);
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .sa-card-btn.blue-outline:hover { background-color: rgba(59, 130, 246, 0.2); }
+
     </style>
 
     <div class="sa-scope">
 
-       {{-- 2. TOP WIDGETS (Grid Layout) --}}
+        {{-- TOP WIDGETS --}}
         <div class="sa-stats-grid">
-            {{-- Total Staff (From users table) --}}
-            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-orange) !important;">
+            
+            {{-- 1. Total Staff (Blue) --}}
+            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-blue) !important;">
                 <div class="stat-header">
                     <span class="stat-label">Total Users</span>
-                    <div class="stat-icon" style="background: rgba(249, 115, 22, 0.1); color: var(--brand-orange);">
+                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: var(--brand-blue);">
                         <x-heroicon-s-users class="w-5 h-5" />
                     </div>
                 </div>
                 <div class="stat-value">{{ $totalStaff }}</div>
-                <div class="stat-desc text-emerald-500">Active Team</div>
+                <div class="sa-card-actions">
+                    <a href="{{ App\Filament\Resources\UserResource::getUrl('create') }}" class="sa-card-btn blue-solid">+ Add</a>
+                    <a href="{{ App\Filament\Resources\UserResource::getUrl('index') }}" class="sa-card-btn blue-outline">Manage</a>
+                </div>
             </div>
 
-            {{-- Menu Items (From menu_items table) --}}
+            {{-- 2. Categories (Orange) --}}
+            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-orange) !important;">
+                <div class="stat-header">
+                    <span class="stat-label">Categories</span>
+                    <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--brand-orange);">
+                        <x-heroicon-s-folder class="w-5 h-5" />
+                    </div>
+                </div>
+                <div class="stat-value">{{ $totalCategories }}</div>
+                {{-- Categories are managed via MenuResource --}}
+                <div class="sa-card-actions">
+                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn orange-outline">Manage</a>
+                </div>
+            </div>
+
+            {{-- 3. Menu Items (Blue) --}}
             <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-blue) !important;">
                 <div class="stat-header">
                     <span class="stat-label">Menu Items</span>
@@ -134,134 +183,127 @@
                     </div>
                 </div>
                 <div class="stat-value">{{ $totalItems }}</div>
-                <div class="stat-desc text-blue-500">Total Dishes</div>
+                <div class="sa-card-actions">
+                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn blue-solid">+ Add Item</a>
+                </div>
             </div>
 
-            {{-- Today's Orders (From orders table) --}}
-            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-red) !important;">
+            {{-- 4. Today's Orders (Orange) --}}
+            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-orange) !important;">
                 <div class="stat-header">
                     <span class="stat-label">Today's Orders</span>
-                    <div class="stat-icon" style="background: rgba(239, 68, 68, 0.1); color: var(--brand-red);">
+                    <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--brand-orange);">
                         <x-heroicon-s-shopping-bag class="w-5 h-5" />
                     </div>
                 </div>
                 <div class="stat-value">{{ $todayOrders }}</div>
-                <div class="text-orange-500 text-[0.65rem] font-black uppercase tracking-widest mt-2">Trending High 🔥
+                <div class="sa-card-actions">
+                    <a href="{{ App\Filament\Resources\OrderResource::getUrl('index') ?? '#' }}" class="sa-card-btn orange-outline">View Orders</a>
                 </div>
             </div>
 
-            {{-- Total Revenue (From payments or orders table) --}}
-            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-green) !important;">
+            {{-- 5. Total Revenue (Blue) --}}
+            <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-blue) !important;">
                 <div class="stat-header">
                     <span class="stat-label">Total Revenue</span>
-                    <div class="stat-icon" style="background: rgba(16, 185, 129, 0.1); color: var(--brand-green);">
-                        <x-heroicon-s-currency-dollar class="w-5 h-5" />
+                    <div class="stat-icon" style="background: rgba(59, 130, 246, 0.1); color: var(--brand-blue);">
+                        <x-heroicon-s-currency-rupee class="w-5 h-5" />
                     </div>
                 </div>
                 <div class="stat-value">₹{{ number_format($totalRevenue, 0) }}</div>
-                <div class="stat-desc text-emerald-500">Lifetime Income</div>
+                <div class="sa-card-actions">
+                    <a href="#" class="sa-card-btn blue-outline">View Finances</a>
+                </div>
             </div>
 
-            {{-- 5TH WIDGET: Total Branches (Clickable, Only for Restaurant Admin) --}}
+            {{-- 6. Total Branches (Only for Restaurant Admin) --}}
             @if($showBranchesWidget)
-                <a href="{{ App\Filament\Resources\BranchResource::getUrl('index') }}"
-                    class="glass-panel stat-box block cursor-pointer transition-transform hover:scale-105"
-                    style="border-bottom: 4px solid #8b5cf6 !important; text-decoration: none;">
+                <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-orange) !important;">
                     <div class="stat-header">
                         <span class="stat-label">Total Branches</span>
-                        <div class="stat-icon" style="background: rgba(139, 92, 246, 0.1); color: #8b5cf6;">
+                        <div class="stat-icon" style="background: rgba(234, 88, 12, 0.1); color: var(--brand-orange);">
                             <x-heroicon-s-building-storefront class="w-5 h-5" />
                         </div>
                     </div>
                     <div class="stat-value">{{ $totalBranches }}</div>
-                    <div class="stat-desc text-purple-500 font-bold mt-1">Manage Locations &rarr;</div>
-                </a>
-            @endif
-
-            {{-- 👇 NAYA: BRANCH REVENUES (Same Grid ke andar add hoga) 👇 --}}
-            @if($showBranchesWidget && count($branchRevenues) > 0)
-                @php
-                    $colors = ['#ec4899', '#14b8a6', '#eab308', '#0ea5e9', '#f43f5e', '#8b5cf6'];
-                @endphp
-                
-                @foreach($branchRevenues as $index => $br)
-                    @php 
-                        $color = $colors[$index % count($colors)]; 
-                    @endphp
-                    <div class="glass-panel stat-box" style="border-bottom: 4px solid {{ $color }} !important;">
-                        <div class="stat-header">
-                            {{-- Branch ka naam heading me aayega --}}
-                            <span class="stat-label" style="color: {{ $color }};">{{ $br['name'] }} Revenue</span>
-                            <div class="stat-icon" style="background: {{ $color }}20; color: {{ $color }};">
-                                <x-heroicon-s-building-storefront class="w-5 h-5" />
-                            </div>
-                        </div>
-                        <div class="stat-value">₹{{ number_format($br['revenue'], 0) }}</div>
-                        <div class="stat-desc" style="color: {{ $color }} opacity: 0.8;">Branch Earnings</div>
+                    <div class="sa-card-actions">
+                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('create') }}" class="sa-card-btn orange-solid">+ Add</a>
+                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('index') }}" class="sa-card-btn orange-outline">Manage</a>
                     </div>
-                @endforeach
+                </div>
             @endif
-            {{-- 👆 NAYA: BRANCH REVENUES END 👆 --}}
 
         </div>
 
-        {{-- 3. MIDDLE SECTION (CHARTS) --}}
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <div class="lg:col-span-1 glass-panel p-6">
-                <h3 class="font-black text-sm uppercase tracking-widest mb-6" style="color: var(--text-main);">Top
-                    Categories</h3>
-                <div id="donut-chart"></div>
+        {{-- NEW MIDDLE SECTION: REVENUE LINE CHART --}}
+        <div class="glass-panel p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-black text-sm uppercase tracking-widest" style="color: var(--text-main);">
+                    Revenue Trend (Last 30 Days)
+                </h3>
             </div>
-
-            <div class="lg:col-span-2 glass-panel p-6">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="font-black text-sm uppercase tracking-widest" style="color: var(--text-main);">Orders
-                        Volume Analysis</h3>
-                </div>
-                <div id="volume-chart"></div>
-            </div>
+            <div id="revenue-line-chart"></div>
         </div>
 
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // Theme check dynamically for ApexCharts
             const isDark = document.documentElement.classList.contains('dark');
 
-            // Donut Chart (Dynamic Data from Categories & Menu Items)
-            new ApexCharts(document.querySelector("#donut-chart"), {
-                series: {!! json_encode($categoryCounts) !!},
-                chart: { type: 'donut', height: 320, background: 'transparent' },
-                labels: {!! json_encode($categoryNames) !!},
-                colors: ['#f97316', '#3b82f6', '#10b981', '#64748b', '#ef4444', '#8b5cf6'],
-                legend: { position: 'bottom', labels: { colors: isDark ? '#9ca3af' : '#4b5563' } },
-                plotOptions: { pie: { donut: { size: '70%' } } },
-                stroke: { show: false },
-                theme: { mode: isDark ? 'dark' : 'light' }
-            }).render();
+            // Strictly using variations of Blue and Orange for the lines
+            const lineColors = ['#3b82f6', '#ea580c', '#60a5fa', '#f97316', '#1d4ed8', '#c2410c'];
 
-            // Generate 24-hour labels (12 AM, 1 AM ... 11 PM) for the X-axis
-            const hourLabels = Array.from({ length: 24 }, (_, i) => {
-                const ampm = i >= 12 ? 'PM' : 'AM';
-                const hour = i % 12 || 12;
-                return `${hour} ${ampm}`;
-            });
-
-            // Bar Chart (Dynamic Data from Orders Volume)
-            new ApexCharts(document.querySelector("#volume-chart"), {
-                series: [{ name: 'Orders', data: {!! json_encode($hourlyOrders) !!} }],
-                chart: { type: 'bar', height: 280, toolbar: { show: false }, background: 'transparent' },
-                plotOptions: { bar: { borderRadius: 6, columnWidth: '45%' } },
-                colors: ['#3b82f6'],
-                xaxis: {
-                    categories: hourLabels,
-                    labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } }
+            const chartOptions = {
+                series: {!! json_encode($chartSeries) !!},
+                chart: { 
+                    type: 'area', // Area chart looks more premium than a simple line
+                    height: 350, 
+                    toolbar: { show: false }, 
+                    background: 'transparent',
+                    fontFamily: 'inherit'
                 },
-                yaxis: { labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } } },
-                grid: { borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)' },
+                colors: lineColors,
+                fill: {
+                    type: 'gradient',
+                    gradient: {
+                        shadeIntensity: 1,
+                        opacityFrom: 0.4,
+                        opacityTo: 0.05,
+                        stops: [0, 100]
+                    }
+                },
+                dataLabels: { enabled: false },
+                stroke: { curve: 'smooth', width: 3 }, // Smooth curves are very modern
+                xaxis: {
+                    categories: {!! json_encode($chartDates) !!},
+                    labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } },
+                    axisBorder: { show: false },
+                    axisTicks: { show: false }
+                },
+                yaxis: { 
+                    labels: { 
+                        style: { colors: isDark ? '#9ca3af' : '#6b7280' },
+                        formatter: function (value) {
+                            return "₹" + value;
+                        }
+                    } 
+                },
+                grid: { 
+                    borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    strokeDashArray: 4, // Dashed lines look cleaner
+                    yaxis: { lines: { show: true } },
+                    xaxis: { lines: { show: false } }
+                },
+                legend: {
+                    position: 'top',
+                    horizontalAlign: 'right',
+                    labels: { colors: isDark ? '#f9fafb' : '#111827' }
+                },
                 theme: { mode: isDark ? 'dark' : 'light' }
-            }).render();
+            };
+
+            new ApexCharts(document.querySelector("#revenue-line-chart"), chartOptions).render();
         });
     </script>
 </x-filament-panels::page>
