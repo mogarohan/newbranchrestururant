@@ -82,7 +82,7 @@ class StaffStatsWidget extends BaseWidget
                 padding: 1.5rem !important;
                 position: relative !important;
                 overflow: hidden !important;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03) !important;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
                 transition: transform 0.2s, box-shadow 0.2s !important;
                 display: flex !important;
                 flex-direction: column !important;

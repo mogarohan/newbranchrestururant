@@ -52,13 +52,18 @@
 
             --accent-pink: #f395a3;
             /* Reserved (Baby Pink) */
+<<<<<<< HEAD
+            --accent-pink-light: rgba(255, 182, 193, 0.15);
+
+=======
             --accent-pink-light: rgba(255, 182, 193, 0.3);
             --accent-pink-light-1: rgba(255, 182, 193, 1);
+>>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
             --accent-red: #ef4444;
 
             --card-radius: 12px;
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.03);
-            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
 
         /* 👇 DARK THEME 👇 */
@@ -264,7 +269,11 @@
         .badge-reserved {
             background-color: var(--accent-pink-light);
             color: var(--accent-pink);
+<<<<<<< HEAD
+            border: 1px solid rgba(255, 182, 193, 0.5);
+=======
             border: 1px solid rgba(255, 182, 193, 100);
+>>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
         }
 
         /* Body Info */

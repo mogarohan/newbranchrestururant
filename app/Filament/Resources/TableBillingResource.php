@@ -102,14 +102,24 @@ class TableBillingResource extends Resource
             ->columns([
                 Tables\Columns\Layout\Stack::make([
 
-                    // --- 1. TABLE HEADER ---
+                    // --- 1. TABLE HEADER (DYNAMIC NAME LAA RAHA HAI YAHAN) ---
                     Tables\Columns\TextColumn::make('table_number')
-                        ->formatStateUsing(fn($state) => "Table {$state}")
+                        ->formatStateUsing(function ($state, RestaurantTable $record) {
+                            // Find active primary session (host)
+                            $hostSession = $record->sessions->where('is_primary', true)->first();
+
+                            // Agar host ka naam maujood hai, toh usko return karo, warna "Table {X}"
+                            if ($hostSession && !empty($hostSession->customer_name)) {
+                                return $hostSession->customer_name;
+                            }
+
+                            return "Table {$state}";
+                        })
                         ->weight(FontWeight::Black)
                         ->color('primary')
                         ->alignCenter()
                         // Replaced solid background with transparent dashed border
-                        ->extraAttributes(['style' => 'font-size: 1.5rem; padding: 1rem; border-bottom: 1px dashed rgba(156, 163, 175, 0.3); background: transparent;']),
+                        ->extraAttributes(['style' => 'font-size: 1.5rem; padding: 1rem; border-bottom: 1px dashed rgba(156, 163, 175, 0.3); background: transparent; text-transform: uppercase;']),
 
                     // --- 2. SUMMARY NUMBERS ---
                     Tables\Columns\Layout\Grid::make(2)->schema([

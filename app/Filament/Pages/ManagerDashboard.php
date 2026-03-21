@@ -17,8 +17,8 @@ class ManagerDashboard extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-command-line';
     protected static string $view = 'filament.pages.manager-dashboard';
-    protected static ?string $navigationLabel = 'Restaurant Manager Dashboard';
-    protected static ?string $title = 'Restaurant Dashboard Control';
+    protected static ?string $navigationLabel = 'Manager Dashboard';
+    protected static ?string $title = 'Manager Dashboard Control';
 
     protected static ?int $navigationSort = 1;
 
