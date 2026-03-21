@@ -36,10 +36,10 @@ class AdminPanelProvider extends PanelProvider
                 'gray' => Color::Slate,
             ])
             ->navigationGroups([
-                
+
                 'Administration',
                 'Access Control',
-                 'Menu Management',
+                'Menu Management',
                 'Restaurant Table Setup',
                 'Finance',
             ])
@@ -100,7 +100,7 @@ class AdminPanelProvider extends PanelProvider
                         .fi-wi-stats-overview-stat, .fi-section, .fi-ta-record, .fi-wi-chart {
                             background-color: #ffffff !important;
                             border: 1px solid #e2e8f0 !important;
-                            box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+                            box-shadow: 0 1px 3px #F47D20 !important;
                             border-radius: 0.75rem !important;
                         }
 
@@ -119,7 +119,7 @@ class AdminPanelProvider extends PanelProvider
 
                         /* Hover Effect - Light Orange tint */
                         .fi-sidebar-item:hover {
-                            background-color: rgba(244, 125, 32, 0.1) !important; /* Orange tint on hover */
+                            background-color: rgba(32, 127, 244, 0.1) !important; /* Orange tint on hover */
                             transform: translateX(3px) !important;
                         }
 
@@ -146,15 +146,15 @@ class AdminPanelProvider extends PanelProvider
                         }
 
                         /* ==========================================================
-                           🌙 DARK MODE (STRICTLY TRANSPARENT / DARK)
+                           🌙 DARK MODE (EXACT MATCH FOR dark:bg-gray-900)
                            ========================================================== */
                         .dark .fi-main, .dark .fi-sidebar, .dark .fi-topbar { 
-                            background-color: #09090b !important; 
+                            background-color: #111827 !important; /* Tailwind gray-900 color */
                             background-image: none !important;
                         }
 
                         .dark .fi-wi-stats-overview-stat, .dark .fi-section, .dark .fi-ta-record {
-                            background-color: rgba(255, 255, 255, 0.02) !important;
+                            background-color: rgba(255, 255, 255, 0.03) !important;
                             border: 1px solid rgba(255, 255, 255, 0.05) !important;
                             backdrop-filter: blur(10px);
                         }
@@ -165,7 +165,7 @@ class AdminPanelProvider extends PanelProvider
                         }
                         
                         .dark .fi-sidebar-item-active .fi-sidebar-item-label {
-                            color: #ffffff !important;
+                            color: #3B82F6 !important;
                         }
                     </style>
                 ')

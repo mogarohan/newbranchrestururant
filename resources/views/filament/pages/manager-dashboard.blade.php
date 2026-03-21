@@ -50,15 +50,15 @@
             /* Available */
             --accent-green-light: rgba(16, 185, 129, 0.1);
 
-            --accent-pink: #FFB6C1;
+            --accent-pink: #f395a3;
             /* Reserved (Baby Pink) */
-            --accent-pink-light: rgba(255, 182, 193, 0.2);
+            --accent-pink-light: rgba(255, 182, 193, 0.15);
 
             --accent-red: #ef4444;
 
             --card-radius: 12px;
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.03);
-            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.3);
         }
 
         /* 👇 DARK THEME 👇 */
@@ -264,7 +264,7 @@
         .badge-reserved {
             background-color: var(--accent-pink-light);
             color: var(--accent-pink);
-            border: 1px solid rgba(255, 182, 193, 0.3);
+            border: 1px solid rgba(255, 182, 193, 0.5);
         }
 
         /* Body Info */

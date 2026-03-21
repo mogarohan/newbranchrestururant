@@ -19,7 +19,9 @@ class AdminDashboard extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-home';
     protected static string $view = 'filament.pages.admin-dashboard';
-    protected static ?string $title = 'Restaurant Admin Dashboard';
+    protected static ?string $navigationLabel = 'Admin Dashboard';
+    protected static ?string $title = 'Admin Dashboard Control';
+
 
     public static function canAccess(): bool
     {
@@ -36,7 +38,7 @@ class AdminDashboard extends Page
             Actions\Action::make('addCategory')
                 ->label('Add Category')
                 ->model(Category::class)
-                
+
                 ->form([
                     Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
                     Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
@@ -54,7 +56,7 @@ class AdminDashboard extends Page
             Actions\CreateAction::make('addItem')
                 ->label('Add Item')
                 ->model(MenuItem::class)
-                
+
                 // We use your exact form from MenuResource
                 ->form(\App\Filament\Resources\MenuResource::form(new \Filament\Forms\Form($this))->getComponents())
                 ->action(function (array $data) {
@@ -116,7 +118,7 @@ class AdminDashboard extends Page
         // ---------------------------------------------------
         // CHART DATA: 30-Day Revenue Trend (Line Graph)
         // ---------------------------------------------------
-        
+
         $dates = [];
         $startDate = Carbon::today()->subDays(29);
         for ($i = 0; $i < 30; $i++) {
@@ -127,12 +129,12 @@ class AdminDashboard extends Page
 
         if ($showBranchesWidget) {
             $branches = Branch::where('restaurant_id', $rid)->get();
-            
+
             foreach ($branches as $branch) {
                 $dailyRevenue = Payment::whereHas('order', function ($query) use ($rid, $branch) {
-                        $query->where('restaurant_id', $rid)
-                              ->where('branch_id', $branch->id);
-                    })
+                    $query->where('restaurant_id', $rid)
+                        ->where('branch_id', $branch->id);
+                })
                     ->where('status', 'paid')
                     ->where('paid_at', '>=', $startDate->startOfDay())
                     ->select(DB::raw('DATE(paid_at) as date'), DB::raw('SUM(amount) as total'))
@@ -152,11 +154,11 @@ class AdminDashboard extends Page
             }
         } else {
             $dailyRevenueQuery = Payment::whereHas('order', function ($query) use ($rid, $bid, $isBranchAdmin) {
-                    $query->where('restaurant_id', $rid);
-                    if ($isBranchAdmin) {
-                        $query->where('branch_id', $bid);
-                    }
-                })
+                $query->where('restaurant_id', $rid);
+                if ($isBranchAdmin) {
+                    $query->where('branch_id', $bid);
+                }
+            })
                 ->where('status', 'paid')
                 ->where('paid_at', '>=', $startDate->startOfDay())
                 ->select(DB::raw('DATE(paid_at) as date'), DB::raw('SUM(amount) as total'))
@@ -175,7 +177,7 @@ class AdminDashboard extends Page
             ];
         }
 
-        $formattedDates = array_map(function($date) {
+        $formattedDates = array_map(function ($date) {
             return Carbon::parse($date)->format('d M');
         }, $dates);
 
@@ -184,7 +186,7 @@ class AdminDashboard extends Page
             'isRestaurantAdmin' => $isRestaurantAdmin,
             'showBranchesWidget' => $showBranchesWidget,
             'totalStaff' => $totalStaff,
-            'totalCategories' => $totalCategories, 
+            'totalCategories' => $totalCategories,
             'totalItems' => $totalItems,
             'totalRevenue' => $totalRevenue,
             'todayOrders' => $todayOrders,

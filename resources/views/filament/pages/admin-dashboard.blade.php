@@ -25,13 +25,13 @@
             background-color: var(--surface-card) !important;
             border: 1px solid var(--border-light) !important;
             border-radius: 16px !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             transition: all 0.3s ease;
         }
 
         .glass-panel:hover {
             transform: translateY(-4px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
         }
 
         .sa-stats-grid {
@@ -41,11 +41,20 @@
             margin-bottom: 2rem;
         }
 
-        @media (min-width: 640px) { .sa-stats-grid { grid-template-columns: repeat(2, 1fr); } }
-        @media (min-width: 1024px) { .sa-stats-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (min-width: 640px) {
+            .sa-stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .sa-stats-grid {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
 
         .stat-box {
-            padding: 1.25rem; 
+            padding: 1.25rem;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -77,7 +86,7 @@
         }
 
         .stat-value {
-            font-size: 1.75rem; 
+            font-size: 1.75rem;
             font-weight: 900;
             line-height: 1;
             color: var(--text-main);
@@ -88,7 +97,7 @@
             display: flex;
             gap: 0.5rem;
             margin-top: 1rem;
-            flex-wrap: wrap; 
+            flex-wrap: wrap;
         }
 
         .sa-card-btn {
@@ -101,7 +110,8 @@
             transition: background-color 0.2s ease;
             text-align: center;
             cursor: pointer;
-            border: none; /* In case it's a button element */
+            border: none;
+            /* In case it's a button element */
         }
 
         .sa-card-btn.orange-solid {
@@ -109,36 +119,49 @@
             background-color: var(--brand-orange);
             border: 1px solid var(--brand-orange);
         }
-        .sa-card-btn.orange-solid:hover { background-color: #c2410c; border-color: #c2410c; }
+
+        .sa-card-btn.orange-solid:hover {
+            background-color: #c2410c;
+            border-color: #c2410c;
+        }
 
         .sa-card-btn.blue-solid {
             color: white;
             background-color: var(--brand-blue);
             border: 1px solid var(--brand-blue);
         }
-        .sa-card-btn.blue-solid:hover { background-color: #2563eb; border-color: #2563eb; }
+
+        .sa-card-btn.blue-solid:hover {
+            background-color: #2563eb;
+            border-color: #2563eb;
+        }
 
         .sa-card-btn.orange-outline {
             color: var(--brand-orange);
             background-color: rgba(234, 88, 12, 0.1);
             border: 1px solid rgba(234, 88, 12, 0.2);
         }
-        .sa-card-btn.orange-outline:hover { background-color: rgba(234, 88, 12, 0.2); }
+
+        .sa-card-btn.orange-outline:hover {
+            background-color: rgba(234, 88, 12, 0.2);
+        }
 
         .sa-card-btn.blue-outline {
             color: var(--brand-blue);
             background-color: rgba(59, 130, 246, 0.1);
             border: 1px solid rgba(59, 130, 246, 0.2);
         }
-        .sa-card-btn.blue-outline:hover { background-color: rgba(59, 130, 246, 0.2); }
 
+        .sa-card-btn.blue-outline:hover {
+            background-color: rgba(59, 130, 246, 0.2);
+        }
     </style>
 
     <div class="sa-scope">
 
         {{-- TOP WIDGETS --}}
         <div class="sa-stats-grid">
-            
+
             {{-- 1. Total Staff (Blue) --}}
             <div class="glass-panel stat-box" style="border-bottom: 4px solid var(--brand-blue) !important;">
                 <div class="stat-header">
@@ -150,9 +173,11 @@
                 <div class="stat-value">{{ $totalStaff }}</div>
                 <div class="sa-card-actions">
                     @if($isRestaurantAdmin)
-                        <a href="{{ App\Filament\Resources\UserResource::getUrl('create') }}" class="sa-card-btn blue-solid">+ Add</a>
+                        <a href="{{ App\Filament\Resources\UserResource::getUrl('create') }}"
+                            class="sa-card-btn blue-solid">+ Add</a>
                     @endif
-                    <a href="{{ App\Filament\Resources\UserResource::getUrl('index') }}" class="sa-card-btn blue-outline">Manage</a>
+                    <a href="{{ App\Filament\Resources\UserResource::getUrl('index') }}"
+                        class="sa-card-btn blue-outline">Manage</a>
                 </div>
             </div>
 
@@ -168,10 +193,12 @@
                 <div class="sa-card-actions">
                     {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
                     @if($isRestaurantAdmin)
-                        <button wire:click="mountAction('addCategory')" type="button" class="sa-card-btn orange-solid">+ Add</button>
+                        <button wire:click="mountAction('addCategory')" type="button" class="sa-card-btn orange-solid">+
+                            Add</button>
                     @endif
                     {{-- The categories manage link still goes to menus because of the unified page --}}
-                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn orange-outline">Manage</a>
+                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}"
+                        class="sa-card-btn orange-outline">Manage</a>
                 </div>
             </div>
 
@@ -187,9 +214,11 @@
                 <div class="sa-card-actions">
                     {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
                     @if($isRestaurantAdmin)
-                        <button wire:click="mountAction('addItem')" type="button" class="sa-card-btn blue-solid">+ Add</button>
+                        <button wire:click="mountAction('addItem')" type="button" class="sa-card-btn blue-solid">+
+                            Add</button>
                     @endif
-                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}" class="sa-card-btn blue-outline">Manage</a>
+                    <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}"
+                        class="sa-card-btn blue-outline">Manage</a>
                 </div>
             </div>
 
@@ -203,7 +232,8 @@
                 </div>
                 <div class="stat-value">{{ $todayOrders }}</div>
                 <div class="sa-card-actions">
-                    <a href="{{ App\Filament\Resources\OrderResource::getUrl('index') ?? '#' }}" class="sa-card-btn orange-outline">View Orders</a>
+                    <a href="{{ App\Filament\Resources\OrderResource::getUrl('index') ?? '#' }}"
+                        class="sa-card-btn orange-outline">View Orders</a>
                 </div>
             </div>
 
@@ -232,8 +262,10 @@
                     </div>
                     <div class="stat-value">{{ $totalBranches }}</div>
                     <div class="sa-card-actions">
-                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('create') }}" class="sa-card-btn orange-solid">+ Add</a>
-                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('index') }}" class="sa-card-btn orange-outline">Manage</a>
+                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('create') }}"
+                            class="sa-card-btn orange-solid">+ Add</a>
+                        <a href="{{ App\Filament\Resources\BranchResource::getUrl('index') }}"
+                            class="sa-card-btn orange-outline">Manage</a>
                     </div>
                 </div>
             @endif
@@ -264,10 +296,10 @@
 
             const chartOptions = {
                 series: {!! json_encode($chartSeries) !!},
-                chart: { 
-                    type: 'area', 
-                    height: 350, 
-                    toolbar: { show: false }, 
+                chart: {
+                    type: 'area',
+                    height: 350,
+                    toolbar: { show: false },
                     background: 'transparent',
                     fontFamily: 'inherit'
                 },
@@ -282,24 +314,24 @@
                     }
                 },
                 dataLabels: { enabled: false },
-                stroke: { curve: 'smooth', width: 3 }, 
+                stroke: { curve: 'smooth', width: 3 },
                 xaxis: {
                     categories: {!! json_encode($chartDates) !!},
                     labels: { style: { colors: isDark ? '#9ca3af' : '#6b7280' } },
                     axisBorder: { show: false },
                     axisTicks: { show: false }
                 },
-                yaxis: { 
-                    labels: { 
+                yaxis: {
+                    labels: {
                         style: { colors: isDark ? '#9ca3af' : '#6b7280' },
                         formatter: function (value) {
                             return "₹" + value;
                         }
-                    } 
+                    }
                 },
-                grid: { 
+                grid: {
                     borderColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-                    strokeDashArray: 4, 
+                    strokeDashArray: 4,
                     yaxis: { lines: { show: true } },
                     xaxis: { lines: { show: false } }
                 },
