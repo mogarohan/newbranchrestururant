@@ -13,12 +13,11 @@ class CategoryManagerWidget extends BaseWidget
 {
     protected int | string | array $columnSpan = 'full';
 
-    // 👇 UPDATED: Added display: none so it is hidden the second the page loads
+    // 👇 ADDED: Unique ID so our CSS and Javascript can find it reliably
     protected function getExtraAttributes(): array
     {
         return [
-            'id' => 'category-table-wrapper',
-            'style' => 'display: none;', 
+            'id' => 'category-manager-inner',
         ];
     }
 
@@ -36,11 +35,26 @@ class CategoryManagerWidget extends BaseWidget
 
                 return $query;
             })
-            // 👇 UPDATED: Cleaned up heading. The Close button just hides the div again.
+            // 👇 UPDATED: Alpine logic that listens for the button click event
             ->heading(new HtmlString('
-                <div id="category-manager-header" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;"
+                     x-init="
+                        // Listen for the custom event from the Stats Widget
+                        window.addEventListener(\'open-category-manager\', () => {
+                            $el.closest(\'#category-manager-inner\').classList.add(\'force-show\');
+                            
+                            // Native fallback for older browsers
+                            let outerWrapper = $el.closest(\'.fi-wi\');
+                            if(outerWrapper) {
+                                outerWrapper.style.display = \'block\';
+                                setTimeout(() => outerWrapper.scrollIntoView({behavior: \'smooth\', block: \'start\'}), 100);
+                            }
+                        });
+                     "
+                >
                     <span>Manage Categories</span>
-                    <button type="button" onclick="document.getElementById(\'category-table-wrapper\').style.display = \'none\';" style="color: #9ca3af; padding: 4px; border-radius: 6px; transition: all 0.2s; cursor: pointer;" onmouseover="this.style.color=\'#ef4444\'; this.style.backgroundColor=\'rgba(239, 68, 68, 0.1)\'" onmouseout="this.style.color=\'#9ca3af\'; this.style.backgroundColor=\'transparent\'" title="Close">
+                    
+                    <button type="button" onclick="let inner = this.closest(\'#category-manager-inner\'); if(inner) { inner.classList.remove(\'force-show\'); let outer = inner.closest(\'.fi-wi\'); if(outer) outer.style.display = \'none\'; }" style="color: #9ca3af; padding: 4px; border-radius: 6px; transition: all 0.2s; cursor: pointer;" onmouseover="this.style.color=\'#ef4444\'; this.style.backgroundColor=\'rgba(239, 68, 68, 0.1)\'" onmouseout="this.style.color=\'#9ca3af\'; this.style.backgroundColor=\'transparent\'" title="Close">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 20px; height: 20px;">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
