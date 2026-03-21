@@ -23,12 +23,15 @@ class MenuDashboardStats extends BaseWidget
         $labelBaseStyle = 'font-size: 0.75rem !important; font-weight: 800 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; display: block !important; margin-bottom: 1rem !important;';
         $numberBaseStyle = 'font-size: 2.25rem !important; font-weight: 800 !important; line-height: 1 !important; display: block !important; margin-bottom: 0.5rem !important;';
 
+        // 👇 Inject CSS to instantly hide the Category Widget Container on load
+        $cssHack = "<style>.fi-wi:has(#category-manager-inner) { display: none; } .fi-wi:has(#category-manager-inner.force-show) { display: block !important; }</style>";
+
         // 1. Add Category Button
         $addCategoryBtn = "<button type='button' onclick=\"document.querySelector('.hidden-add-category').click()\" style='display: inline-block; margin-top: 10px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: rgba(234, 88, 12, 0.1); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.2); cursor: pointer;'>+ Add Category</button>";
         
-        // 👇 UPDATED: Targets the specific wrapper ID instead of traversing the DOM
-        $manageCatBtn = "<button type='button' onclick=\"window.categoryWidgetOpen = true; let el = document.getElementById('category-table-wrapper'); if(el) el.style.display = 'block';\" style='display: inline-block; margin-top: 10px; margin-left: 8px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: transparent; color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.3); cursor: pointer; transition: 0.2s;' onmouseover=\"this.style.backgroundColor='rgba(107, 114, 128, 0.1)'\" onmouseout=\"this.style.backgroundColor='transparent'\">Manage Categories</button>";
-
+        // 👇 UPDATED: Button now fires a native Event to open the table
+// This is inside getStats() in MenuDashboardStats.php
+        $manageCatBtn = "<button type='button' onclick=\"document.querySelector('.hidden-manage-category').click()\" style='display: inline-block; margin-top: 10px; margin-left: 8px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: transparent; color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.3); cursor: pointer; transition: 0.2s;' onmouseover=\"this.style.backgroundColor='rgba(107, 114, 128, 0.1)'\" onmouseout=\"this.style.backgroundColor='transparent'\">Manage Categories</button>";
         // 3. Add Item Button
         $addItemBtn = "<button type='button' onclick=\"document.querySelector('.hidden-add-item').click()\" style='display: inline-block; margin-top: 10px; font-size: 0.75rem; font-weight: 600; padding: 4px 12px; border-radius: 6px; background-color: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); cursor: pointer;'>+ Add Item</button>";
 
@@ -45,7 +48,7 @@ class MenuDashboardStats extends BaseWidget
         return [
             Stat::make(
                 new HtmlString("<span style='{$labelBaseStyle} color: #ea580c !important;'>Total Categories</span>"),
-                new HtmlString("<span style='{$numberBaseStyle}' class='text-gray-900 dark:text-white'>{$totalCategories}</span>" . $iconFolder)
+                new HtmlString($cssHack . "<span style='{$numberBaseStyle}' class='text-gray-900 dark:text-white'>{$totalCategories}</span>" . $iconFolder)
             )
             ->description(new HtmlString($addCategoryBtn . $manageCatBtn))
             ->extraAttributes(['style' => $cardBaseStyle]),
