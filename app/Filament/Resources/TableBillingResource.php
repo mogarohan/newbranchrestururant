@@ -111,7 +111,6 @@ class TableBillingResource extends Resource
                                 ? $primarySession->customer_name
                                 : '-';
 
-                            // Clean stacked layout with prefixes on top
                             return new HtmlString("
                                 <div style='display: flex; align-items: center; justify-content: center; gap: 1.5rem; width: 100%; line-height: 1.2;'>
                                     <div style='display: flex; flex-direction: column; align-items: center;'>
@@ -169,11 +168,8 @@ class TableBillingResource extends Resource
                         })
                         ->extraAttributes(['style' => 'padding: 0;'])
                         ->alignCenter(),
-                    // ❌ Yahan se maine `->action('checkout')` hata diya hai
-
                 ])->space(0),
             ])
-            // 👇 YEH LINE POORE CARD KO CLICKABLE BANA DEGI 👇
             ->recordAction('checkout')
             ->actions([
                 Tables\Actions\Action::make('checkout')
@@ -181,15 +177,14 @@ class TableBillingResource extends Resource
                     ->hiddenLabel()
                     ->modalHeading(fn(RestaurantTable $record) => "Checkout - Table {$record->table_number}")
                     ->modalWidth('6xl')
-                    ->modalSubmitActionLabel('Confirm Payment & Clear Table')
+                    ->modalSubmitActionLabel('Confirm Payment')
                     ->fillForm(function (RestaurantTable $record): array {
-                        $total = $record->sessions->flatMap->orders->sum('total_amount');
-                        $orderIds = $record->sessions->flatMap->orders->pluck('id');
-                        $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
-
+                        $total = $record->sessions->flatMap->orders->where('status', '!=', 'cancelled')->sum('total_amount');
+                        
                         return [
-                            'subtotal' => max(0, $total - $paid),
-                            'tip' => 0,
+                            'subtotal' => $total,
+                            'discount_amount' => 0,
+                            'tax_percentage' => 5, // Default 5% Tax
                         ];
                     })
                     ->form([
@@ -201,26 +196,35 @@ class TableBillingResource extends Resource
                                 ->schema([
                                     Forms\Components\Placeholder::make('receipt')
                                         ->hiddenLabel()
-                                        ->content(function (RestaurantTable $record) {
-                                            $html = '<div class="max-h-[500px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
+                                        ->content(function (RestaurantTable $record, Forms\Get $get) {
+                                            
+                                            // 1. GRAB LIVE VALUES
+                                            $sub = (float) $get('subtotal');
+                                            $disc = (float) $get('discount_amount');
+                                            $taxP = (float) $get('tax_percentage');
+
+                                            $taxable = max(0, $sub - $disc);
+                                            $taxAmt = $taxable * ($taxP / 100);
+                                            $grandTotal = $taxable + $taxAmt;
+
+                                            // 2. BUILD THE RECEIPT HTML
+                                            $html = '<div class="max-h-[550px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
                                             $html .= '<h2 class="text-center text-2xl font-black text-gray-900 dark:text-white mb-1">TABLE ' . $record->table_number . '</h2>';
                                             $html .= '<div class="text-center text-xs font-semibold tracking-widest text-gray-500 dark:text-gray-400 border-b-2 border-dashed border-gray-300 dark:border-gray-600 pb-4 mb-5">FINAL BILLING SUMMARY</div>';
 
                                             $hasOrders = false;
-                                            $grandTotal = 0;
                                             $totalOrdersCount = 0;
-
                                             $primarySession = $record->sessions->where('is_primary', true)->first();
 
                                             if ($primarySession) {
                                                 // --- HOST ORDERS ---
-                                                $hostOrdersCount = $primarySession->orders->count();
+                                                $hostOrdersCount = $primarySession->orders->where('status', '!=', 'cancelled')->count();
                                                 $hasOrders = $hasOrders || $hostOrdersCount > 0;
 
                                                 $html .= "<div class='mb-6'>";
                                                 $html .= "<div class='text-base font-bold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👑 HOST: {$primarySession->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$hostOrdersCount} Orders)</span></div>";
 
-                                                foreach ($primarySession->orders as $order) {
+                                                foreach ($primarySession->orders->where('status', '!=', 'cancelled') as $order) {
                                                     $totalOrdersCount++;
                                                     $html .= "<div class='mt-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700'>";
                                                     $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
@@ -236,7 +240,6 @@ class TableBillingResource extends Resource
                                                         </div>";
                                                     }
                                                     $html .= "</div>";
-                                                    $grandTotal += $order->total_amount;
                                                 }
                                                 $html .= "</div>";
 
@@ -247,31 +250,32 @@ class TableBillingResource extends Resource
                                                     $html .= "<div class='text-sm font-bold text-center border-y border-dashed border-gray-300 dark:border-gray-600 py-2 my-6 text-gray-500 dark:text-gray-400 tracking-widest'>--- JOINED GUESTS ---</div>";
 
                                                     foreach ($guests as $guest) {
-                                                        $guestOrdersCount = $guest->orders->count();
-                                                        $hasOrders = $hasOrders || $guestOrdersCount > 0;
+                                                        $guestOrdersCount = $guest->orders->where('status', '!=', 'cancelled')->count();
+                                                        if ($guestOrdersCount > 0) {
+                                                            $hasOrders = true;
 
-                                                        $html .= "<div class='mb-5'>";
-                                                        $html .= "<div class='text-sm font-bold bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👤 GUEST: {$guest->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$guestOrdersCount} Orders)</span></div>";
+                                                            $html .= "<div class='mb-5'>";
+                                                            $html .= "<div class='text-sm font-bold bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👤 GUEST: {$guest->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$guestOrdersCount} Orders)</span></div>";
 
-                                                        foreach ($guest->orders as $order) {
-                                                            $totalOrdersCount++;
-                                                            $html .= "<div class='mt-3 pl-3 border-l-2 border-orange-200 dark:border-orange-500/30'>";
-                                                            $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
+                                                            foreach ($guest->orders->where('status', '!=', 'cancelled') as $order) {
+                                                                $totalOrdersCount++;
+                                                                $html .= "<div class='mt-3 pl-3 border-l-2 border-orange-200 dark:border-orange-500/30'>";
+                                                                $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
 
-                                                            foreach ($order->items as $item) {
-                                                                $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
-                                                                $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
+                                                                foreach ($order->items as $item) {
+                                                                    $name = $item->menuItem ? $item->menuItem->name : $item->item_name;
+                                                                    $category = $item->menuItem?->category ? strtoupper($item->menuItem->category->name) : 'GENERAL';
 
-                                                                $html .= "
-                                                                <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
-                                                                    <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
-                                                                    <span class='font-bold'>₹{$item->total_price}</span>
-                                                                </div>";
+                                                                    $html .= "
+                                                                    <div class='flex justify-between items-start text-sm mb-2 text-gray-800 dark:text-gray-200'>
+                                                                        <span><strong class='text-orange-500 dark:text-orange-400'>{$item->quantity}x</strong> {$name} <br><span class='text-[10px] text-gray-500 dark:text-gray-400'>[{$category}]</span></span>
+                                                                        <span class='font-bold'>₹{$item->total_price}</span>
+                                                                    </div>";
+                                                                }
+                                                                $html .= "</div>";
                                                             }
                                                             $html .= "</div>";
-                                                            $grandTotal += $order->total_amount;
                                                         }
-                                                        $html .= "</div>";
                                                     }
                                                 }
                                             }
@@ -280,15 +284,39 @@ class TableBillingResource extends Resource
                                                 return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400'>No valid orders found to bill.</div>");
                                             }
 
+                                            // 3. LIVE SUBTOTAL / TAX / DISCOUNT SECTION
                                             $html .= "
                                                 <div class='border-t-2 border-gray-900 dark:border-gray-100 mt-6 pt-4'>
-                                                    <div class='flex justify-between text-sm text-gray-600 dark:text-gray-400'>
+                                                    <div class='flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-4'>
                                                         <span>Total Orders Delivered:</span>
                                                         <span>{$totalOrdersCount}</span>
                                                     </div>
-                                                    <div class='flex justify-between text-xl font-black text-gray-900 dark:text-white mt-2'>
+                                                    
+                                                    <div class='flex justify-between text-sm text-gray-800 dark:text-gray-200 mb-1'>
+                                                        <span>Subtotal:</span>
+                                                        <span class='font-bold'>₹" . number_format($sub, 2) . "</span>
+                                                    </div>";
+                                            
+                                            if ($disc > 0) {
+                                                $html .= "
+                                                    <div class='flex justify-between text-sm text-green-600 dark:text-green-400 mb-1'>
+                                                        <span>Discount:</span>
+                                                        <span class='font-bold'>- ₹" . number_format($disc, 2) . "</span>
+                                                    </div>";
+                                            }
+
+                                            if ($taxAmt > 0) {
+                                                $html .= "
+                                                    <div class='flex justify-between text-sm text-red-500 dark:text-red-400 mb-3'>
+                                                        <span>Tax ({$taxP}%):</span>
+                                                        <span class='font-bold'>+ ₹" . number_format($taxAmt, 2) . "</span>
+                                                    </div>";
+                                            }
+
+                                            $html .= "
+                                                    <div class='flex justify-between text-xl font-black text-gray-900 dark:text-white mt-4 border-t border-dashed border-gray-300 dark:border-gray-700 pt-3'>
                                                         <span>GRAND TOTAL</span>
-                                                        <span class='text-green-600 dark:text-green-400'>₹" . number_format($grandTotal, 2) . "</span>
+                                                        <span class='text-emerald-600 dark:text-emerald-400'>₹" . number_format($grandTotal, 2) . "</span>
                                                     </div>
                                                 </div>
                                             </div>";
@@ -297,60 +325,59 @@ class TableBillingResource extends Resource
                                         })
                                 ]),
 
-                            // 💰 RIGHT COLUMN: PAYMENT GATEWAY & CLOSURE
+                            // 💰 RIGHT COLUMN: PAYMENT GATEWAY
                             Forms\Components\Section::make('Payment Collection')
                                 ->columnSpan(5)
                                 ->schema([
                                     Forms\Components\TextInput::make('subtotal')
-                                        ->label('Remaining Bill Balance')
+                                        ->label('Subtotal (₹)')
                                         ->numeric()
-                                        ->prefix('₹')
                                         ->readOnly()
-                                        ->extraInputAttributes(['class' => 'font-bold text-lg text-gray-900 dark:text-white']),
+                                        ->extraInputAttributes(['class' => 'font-bold text-gray-900 dark:text-white']),
 
-                                    Forms\Components\TextInput::make('tip')
-                                        ->label('Add Tip Amount (Optional)')
-                                        ->numeric()
-                                        ->prefix('₹')
-                                        ->default(0)
-                                        ->live(onBlur: true),
+                                    Forms\Components\Grid::make(2)->schema([
+                                        Forms\Components\TextInput::make('discount_amount')
+                                            ->label('Discount (₹)')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->live(onBlur: true), // Live update receipt
 
+                                        Forms\Components\TextInput::make('tax_percentage')
+                                            ->label('Tax (%)')
+                                            ->numeric()
+                                            ->default(5)
+                                            ->live(onBlur: true), // Live update receipt
+                                    ]),
+
+                                    // 👇 REAL-TIME CALCULATED GRAND TOTAL
                                     Forms\Components\Placeholder::make('grand_total')
                                         ->label('Total to Collect')
                                         ->content(function (Forms\Get $get) {
-                                            $total = (float) $get('subtotal') + (float) $get('tip');
+                                            $sub = (float) $get('subtotal');
+                                            $disc = (float) $get('discount_amount');
+                                            $taxP = (float) $get('tax_percentage');
+
+                                            $taxable = max(0, $sub - $disc);
+                                            $taxAmt = $taxable * ($taxP / 100);
+                                            $total = $taxable + $taxAmt;
+
                                             return new HtmlString("
                                                 <div class='text-3xl font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 text-center shadow-sm'>
                                                     ₹" . number_format($total, 2) . "
+                                                    <div class='text-xs font-normal text-gray-500 mt-1'>Includes ₹" . number_format($taxAmt, 2) . " Tax</div>
                                                 </div>
                                             ");
                                         }),
 
                                     Forms\Components\ToggleButtons::make('payment_method')
                                         ->label('Select Payment Method')
-                                        ->options([
-                                            'cash' => 'Cash',
-                                            'upi' => 'UPI (QR)',
-                                            'card' => 'Credit/Debit Card',
-                                        ])
-                                        ->icons([
-                                            'cash' => 'heroicon-m-banknotes',
-                                            'upi' => 'heroicon-m-qr-code',
-                                            'card' => 'heroicon-m-credit-card',
-                                        ])
-                                        ->colors([
-                                            'cash' => 'success',
-                                            'upi' => 'info',
-                                            'card' => 'warning',
-                                        ])
+                                        ->options(['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card'])
                                         ->inline()
                                         ->required()
                                         ->default('cash'),
 
                                     Forms\Components\TextInput::make('transaction_reference')
                                         ->label('Transaction ID / UTR')
-                                        ->placeholder('Required for Online Payments')
-                                        ->required(fn(Forms\Get $get) => in_array($get('payment_method'), ['upi', 'card']))
                                         ->visible(fn(Forms\Get $get) => $get('payment_method') !== 'cash'),
                                 ]),
                         ]),
@@ -365,14 +392,25 @@ class TableBillingResource extends Resource
 
                         $orderIds = $validOrders->pluck('id')->toArray();
                         $latestOrderId = collect($orderIds)->last();
-                        $totalAmountToRecord = (float) $data['subtotal'] + (float) $data['tip'];
 
-                        if ($latestOrderId && $totalAmountToRecord > 0) {
+                        // 🧮 Math
+                        $sub = (float) $data['subtotal'];
+                        $disc = (float) $data['discount_amount'];
+                        $taxP = (float) $data['tax_percentage'];
+
+                        $taxable = max(0, $sub - $disc);
+                        $taxAmt = $taxable * ($taxP / 100);
+                        $grandTotal = $taxable + $taxAmt;
+
+                        if ($latestOrderId && $grandTotal >= 0) {
                             Payment::create([
                                 'restaurant_id' => $record->restaurant_id,
                                 'branch_id' => $record->branch_id,
                                 'order_id' => $latestOrderId,
-                                'amount' => $totalAmountToRecord,
+                                'subtotal' => $sub,
+                                'discount_amount' => $disc,
+                                'tax_amount' => $taxAmt,
+                                'amount' => $grandTotal, 
                                 'payment_method' => $data['payment_method'],
                                 'status' => 'paid',
                                 'transaction_reference' => $data['transaction_reference'] ?? null,
@@ -380,25 +418,23 @@ class TableBillingResource extends Resource
                             ]);
                         }
 
+                        // Just mark the orders as completed so the frontend knows it is paid
                         if (!empty($orderIds)) {
                             Order::whereIn('id', $orderIds)->update(['status' => 'completed']);
-
-                            foreach ($orderIds as $oId) {
-                                OrderStatusLog::create([
-                                    'order_id' => $oId,
-                                    'from_status' => 'served',
-                                    'to_status' => 'completed',
-                                    'changed_by' => auth()->id(),
-                                ]);
+                            $updatedOrders = Order::whereIn('id', $orderIds)->get();
+                            foreach ($updatedOrders as $ord) {
+                                \App\Events\OrderStatusUpdated::dispatch($ord);
                             }
                         }
-
-                        if (!empty($sessionIds)) {
-                            QrSession::whereIn('id', $sessionIds)->update([
-                                'is_active' => false,
-                            ]);
-                        }
-                    }),
+                        
+                        \Filament\Notifications\Notification::make()
+                            ->title('Payment Confirmed Successfully!')
+                            ->body('The customer can now download their bill.')
+                            ->success()
+                            ->send();
+                    })
+                    // 👇 FIX: Gently refresh the DOM after action to prevent Livewire Unmount crash
+                    ->after(fn (\Livewire\Component $livewire) => $livewire->dispatch('$refresh')),
             ]);
     }
 

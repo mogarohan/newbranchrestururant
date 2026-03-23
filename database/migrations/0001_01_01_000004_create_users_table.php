@@ -26,7 +26,8 @@ return new class extends Migration {
                 ->nullable()
                 ->constrained()
                 ->cascadeOnDelete();
-
+            $table->unsignedInteger('total_served')
+                ->default(0);
             /* ROLE RELATION */
             $table->foreignId('role_id')
                 ->constrained()

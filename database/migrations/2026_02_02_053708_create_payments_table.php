@@ -13,7 +13,9 @@ return new class extends Migration {
             $table->foreignId('restaurant_id')->constrained('restaurants')->cascadeOnDelete();
             $table->foreignId('branch_id')->nullable()->constrained('branches')->cascadeOnDelete();
             $table->foreignId('order_id')->constrained('orders')->cascadeOnDelete();
-
+            $table->decimal('subtotal', 10, 2)->default(0);
+            $table->decimal('discount_amount', 10, 2)->default(0);
+            $table->decimal('tax_amount', 10, 2)->default(0);
             $table->decimal('amount', 10, 2);
             $table->enum('payment_method', ['cash', 'upi', 'card', 'online']);
             $table->enum('status', ['pending', 'paid', 'failed']);

@@ -17,6 +17,9 @@ class Payment extends Model
         'restaurant_id',
         'branch_id',
         'restaurant_id', // 👈 Isko add karna sabse zaroori hai
+        'subtotal', // 👈 Naya field
+        'discount_amount', // 👈 Naya field
+        'tax_amount', // 👈 Naya field
 
     ];
 

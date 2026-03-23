@@ -52,13 +52,8 @@
 
             --accent-pink: #f395a3;
             /* Reserved (Baby Pink) */
-<<<<<<< HEAD
-            --accent-pink-light: rgba(255, 182, 193, 0.15);
-
-=======
             --accent-pink-light: rgba(255, 182, 193, 0.3);
             --accent-pink-light-1: rgba(255, 182, 193, 1);
->>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
             --accent-red: #ef4444;
 
             --card-radius: 12px;
@@ -269,11 +264,7 @@
         .badge-reserved {
             background-color: var(--accent-pink-light);
             color: var(--accent-pink);
-<<<<<<< HEAD
-            border: 1px solid rgba(255, 182, 193, 0.5);
-=======
             border: 1px solid rgba(255, 182, 193, 100);
->>>>>>> 0f29d42ddf2433a96c80361711e0f7d31ae0cd61
         }
 
         /* Body Info */
@@ -381,7 +372,8 @@
         }
     </style>
 
-    <div wire:poll.5s class="pos-scope pos-container">
+    {{-- 👇 FIX: Removed wire:poll.5s to prevent DOM disruption crashes 👇 --}}
+    <div class="pos-scope pos-container">
 
         <div class="pos-layout">
 
@@ -525,7 +517,8 @@
                         @foreach($tables as $table)
                             @php
                                 $isOccupied = $table->active_sessions_count > 0;
-                                $isReserved = ($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false);
+                                // Explicitly ensure an occupied table cannot be marked reserved visually.
+                                $isReserved = !$isOccupied && (($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false));
                                 $isSelected = $selectedTableId === $table->id;
 
                                 $tableStateClass = 'available';

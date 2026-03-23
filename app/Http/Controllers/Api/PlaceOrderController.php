@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Events\OrderStatusUpdated;
+use App\Models\Payment;
 
 class PlaceOrderController extends Controller
 {
@@ -138,7 +139,7 @@ class PlaceOrderController extends Controller
         ], 201);
     }
 
-    public function getSessionOrders($token)
+   public function getSessionOrders($token)
     {
         $session = QrSession::where('session_token', $token)->first();
 
@@ -159,18 +160,35 @@ class PlaceOrderController extends Controller
         $orders = Order::with(['items.menuItem'])
             ->whereIn('qr_session_id', $groupIds)
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($order) {
-                return [
-                    'id' => $order->id,
-                    'status' => $order->status,
-                    'total_amount' => $order->total_amount,
-                    'customer_name' => $order->customer_name,
-                    'created_at' => $order->created_at,
-                    'items' => $order->items
-                ];
-            });
+            ->get();
 
-        return response()->json($orders);
+        $formattedOrders = $orders->map(function ($order) {
+            return [
+                'id' => $order->id,
+                'status' => $order->status,
+                'total_amount' => $order->total_amount,
+                'customer_name' => $order->customer_name,
+                'created_at' => $order->created_at,
+                'items' => $order->items
+            ];
+        });
+
+        // 👇 NEW: Check if a payment has been made for any of these orders
+        $orderIds = $orders->pluck('id');
+        $payment = Payment::whereIn('order_id', $orderIds)
+            ->where('status', 'paid')
+            ->first();
+
+        // 👇 NEW: Return both Orders AND Payment Data
+        return response()->json([
+            'orders' => $formattedOrders,
+            'payment' => $payment ? [
+                'subtotal' => $payment->subtotal,
+                'discount_amount' => $payment->discount_amount,
+                'tax_amount' => $payment->tax_amount,
+                'amount' => $payment->amount,
+                'status' => $payment->status,
+            ] : null
+        ]);
     }
 }
