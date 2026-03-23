@@ -94,7 +94,7 @@ class AdminPanelProvider extends PanelProvider
 
                         .fi-topbar {
                             background-color: #ffffff !important;
-                            border-bottom: 1px solid #e2e8f0 !important;
+                           
                         }
 
                         .fi-wi-stats-overview-stat, .fi-section, .fi-ta-record, .fi-wi-chart {
@@ -146,10 +146,10 @@ class AdminPanelProvider extends PanelProvider
                         }
 
                         /* ==========================================================
-                           🌙 DARK MODE (EXACT MATCH FOR dark:bg-gray-900)
+                           🌙 DARK MODE 
                            ========================================================== */
                         .dark .fi-main, .dark .fi-sidebar, .dark .fi-topbar { 
-                            background-color: #111827 !important; /* Tailwind gray-900 color */
+                            background-color: #0C1136 !important; 
                             background-image: none !important;
                         }
 
@@ -165,7 +165,7 @@ class AdminPanelProvider extends PanelProvider
                         }
                         
                         .dark .fi-sidebar-item-active .fi-sidebar-item-label {
-                            color: #3B82F6 !important;
+                            color: #fff !important;
                         }
                     </style>
                 ')

@@ -46,14 +46,14 @@ class ManageMenus extends ManageRecords
                 ->label('Add Item')
                 ->extraAttributes(['class' => 'hidden-add-item hidden'])
                 ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
-                
+
             // 👇 3. MANAGE CATEGORIES ACTION (Native Repeater Form)
             Actions\Action::make('manageCategories')
                 ->label('Manage Categories')
                 ->extraAttributes(['class' => 'hidden-manage-category hidden'])
-               
+
                 ->modalHeading('Manage Categories')
-                // 👇 Injecting CSS to create the specific Vertical Card Layout & Scroll Lock
+                // 👇 Injecting CSS to create the specific Vertical Card Layout, Scroll Lock & Alternating Colors
                 ->modalDescription(new HtmlString('
                     Update category names or toggle their availability.
                     <style>
@@ -79,7 +79,6 @@ class ManageMenus extends ManageRecords
                         }
                         /* 👇 End Scroll Lock Logic 👇 */
 
-
                         /* Hide the main header text/icon */
                         .fi-fo-repeater-item-header-title,
                         .fi-fo-repeater-item-header-icon {
@@ -99,10 +98,9 @@ class ManageMenus extends ManageRecords
                             z-index: 10;
                         }
 
-                        /* Main card styling */
+                        /* Main card styling base */
                         .fi-fo-repeater-item {
                             position: relative !important;
-                            border: 1px solid rgba(156, 163, 175, 0.3) !important;
                             border-radius: 12px !important;
                             padding: 1rem 1rem 4rem 1rem !important; /* Big padding at bottom for the toggle & delete btn */
                             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
@@ -111,7 +109,23 @@ class ManageMenus extends ManageRecords
 
                         .dark .fi-fo-repeater-item {
                             background-color: #1f2937 !important;
-                            border-color: rgba(255,255,255,0.1) !important;
+                        }
+                        
+                        /* 👇 ALTERNATING COLORS FOR CARDS & TOGGLES 👇 */
+                        /* ODD CARDS - BLUE */
+                        .fi-fo-repeater-item:nth-child(odd) {
+                            border: 2px solid #3B82F6 !important;
+                        }
+                        .fi-fo-repeater-item:nth-child(odd) button[role="switch"][aria-checked="true"] {
+                            background-color: #3B82F6 !important;
+                        }
+
+                        /* EVEN CARDS - ORANGE */
+                        .fi-fo-repeater-item:nth-child(even) {
+                            border: 2px solid #F47D20 !important;
+                        }
+                        .fi-fo-repeater-item:nth-child(even) button[role="switch"][aria-checked="true"] {
+                            background-color: #F47D20 !important;
                         }
                         
                         /* Make delete button icon red */
@@ -132,7 +146,7 @@ class ManageMenus extends ManageRecords
                 ->fillForm(function () {
                     $user = auth()->user();
                     $query = Category::withoutGlobalScopes()->where('restaurant_id', $user->restaurant_id);
-                    
+
                     if ($user->isBranchAdmin() || $user->isManager()) {
                         $query->whereNull('branch_id');
                     }
@@ -168,35 +182,34 @@ class ManageMenus extends ManageRecords
                         ])
                         ->schema([
                             Forms\Components\Hidden::make('id'),
-                            
+
                             // 👇 Name Input at the top
                             Forms\Components\TextInput::make('name')
-                                ->label('Name') 
+                                ->label('Name')
                                 ->placeholder('Category Name')
                                 ->required()
                                 ->maxLength(100)
                                 ->disabled(fn() => auth()->user()->isBranchAdmin() || auth()->user()->isManager()),
-                                
+
                             // 👇 Toggle anchored to the bottom left via custom CSS class
                             Forms\Components\Toggle::make('is_active')
                                 ->hiddenLabel()
-                                ->onColor('warning')
                                 ->inline(false)
-                                ->extraAttributes(['class' => 'absolute-bottom-left-toggle']), 
+                                ->extraAttributes(['class' => 'absolute-bottom-left-toggle']),
                         ])
                         ->addable(false)
                         ->deletable(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager())
                         ->reorderable(false)
-                        ->itemLabel(null), 
+                        ->itemLabel(null),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
-                    
+
                     $submittedIds = collect($data['categories'] ?? [])
                         ->pluck('id')
                         ->filter()
                         ->toArray();
-                    
+
                     if (!$user->isBranchAdmin() && !$user->isManager()) {
                         $existingIds = Category::withoutGlobalScopes()
                             ->where('restaurant_id', $user->restaurant_id)
@@ -213,10 +226,12 @@ class ManageMenus extends ManageRecords
                     }
 
                     foreach ($data['categories'] ?? [] as $catData) {
-                        if (empty($catData['id'])) continue;
+                        if (empty($catData['id']))
+                            continue;
 
                         $category = Category::withoutGlobalScopes()->find($catData['id']);
-                        if (!$category) continue;
+                        if (!$category)
+                            continue;
 
                         if ($user->isBranchAdmin() || $user->isManager()) {
                             DB::table('branch_category_status')->updateOrInsert(
