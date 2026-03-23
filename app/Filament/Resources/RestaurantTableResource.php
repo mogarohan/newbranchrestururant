@@ -97,20 +97,64 @@ class RestaurantTableResource extends Resource
                     .fi-ta-content {
                         background-color: transparent !important;
                     }
-                    /* Individual Grid Cards */
+                    
+                    /* 👇 NEW: Premium Gradient Layout for Table Cards 👇 */
                     .fi-ta-record {
-                        background-color: transparent !important;
-                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        background-color: #ffffff !important;
+                        /* Sleek Blue-to-Orange border using border-image or pseudo element */
+                        border: 2px solid transparent !important;
+                        background-image: linear-gradient(#ffffff, #ffffff), linear-gradient(135deg, #3B82F6, #F47D20);
+                        background-origin: border-box;
+                        background-clip: padding-box, border-box;
                         border-radius: 16px !important;
-                        box-shadow: none !important;
-                        transition: all 0.2s ease;
+                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
+                        transition: all 0.3s ease;
                     }
-                    /* Card Hover Effect */
+                    
+                    .dark .fi-ta-record {
+                        background-color: #1e293b !important;
+                        background-image: linear-gradient(#1e293b, #1e293b), linear-gradient(135deg, #3B82F6, #F47D20);
+                    }
+                    
+                    /* Hover Effect */
                     .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important;
-                        border-color: rgba(234, 88, 12, 0.4) !important;
-                        transform: translateY(-3px);
-                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+                        transform: translateY(-5px);
+                        box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15), 0 5px 15px rgba(244, 125, 32, 0.1) !important;
+                    }
+
+                    /* Table Number Styling */
+                    .fi-ta-record .fi-ta-text-item {
+                        color: #1e293b !important;
+                    }
+                    .dark .fi-ta-record .fi-ta-text-item {
+                        color: #f8fafc !important;
+                    }
+
+                    /* Active Icon Color fix */
+                    .fi-ta-record svg.text-success-500 {
+                        color: #3B82F6 !important; /* Replaced default green with Blue */
+                    }
+                    
+                    /* Buttons styling */
+                    /* Edit Button */
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(1) {
+                        background-color: #3B82F6 !important;
+                        color: #ffffff !important;
+                        border: none !important;
+                        transition: 0.2s;
+                    }
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(1):hover {
+                        background-color: #2563eb !important;
+                    }
+                    
+                    /* Delete Button */
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(2) {
+                        color: #ef4444 !important;
+                        border: none !important;
+                        background-color: rgba(239, 68, 68, 0.05) !important;
+                    }
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(2):hover {
+                        background-color: rgba(239, 68, 68, 0.1) !important;
                     }
                 </style>
                 <span style="font-size: 1.25rem; font-weight: 800;">Tables & QR Codes</span>
@@ -127,7 +171,7 @@ class RestaurantTableResource extends Resource
                             Tables\Columns\TextColumn::make('table_number')
                                 ->label('Table No')
                                 ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                ->size('lg'),
+                                ->size('xl'),
 
                             // Show branch name ONLY if it's not the Main Restaurant admin (optional)
                             Tables\Columns\TextColumn::make('branch.name')
@@ -140,13 +184,15 @@ class RestaurantTableResource extends Resource
                             ->grow(false),
                     ]),
 
+                    // QR Code Display Customization - Updated Padding and Height
                     ImageColumn::make('qr_path')
                         ->label('QR')
                         ->disk('public')
-                        ->height(200)
+                        ->height(250) // 👈 Increased height from 200 to 250
                         ->width('100%')
                         ->extraImgAttributes([
-                            'style' => 'background-color: #e8c08d; padding: 2rem; border-radius: 0.5rem; object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem;',
+                            // 👈 Reduced padding to 0.5rem so QR looks bigger inside the container
+                            'style' => 'background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(244, 125, 32, 0.05)); padding: 0.5rem; border-radius: 12px; object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem; border: 1px solid rgba(59, 130, 246, 0.2); box-shadow: 0 4px 6px rgba(0,0,0,0.05);',
                         ])
                         ->visibility('public'),
                 ])->space(3),
@@ -154,18 +200,176 @@ class RestaurantTableResource extends Resource
             ->actions([
                 Tables\Actions\EditAction::make()
                     ->button()
-                    ->outlined()
-                    ->color('warning'),
+                    // Removed outline for solid blue button
+                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
 
                 Tables\Actions\DeleteAction::make()
-                    ->button()
-                    ->outlined()
+                    ->iconButton() // Convert to modern icon button
+                    ->icon('heroicon-o-trash')
                     ->color('danger')
-                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin'])),
+                    ->requiresConfirmation()
+                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
+            ])
+            // Bulk Delete Option maintained
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
+                ]),
             ])
             ->headerActions([
+                // 👇 NEW ACTION: Delete All QRs (Visible beside the PDF button) 👇
+                Tables\Actions\Action::make('delete_all_qr')
+                    ->label('Delete All QRs')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->outlined()
+                    ->requiresConfirmation()
+                    ->modalHeading('Delete All Tables & QRs')
+                    ->modalDescription('Are you sure you want to delete all tables and their QR codes? This action cannot be undone.')
+                    ->modalSubmitActionLabel('Yes, delete them all')
+                    ->action(function () {
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
+
+                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        if ($branchId) {
+                            $query->where('branch_id', $branchId);
+                        } else {
+                            $query->whereNull('branch_id');
+                        }
+
+                        // Delete files from storage before deleting from DB
+                        $tables = $query->get();
+                        foreach ($tables as $table) {
+                            if ($table->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($table->qr_path)) {
+                                \Illuminate\Support\Facades\Storage::disk('public')->delete($table->qr_path);
+                            }
+                        }
+
+                        $query->delete();
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('All tables and QR codes deleted successfully.')
+                            ->success()
+                            ->send();
+                    })
+                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin'])),
+
+                // 👇 EXISTING ACTION: Download as PDF (Exact 4 QRs per page format in 2x2 grid) 👇
+                Tables\Actions\Action::make('download_pdf_qr')
+                    ->label('Download QRs as PDF')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('info')
+                    ->outlined()
+                    ->action(function () {
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
+
+                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        if ($branchId) {
+                            $query->where('branch_id', $branchId);
+                        } else {
+                            $query->whereNull('branch_id');
+                        }
+                        $tables = $query->get();
+
+                        // Create HTML for PDF (Strict 2x2 Grid using Fixed Pixels)
+                        $html = '<!DOCTYPE html><html><head><style>
+                            @page { margin: 15px; size: A4 portrait; }
+                            body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; }
+                            
+                            .page-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-after: always; }
+                            .page-table:last-child { page-break-after: auto; }
+                            
+                            .quadrant { width: 50%; padding: 10px; vertical-align: top; }
+                            
+                            /* Strict height to STOP DomPDF from stretching the row to full page */
+                            .qr-container { 
+                                border: 3px solid #3B82F6; 
+                                border-radius: 15px; 
+                                padding: 15px; 
+                                text-align: center; 
+                                height: 360px; /* Exact height prevents stretching */
+                                box-sizing: border-box; 
+                            }
+                            
+                            /* Big and Bold QR Image */
+                            .qr-img { width: 220px; height: 220px; margin: 15px auto; display: block; object-fit: contain; }
+                            
+                            h2 { margin: 0; padding-top: 5px; color: #1e293b; font-size: 32px; font-weight: bold; }
+                            h4 { margin: 10px 0 0 0; color: #F47D20; font-size: 22px; text-transform: uppercase; }
+                        </style></head><body>';
+
+                        // Group tables into chunks of 4 for each page
+                        $pages = $tables->chunk(4);
+
+                        foreach ($pages as $pageItems) {
+                            $html .= '<table class="page-table">';
+
+                            // Break 4 items into 2 rows of 2
+                            $rows = $pageItems->chunk(2);
+
+                            foreach ($rows as $rowItems) {
+                                $html .= '<tr>';
+                                foreach ($rowItems as $table) {
+                                    // Convert image to base64 for DomPDF compatibility
+                                    $imagePath = storage_path('app/public/' . $table->qr_path);
+                                    $base64 = '';
+                                    if ($table->qr_path && file_exists($imagePath)) {
+                                        $type = pathinfo($imagePath, PATHINFO_EXTENSION);
+                                        $data = file_get_contents($imagePath);
+                                        $base64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
+                                    }
+
+                                    $html .= '<td class="quadrant"><div class="qr-container">';
+                                    $html .= '<h2>Table: ' . $table->table_number . '</h2>';
+                                    if ($base64) {
+                                        $html .= '<img src="' . $base64 . '" alt="QR" class="qr-img">';
+                                    } else {
+                                        $html .= '<p style="margin: 80px 0; font-size: 20px; color: red;">QR Not Found</p>';
+                                    }
+                                    $html .= '<h4>' . ($restaurant->name ?? 'Restaurant') . '</h4>';
+                                    $html .= '</div></td>';
+                                }
+
+                                // Fill empty column if row only has 1 item
+                                if ($rowItems->count() == 1) {
+                                    $html .= '<td class="quadrant"></td>';
+                                }
+                                $html .= '</tr>';
+                            }
+
+                            // Fill empty row if page only has 1 row (less than 3 items total on page)
+                            if ($rows->count() == 1) {
+                                $html .= '<tr><td class="quadrant"></td><td class="quadrant"></td></tr>';
+                            }
+
+                            $html .= '</table>';
+                        }
+
+                        $html .= '</body></html>';
+
+                        // Generate and Download PDF
+                        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'portrait');
+                            return response()->streamDownload(function () use ($pdf) {
+                                echo $pdf->output();
+                            }, 'Table_QRs_Document.pdf');
+                        } else {
+                            \Filament\Notifications\Notification::make()
+                                ->title('PDF Library Missing')
+                                ->body('Please run: composer require barryvdh/laravel-dompdf to download PDFs.')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+
+                // EXISTING ACTION: Download ZIP
                 Tables\Actions\Action::make('download_all_qr')
-                    ->label('Download All Table QRs')
+                    ->label('Download ZIP QRs')
                     ->icon('heroicon-o-archive-box-arrow-down')
                     ->color('gray')
                     ->outlined()
@@ -180,10 +384,11 @@ class RestaurantTableResource extends Resource
                             ->deleteFileAfterSend(true);
                     }),
 
+                // EXISTING ACTION: Generate Tables
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
-                    ->color('warning')
+                    ->color('primary') // Changed to primary (blue)
                     ->form(function () {
                         // 👇 Form updated: Select Branch removed for all
                         return [
