@@ -76,6 +76,13 @@ class RestaurantResource extends Resource
                 ->minValue(1)
                 ->required(),
 
+            // 👇 NEW: UPI ID Field for Main Restaurant 👇
+            Forms\Components\TextInput::make('upi_id')
+                ->label('Master UPI ID')
+                ->placeholder('e.g., yourname@okhdfcbank')
+                ->maxLength(255)
+                ->helperText('This UPI ID will be used for all QR Payments unless a branch overrides it.'),
+
             /* --- MULTI-BRANCH FEATURE TOGGLE --- */
             Forms\Components\Toggle::make('has_branches')
                 ->label('Enable Multiple Branches')
@@ -167,6 +174,13 @@ class RestaurantResource extends Resource
                     ->copyable()
                     ->color('gray')
                     ->toggleable(),
+                    
+                // 👇 NEW: Display UPI ID in Table 👇
+                Tables\Columns\TextColumn::make('upi_id')
+                    ->label('UPI ID')
+                    ->searchable()
+                    ->placeholder('Not Set')
+                    ->color('gray'),
 
                 Tables\Columns\IconColumn::make('has_branches')
                     ->label('MULTI-BRANCH')

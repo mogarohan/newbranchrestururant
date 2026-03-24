@@ -160,6 +160,13 @@ class BranchResource extends Resource
                 ->tel()
                 ->maxLength(20),
 
+            // 👇 NEW: UPI ID Field for Branch 👇
+            Forms\Components\TextInput::make('upi_id')
+                ->label('UPI ID (Optional)')
+                ->placeholder('e.g., yourname@okhdfcbank')
+                ->maxLength(255)
+                ->helperText('If provided, payments at this branch will go to this UPI ID instead of the main restaurant.'),
+
             Forms\Components\Textarea::make('address')
                 ->rows(3)
                 ->columnSpanFull(),
@@ -218,6 +225,13 @@ class BranchResource extends Resource
 
                 Tables\Columns\TextColumn::make('phone')
                     ->searchable(),
+
+                // 👇 NEW: Display UPI ID in Table 👇
+                Tables\Columns\TextColumn::make('upi_id')
+                    ->label('UPI ID')
+                    ->searchable()
+                    ->placeholder('Not Set')
+                    ->color('gray'),
 
                 Tables\Columns\TextColumn::make('address')
                     ->limit(30),
