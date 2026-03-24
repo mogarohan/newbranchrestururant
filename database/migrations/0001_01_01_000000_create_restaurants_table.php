@@ -16,7 +16,8 @@ return new class extends Migration {
             $table->integer('user_limits')->default(1);
             $table->boolean('has_branches')->default(false);
             $table->integer('max_branches')->nullable();
-
+            $table->string('upi_id')->nullable();
+            
             $table->boolean('is_active')->default(true);
 
             // 👇 YAHAN FIX KIYA HAI: constrained('users') hata diya gaya hai deadlock todne ke liye

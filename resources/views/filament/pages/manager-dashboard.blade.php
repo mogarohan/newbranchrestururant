@@ -286,37 +286,60 @@
             color: var(--text-secondary);
         }
 
-        /* Available Dashed Box & Button */
-        .ts-avail-box {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 1.25rem auto;
-            border: 2px dashed var(--accent-green);
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--accent-green);
-            background: var(--accent-green-light);
-        }
-
-        .ts-btn-assign {
+        /* Table Action Buttons */
+        .ts-btn-reserve {
             margin-top: auto;
             width: 100%;
+            padding: 0.6rem;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            font-weight: 800;
+            text-align: center;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .ts-btn-reserve.make {
+            background-color: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+        }
+
+        .ts-btn-reserve.make:hover {
+            background-color: var(--surface-bg);
+            border-color: var(--text-primary);
+        }
+
+        .ts-btn-reserve.cancel {
+            background-color: var(--accent-pink-light);
+            color: var(--accent-pink);
+            border: 1px solid var(--accent-pink);
+        }
+
+        .ts-btn-reserve.cancel:hover {
+            background-color: var(--accent-pink);
+            color: white;
+        }
+        
+        .ts-btn-clean {
+            margin-top: 8px;
+            width: 100%;
             padding: 0.5rem;
-            background-color: var(--accent-green-light);
-            color: var(--accent-green);
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background-color: transparent;
+            color: var(--brand-orange);
+            border: 1px solid var(--brand-orange);
             border-radius: 8px;
             font-size: 0.65rem;
             font-weight: 800;
             text-align: center;
             text-transform: uppercase;
             transition: all 0.2s;
+            cursor: pointer;
         }
 
-        .ts-btn-assign:hover {
-            background-color: var(--accent-green);
+        .ts-btn-clean:hover {
+            background-color: var(--brand-orange);
             color: white;
         }
 
@@ -335,7 +358,6 @@
             box-shadow: var(--shadow-md);
             overflow: hidden;
             width: 100%;
-            /* Ensures it stays within grid bounds */
         }
 
         .pos-receipt-header {
@@ -372,7 +394,6 @@
         }
     </style>
 
-    {{-- 👇 FIX: Removed wire:poll.5s to prevent DOM disruption crashes 👇 --}}
     <div class="pos-scope pos-container">
 
         <div class="pos-layout">
@@ -382,10 +403,8 @@
             {{-- ========================================== --}}
             <div class="flex flex-col w-full min-w-0">
 
-                {{-- 1. TOP STATS WIDGETS (ALTERNATING BLUE & ORANGE) --}}
+                {{-- 1. TOP STATS WIDGETS --}}
                 <div class="pos-stats">
-
-                    {{-- 1. Total Tables (BLUE) --}}
                     <div class="stat-card-h theme-blue">
                         <div class="stat-icon-wrapper"><x-heroicon-s-squares-2x2 /></div>
                         <div class="stat-h-info">
@@ -393,8 +412,6 @@
                             <span class="stat-value">{{ $totalTables }}</span>
                         </div>
                     </div>
-
-                    {{-- 2. Active Tables (ORANGE) --}}
                     <div class="stat-card-h theme-orange">
                         <div class="stat-icon-wrapper"><x-heroicon-s-play-circle /></div>
                         <div class="stat-h-info">
@@ -402,8 +419,6 @@
                             <span class="stat-value">{{ $activeTables }}</span>
                         </div>
                     </div>
-
-                    {{-- 3. Occupancy (BLUE) --}}
                     <div class="stat-card-h theme-blue">
                         <div class="stat-icon-wrapper"><x-heroicon-s-chart-pie /></div>
                         <div class="stat-h-info">
@@ -411,8 +426,6 @@
                             <span class="stat-value">{{ $occupancyRate }}%</span>
                         </div>
                     </div>
-
-                    {{-- 4. Active Diners (ORANGE) --}}
                     <div class="stat-card-h theme-orange">
                         <div class="stat-icon-wrapper"><x-heroicon-s-users /></div>
                         <div class="stat-h-info">
@@ -420,53 +433,38 @@
                             <span class="stat-value">{{ $activeSessions }}</span>
                         </div>
                     </div>
-
                 </div>
 
                 {{-- 2. URGENT ACTION STRIP (KITCHEN TICKETS) --}}
                 @if($incomingOrders->count() > 0)
-                    <div class="mb-6"
-                        style="border: 2px solid var(--accent-red); background: rgba(239, 68, 68, 0.05); padding: 1.25rem; border-radius: 12px;">
-                        <h2
-                            style="color: var(--accent-red); font-size: 0.9rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
-                            <x-heroicon-s-bell-alert style="width: 18px;" class="animate-bounce" /> Kitchen Action Required
-                            ({{ $incomingOrders->count() }})
+                    <div class="mb-6" style="border: 2px solid var(--accent-red); background: rgba(239, 68, 68, 0.05); padding: 1.25rem; border-radius: 12px;">
+                        <h2 style="color: var(--accent-red); font-size: 0.9rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
+                            <x-heroicon-s-bell-alert style="width: 18px;" class="animate-bounce" /> Kitchen Action Required ({{ $incomingOrders->count() }})
                         </h2>
 
                         <div class="pos-scroll flex gap-4 overflow-x-auto pb-2">
                             @foreach($incomingOrders as $order)
-                                <div class="min-w-[280px] flex-shrink-0 flex flex-col p-4 shadow-sm"
-                                    style="border-left: 6px solid var(--accent-red); background: var(--surface-card); border-radius: 8px;">
-
-                                    <div class="flex justify-between items-start border-b pb-3 mb-3"
-                                        style="border-color: var(--border-light);">
+                                <div class="min-w-[280px] flex-shrink-0 flex flex-col p-4 shadow-sm" style="border-left: 6px solid var(--accent-red); background: var(--surface-card); border-radius: 8px;">
+                                    <div class="flex justify-between items-start border-b pb-3 mb-3" style="border-color: var(--border-light);">
                                         <div>
-                                            <span
-                                                style="color: var(--text-primary); font-weight: 900; font-size: 1.1rem; display: block; line-height: 1;">Table
-                                                {{ $order->restaurantTable->table_number ?? 'TW' }}</span>
-                                            <span
-                                                style="color: var(--text-muted); font-size: 0.75rem; font-weight: 600; margin-top: 4px; display: block;">Order
-                                                #{{ $order->id }} • {{ $order->customer_name ?? 'Guest' }}</span>
+                                            <span style="color: var(--text-primary); font-weight: 900; font-size: 1.1rem; display: block; line-height: 1;">Table {{ $order->restaurantTable->table_number ?? 'TW' }}</span>
+                                            <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: 600; margin-top: 4px; display: block;">Order #{{ $order->id }} • {{ $order->customer_name ?? 'Guest' }}</span>
                                         </div>
                                         <div class="text-right">
-                                            <span
-                                                style="color: var(--accent-green); font-weight: 900; font-size: 1rem; display: block;">₹{{ number_format($order->total_amount, 0) }}</span>
-                                            <span
-                                                style="color: var(--brand-orange); font-size: 0.7rem; font-weight: 800;">{{ $order->created_at->diffForHumans(null, true, true) }}</span>
+                                            <span style="color: var(--accent-green); font-weight: 900; font-size: 1rem; display: block;">₹{{ number_format($order->total_amount, 0) }}</span>
+                                            <span style="color: var(--brand-orange); font-size: 0.7rem; font-weight: 800;">{{ $order->created_at->diffForHumans(null, true, true) }}</span>
                                         </div>
                                     </div>
 
                                     <div class="flex flex-col gap-2 flex-grow mb-4">
                                         @foreach($order->items as $item)
                                             <div class="flex items-start gap-2">
-                                                <span
-                                                    style="background: var(--surface-bg); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 0.6rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; margin-top: 2px;">
+                                                <span style="background: var(--surface-bg); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 0.6rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; margin-top: 2px;">
                                                     {{ strtoupper($item->menuItem?->category?->name ?? 'GEN') }}
                                                 </span>
                                                 <div>
                                                     <span style="color: var(--text-primary); font-size: 0.85rem; font-weight: 700;">
-                                                        <strong>{{ $item->quantity }}x</strong>
-                                                        {{ $item->menuItem->name ?? $item->item_name }}
+                                                        <strong>{{ $item->quantity }}x</strong> {{ $item->menuItem->name ?? $item->item_name }}
                                                     </span>
                                                 </div>
                                             </div>
@@ -474,13 +472,10 @@
                                     </div>
 
                                     <div class="flex gap-2 mt-auto">
-                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')"
-                                            style="background: var(--brand-orange); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
+                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: var(--brand-orange); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
                                             Accept & Cook
                                         </button>
-                                        <button wire:click="updateStatus({{ $order->id }}, 'cancelled')"
-                                            onclick="confirm('Reject this order?')"
-                                            style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-strong); padding: 0.6rem 0.8rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem;">
+                                        <button wire:click="updateStatus({{ $order->id }}, 'cancelled')" onclick="confirm('Reject this order?')" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-strong); padding: 0.6rem 0.8rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem;">
                                             Reject
                                         </button>
                                     </div>
@@ -490,34 +485,28 @@
                     </div>
                 @endif
                 <br />
-                {{-- 3. FLOOR PLAN GRID (EXACT DESIGN MATCH) --}}
+
+                {{-- 3. FLOOR PLAN GRID --}}
                 <div>
                     <div class="flex flex-col md:flex-row justify-center md:items-center mb-6 pb-2 gap-4">
-                        <div class="flex gap-4 px-4 py-2 rounded-full"
-                            style="background: var(--surface-card); border: 1px solid var(--border-light);">
-                            <span
-                                style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-green);"></div>
-                                Available
+                        <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--surface-card); border: 1px solid var(--border-light);">
+                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-green);"></div> Available
                             </span>
-                            <span
-                                style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--brand-orange);"></div>
-                                Occupied
+                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                                <div class="w-3 h-3 rounded-full" style="background: var(--brand-orange);"></div> Occupied
                             </span>
-                            <span
-                                style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-pink);"></div>
-                                Reserved
+                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-pink);"></div> Reserved
                             </span>
                         </div>
                     </div>
                     <br />
+                    
                     <div class="pos-table-grid">
                         @foreach($tables as $table)
                             @php
                                 $isOccupied = $table->active_sessions_count > 0;
-                                // Explicitly ensure an occupied table cannot be marked reserved visually.
                                 $isReserved = !$isOccupied && (($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false));
                                 $isSelected = $selectedTableId === $table->id;
 
@@ -535,57 +524,56 @@
                                     $badgeClass = 'badge-reserved';
                                 }
 
-                                // Format Table number to T-01, T-02 etc.
                                 $formattedTableNum = is_numeric($table->table_number) ? sprintf('%02d', $table->table_number) : $table->table_number;
                             @endphp
 
-                            <div wire:click="openTable({{ $table->id }})"
-                                class="ts-table {{ $tableStateClass }} {{ $isSelected ? 'selected' : '' }}">
+                            <div wire:click="openTable({{ $table->id }})" class="ts-table {{ $tableStateClass }} {{ $isSelected ? 'selected' : '' }}">
 
-                                {{-- Header: T-01 & Badge --}}
                                 <div class="ts-header">
                                     <div>
                                         <div class="ts-title">T-{{ $formattedTableNum }}</div>
-                                        <div class="ts-subtitle">{{ $table->capacity ?? 4 }}-SEATER</div>
+                                        {{-- 👇 FIX: Change '4-SEATER' to Occupancy string 👇 --}}
+                                        <div class="ts-subtitle">OCCUPANCY: {{ $table->active_sessions_count }} / {{ $table->capacity ?? 4 }}</div>
                                     </div>
                                     <div class="ts-badge {{ $badgeClass }}">{{ $statusText }}</div>
                                 </div>
 
-                                {{-- Body Info --}}
                                 <div class="flex-grow flex flex-col justify-center">
                                     @if($isOccupied)
                                         <div class="ts-info-row">
                                             <x-heroicon-s-clock class="ts-info-icon" />
-                                            <span class="ts-info-text">{{ $table->active_sessions_count }} Active
-                                                Diner(s)</span>
+                                            {{-- 👇 FIX: Change '1 Active Diner' to 'X Order(s) Placed' based on new count 👇 --}}
+                                            <span class="ts-info-text">{{ $table->total_orders_count ?? 0 }} Order(s) Placed</span>
                                         </div>
                                         <div class="ts-info-row">
                                             <x-heroicon-s-currency-rupee class="ts-info-icon" />
                                             <span class="ts-info-text">₹{{ number_format($table->total_bill, 2) }}</span>
                                         </div>
+                                        
+                                        <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
+                                            Clean Table
+                                        </button>
+                                        
                                     @elseif($isReserved)
-                                        <div class="ts-info-row justify-center mt-2">
+                                        <div class="ts-info-row justify-center mt-2 mb-3">
                                             <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink-light-1);" />
                                         </div>
-                                        <div class="text-center mt-2"
-                                            style="font-size: 0.85rem; font-weight: 800; color: var(--accent-pink);">
-                                            Reserved
-                                        </div>
+                                        <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve cancel">
+                                            Cancel Reserve
+                                        </button>
                                     @else
-                                        {{-- Available: Dashed Icon Box & Button --}}
-                                        <div class="ts-avail-box">
-                                            <x-heroicon-s-user-plus class="w-8 h-8" />
+                                        <div class="ts-info-row justify-center mt-2 mb-3">
+                                            <x-heroicon-s-check-circle class="w-10 h-10" style="color: var(--border-strong);" />
                                         </div>
-                                        <div class="ts-btn-assign">
-                                            Assign Guests
-                                        </div>
+                                        <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve make">
+                                            Reserve Table
+                                        </button>
                                     @endif
                                 </div>
                             </div>
                         @endforeach
                     </div>
                 </div>
-
             </div>
 
             {{-- ========================================== --}}
@@ -595,24 +583,27 @@
                 @if($selectedTableData && $selectedTableData->active_sessions_count > 0)
                     @php
                         $groupedOrders = $selectedTableData->orders->groupBy('status');
-                        $runningTotal = $selectedTableData->orders->sum('total_amount');
+                        
+                        // Calculate total bill manually from valid statuses to ensure completely exact amounts
+                        $validOrdersForBill = $selectedTableData->orders->whereIn('status', ['preparing', 'ready', 'served']);
+                        $runningTotal = $validOrdersForBill->sum('total_amount');
+                        
+                        $primarySession = $selectedTableData->qrSessions->where('is_primary', true)->first();
+                        $guestSessions = $selectedTableData->qrSessions->where('is_primary', false)->where('join_status', 'approved');
+                        
+                        $hostName = $primarySession ? $primarySession->customer_name : 'Walk-in Customer';
+                        $totalDinersCount = 1 + $guestSessions->count();
                     @endphp
 
                     <div class="pos-receipt">
-
-                        {{-- Receipt Header --}}
                         <div class="pos-receipt-header">
                             <div class="flex justify-between items-start">
                                 <div>
-                                    <span
-                                        style="color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em;">CURRENTLY
-                                        VIEWING</span>
-                                    <h3
-                                        style="color: var(--text-primary); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
+                                    <span style="color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em;">CURRENTLY VIEWING</span>
+                                    <h3 style="color: var(--text-primary); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
                                         Table {{ $selectedTableData->table_number }}
                                     </h3>
-                                    <p
-                                        style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                    <p style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
                                         <x-heroicon-s-clock style="width: 14px;" /> Seated at
                                         {{ $selectedTableData->qrSessions->first()?->created_at->format('h:i A') ?? 'N/A' }}
                                     </p>
@@ -626,44 +617,73 @@
                             </div>
                         </div>
 
-                        {{-- Receipt Body (Orders) --}}
                         <div class="pos-receipt-body pos-scroll">
+                            {{-- Info Box (Occupancy / Capacity / Host) --}}
+                            <div style="background: var(--surface-bg); border-radius: 8px; padding: 16px; margin-bottom: 1.5rem; border: 1px solid var(--border-light);">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">Occupancy:</span>
+                                    <span style="font-size: 0.8rem; color: var(--text-primary); font-weight: 800;">{{ $totalDinersCount }} / {{ $selectedTableData->capacity ?? 4 }} Seats</span>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">Host:</span>
+                                    <span style="font-size: 0.8rem; color: var(--brand-orange); font-weight: 800;">👑 {{ $hostName }}</span>
+                                </div>
+                                @if($guestSessions->count() > 0)
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-top: 1px dashed var(--border-strong); padding-top: 8px; margin-top: 8px;">
+                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700; flex-shrink: 0; margin-right: 8px;">Guests:</span>
+                                    <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 700; text-align: right;">
+                                        {{ $guestSessions->pluck('customer_name')->join(', ') }}
+                                    </span>
+                                </div>
+                                @endif
+                            </div>
+
                             <div style="text-align: center; margin-bottom: 1.5rem;">
-                                <span
-                                    style="background: var(--text-primary); color: var(--surface-card); padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">Active
-                                    Orders</span>
+                                <span style="background: var(--text-primary); color: var(--surface-card); padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">
+                                    Active Orders
+                                </span>
                             </div>
 
                             <div class="flex flex-col gap-6">
-                                @foreach(['preparing' => 'Cooking', 'ready' => 'Ready to Serve', 'served' => 'Served'] as $statusKey => $label)
+                                {{-- Loop through all statuses including placed and cancelled --}}
+                                @foreach(['placed' => 'New / Pending', 'preparing' => 'Cooking', 'ready' => 'Ready to Serve', 'served' => 'Served', 'cancelled' => 'Cancelled'] as $statusKey => $label)
                                     @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
                                         <div>
-                                            <div
-                                                style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ $statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : 'var(--text-muted)') }}; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-light); padding-bottom: 4px;">
+                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ $statusKey === 'placed' ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : ($statusKey === 'cancelled' ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-light); padding-bottom: 4px;">
                                                 {{ $label }}
                                             </div>
 
                                             <div class="flex flex-col gap-4">
                                                 @foreach($groupedOrders[$statusKey] as $order)
-                                                    <div class="flex flex-col gap-2">
-                                                        @if($order->notes)
-                                                            <div
-                                                                style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: rgba(239, 68, 68, 0.05); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
+                                                    @php
+                                                        $isHostOrder = $primarySession && $order->qr_session_id === $primarySession->id;
+                                                        $isCancelled = $statusKey === 'cancelled';
+                                                    @endphp
+                                                    
+                                                    {{-- Order Container --}}
+                                                    <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(0,0,0,0.02); border: 1px solid var(--border-light); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                        
+                                                        <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: var(--border-strong);">
+                                                            <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
+                                                            <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
+                                                            </span>
+                                                        </div>
+
+                                                        @if($order->notes && !$isCancelled)
+                                                            <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: rgba(239, 68, 68, 0.05); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
                                                                 Note: {{ $order->notes }}
                                                             </div>
                                                         @endif
 
                                                         @foreach($order->items as $item)
-                                                            <div class="flex justify-between items-start">
+                                                            <div class="flex justify-between items-start mt-1">
                                                                 <div class="pr-4">
-                                                                    <span
-                                                                        style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block;">
-                                                                        <span
-                                                                            style="color: var(--text-muted); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
+                                                                    <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                        <span style="color: var(--text-muted); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
                                                                     </span>
                                                                 </div>
-                                                                <span
-                                                                    style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap;">
+                                                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
                                                                     ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
                                                                 </span>
                                                             </div>
@@ -677,74 +697,45 @@
                             </div>
                         </div>
 
-                        {{-- Receipt Footer (Checkout) --}}
+                        {{-- Receipt Footer (Checkout Button) --}}
                         <div class="pos-receipt-footer">
-                            <div class="flex justify-between items-center mb-2">
-                                <span
-                                    style="color: var(--text-muted); font-size: 0.85rem; font-weight: 700;">Subtotal</span>
-                                <span
-                                    style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800;">₹{{ number_format($runningTotal, 2) }}</span>
-                            </div>
-                            <div class="flex justify-between items-center mb-4">
-                                <span style="color: var(--text-muted); font-size: 0.85rem; font-weight: 700;">Taxes</span>
-                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800;">₹0.00</span>
-                            </div>
-
-                            <div style="border-top: 2px solid var(--text-primary); margin-bottom: 1.25rem;"></div>
-
                             <div class="flex justify-between items-end mb-6">
                                 <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Total</span>
-                                <span
-                                    style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($runningTotal, 2) }}</span>
+                                <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($runningTotal, 2) }}</span>
                             </div>
 
                             <a href="{{ \App\Filament\Resources\TableBillingResource::getUrl('index') }}"
                                 style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--brand-orange); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; box-shadow: 0 4px 15px rgba(244, 125, 32, 0.3); transition: all 0.2s;"
                                 onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(244, 125, 32, 0.4)';"
                                 onmouseout="this.style.transform='none'; this.style.boxShadow='0 4px 15px rgba(244, 125, 32, 0.3)';">
-                                Settle & Checkout
+                                Go to Billing Section
                             </a>
                         </div>
-
                     </div>
                 @else
-                    {{-- Empty State Sidebar --}}
                     @if($this->selectedTableId)
                         @php 
                             $tableInfo = $tables->firstWhere('id', $this->selectedTableId); 
                             $isRes = $tableInfo && ($tableInfo->status === 'reserved');
                         @endphp
                         
-                        <div class="pos-receipt justify-center items-center p-8 text-center"
-                            style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
-                            
+                        <div class="pos-receipt justify-center items-center p-8 text-center" style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
                             <div style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: {{ $isRes ? 'var(--accent-pink)' : 'var(--accent-green)' }};" />
                             </div>
-                            
                             <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
                                 Table {{ $tableInfo->table_number ?? '' }} is {{ $isRes ? 'Reserved' : 'Empty' }}
                             </h3>
-                            
                             <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5; margin-bottom: 2rem;">
                                 {{ $isRes ? 'This table is currently reserved for upcoming guests.' : 'This table is clean and ready for new guests.' }}
                             </p>
-
-                            {{-- THE RESERVATION TOGGLE BUTTON --}}
-                            <button wire:click="toggleReservation({{ $this->selectedTableId }})"
-                                style="background: {{ $isRes ? 'var(--surface-card)' : 'var(--accent-pink)' }}; color: {{ $isRes ? 'var(--text-primary)' : 'white' }}; border: 1px solid {{ $isRes ? 'var(--border-strong)' : 'var(--accent-pink)' }}; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 800; font-size: 0.85rem; width: 100%; transition: all 0.2s;">
-                                {{ $isRes ? 'Remove Reservation' : 'Make Reservation' }}
-                            </button>
                         </div>
                     @else
-                        <div class="pos-receipt justify-center items-center p-8 text-center"
-                            style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
-                            <div
-                                style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                        <div class="pos-receipt justify-center items-center p-8 text-center" style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
+                            <div style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-hand-raised style="width: 40px; height: 40px; color: var(--text-muted);" />
                             </div>
-                            <h3
-                                style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
+                            <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
                                 Select a Table</h3>
                             <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5;">Click
                                 on any occupied table from the layout to view active orders and process checkout.</p>
@@ -752,7 +743,6 @@
                     @endif
                 @endif
             </div>
-
         </div>
     </div>
 </x-filament-panels::page>

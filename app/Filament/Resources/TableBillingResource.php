@@ -6,8 +6,8 @@ use App\Filament\Resources\TableBillingResource\Pages;
 use App\Models\RestaurantTable;
 use App\Models\Payment;
 use App\Models\Order;
-use App\Models\QrSession;
-use App\Models\OrderStatusLog;
+use App\Models\Restaurant;
+use App\Models\Branch;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -16,6 +16,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\HtmlString;
+use SimpleSoftwareIO\QrCode\Facades\QrCode;
 
 class TableBillingResource extends Resource
 {
@@ -45,7 +46,8 @@ class TableBillingResource extends Resource
 
         return $query->with([
             'sessions' => fn($q) => $q->where('is_active', true),
-            'sessions.orders' => fn($q) => $q->where('status', '!=', 'cancelled'),
+            // 👇 FIX: Ignore completed orders in the query
+            'sessions.orders' => fn($q) => $q->whereNotIn('status', ['cancelled', 'completed']),
             'sessions.orders.items.menuItem.category',
             'sessions.guests' => fn($q) => $q->where('is_active', true),
         ]);
@@ -77,7 +79,7 @@ class TableBillingResource extends Resource
                         border-radius: 12px !important;
                         box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
                         transition: all 0.2s ease;
-                        cursor: pointer; /* Pointer to indicate full card is clickable */
+                        cursor: pointer;
                         overflow: hidden;
                     }
                     .dark .fi-ta-record {
@@ -87,7 +89,7 @@ class TableBillingResource extends Resource
                     .fi-ta-record:hover {
                         transform: translateY(-2px);
                         box-shadow: 0 6px 15px rgba(244, 125, 32, 0.15) !important;
-                        border-color: rgba(244, 125, 32, 0.5) !important; /* Orange hover border */
+                        border-color: rgba(244, 125, 32, 0.5) !important;
                     }
                 </style>
                 <span style="font-size: 1.25rem; font-weight: 800;">Active Tables Checkout</span>
@@ -145,10 +147,10 @@ class TableBillingResource extends Resource
                         Tables\Columns\TextColumn::make('due_amount')
                             ->label('Balance Due')
                             ->state(function (RestaurantTable $record) {
-                                $total = $record->sessions->flatMap->orders->sum('total_amount');
-                                $orderIds = $record->sessions->flatMap->orders->pluck('id');
-                                $paid = Payment::whereIn('order_id', $orderIds)->where('status', 'paid')->sum('amount');
-                                return max(0, $total - $paid);
+                                // 👇 FIX: Only calculate due amount from orders that are NOT completed or cancelled
+                                return $record->sessions->flatMap->orders
+                                    ->whereNotIn('status', ['completed', 'cancelled'])
+                                    ->sum('total_amount');
                             })
                             ->money('INR')
                             ->weight(FontWeight::Black)
@@ -179,12 +181,16 @@ class TableBillingResource extends Resource
                     ->modalWidth('6xl')
                     ->modalSubmitActionLabel('Confirm Payment')
                     ->fillForm(function (RestaurantTable $record): array {
-                        $total = $record->sessions->flatMap->orders->where('status', '!=', 'cancelled')->sum('total_amount');
+                        // 👇 FIX: Only pre-fill subtotal for unpaid orders
+                        $total = $record->sessions->flatMap->orders
+                            ->whereNotIn('status', ['completed', 'cancelled'])
+                            ->sum('total_amount');
                         
                         return [
                             'subtotal' => $total,
                             'discount_amount' => 0,
                             'tax_percentage' => 5, // Default 5% Tax
+                            'payment_method' => 'cash',
                         ];
                     })
                     ->form([
@@ -218,13 +224,13 @@ class TableBillingResource extends Resource
 
                                             if ($primarySession) {
                                                 // --- HOST ORDERS ---
-                                                $hostOrdersCount = $primarySession->orders->where('status', '!=', 'cancelled')->count();
+                                                $hostOrdersCount = $primarySession->orders->whereNotIn('status', ['completed', 'cancelled'])->count();
                                                 $hasOrders = $hasOrders || $hostOrdersCount > 0;
 
                                                 $html .= "<div class='mb-6'>";
                                                 $html .= "<div class='text-base font-bold bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👑 HOST: {$primarySession->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$hostOrdersCount} Orders)</span></div>";
 
-                                                foreach ($primarySession->orders->where('status', '!=', 'cancelled') as $order) {
+                                                foreach ($primarySession->orders->whereNotIn('status', ['completed', 'cancelled']) as $order) {
                                                     $totalOrdersCount++;
                                                     $html .= "<div class='mt-3 pl-3 border-l-2 border-gray-200 dark:border-gray-700'>";
                                                     $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
@@ -250,14 +256,14 @@ class TableBillingResource extends Resource
                                                     $html .= "<div class='text-sm font-bold text-center border-y border-dashed border-gray-300 dark:border-gray-600 py-2 my-6 text-gray-500 dark:text-gray-400 tracking-widest'>--- JOINED GUESTS ---</div>";
 
                                                     foreach ($guests as $guest) {
-                                                        $guestOrdersCount = $guest->orders->where('status', '!=', 'cancelled')->count();
+                                                        $guestOrdersCount = $guest->orders->whereNotIn('status', ['completed', 'cancelled'])->count();
                                                         if ($guestOrdersCount > 0) {
                                                             $hasOrders = true;
 
                                                             $html .= "<div class='mb-5'>";
                                                             $html .= "<div class='text-sm font-bold bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 text-gray-900 dark:text-white px-3 py-2 rounded-lg flex justify-between items-center'><span>👤 GUEST: {$guest->customer_name}</span> <span class='font-normal text-xs text-gray-500 dark:text-gray-400'>({$guestOrdersCount} Orders)</span></div>";
 
-                                                            foreach ($guest->orders->where('status', '!=', 'cancelled') as $order) {
+                                                            foreach ($guest->orders->whereNotIn('status', ['completed', 'cancelled']) as $order) {
                                                                 $totalOrdersCount++;
                                                                 $html .= "<div class='mt-3 pl-3 border-l-2 border-orange-200 dark:border-orange-500/30'>";
                                                                 $html .= "<div class='text-xs font-semibold text-gray-400 dark:text-gray-500 mb-2'>Order #{$order->id}</div>";
@@ -281,7 +287,7 @@ class TableBillingResource extends Resource
                                             }
 
                                             if (!$hasOrders) {
-                                                return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400'>No valid orders found to bill.</div>");
+                                                return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400 font-bold'>No unpaid orders found to bill.</div>");
                                             }
 
                                             // 3. LIVE SUBTOTAL / TAX / DISCOUNT SECTION
@@ -340,13 +346,13 @@ class TableBillingResource extends Resource
                                             ->label('Discount (₹)')
                                             ->numeric()
                                             ->default(0)
-                                            ->live(onBlur: true), // Live update receipt
+                                            ->live(onBlur: true),
 
                                         Forms\Components\TextInput::make('tax_percentage')
                                             ->label('Tax (%)')
                                             ->numeric()
                                             ->default(5)
-                                            ->live(onBlur: true), // Live update receipt
+                                            ->live(onBlur: true),
                                     ]),
 
                                     // 👇 REAL-TIME CALCULATED GRAND TOTAL
@@ -371,10 +377,68 @@ class TableBillingResource extends Resource
 
                                     Forms\Components\ToggleButtons::make('payment_method')
                                         ->label('Select Payment Method')
-                                        ->options(['cash' => 'Cash', 'upi' => 'UPI', 'card' => 'Card'])
+                                        ->options([
+                                            'cash' => 'Cash', 
+                                            'upi' => 'UPI QR', 
+                                            'card' => 'Card'
+                                        ])
                                         ->inline()
                                         ->required()
+                                        ->live() 
                                         ->default('cash'),
+
+                                    Forms\Components\Placeholder::make('upi_qr')
+                                        ->hiddenLabel()
+                                        ->visible(fn(Forms\Get $get) => $get('payment_method') === 'upi')
+                                        ->content(function (RestaurantTable $record, Forms\Get $get) {
+                                            $sub = (float) $get('subtotal');
+                                            $disc = (float) $get('discount_amount');
+                                            $taxP = (float) $get('tax_percentage');
+
+                                            $taxable = max(0, $sub - $disc);
+                                            $taxAmt = $taxable * ($taxP / 100);
+                                            $grandTotal = number_format($taxable + $taxAmt, 2, '.', '');
+
+                                            // 1. Fetch correct UPI ID
+                                            $upiId = null;
+                                            if ($record->branch_id) {
+                                                $branch = Branch::find($record->branch_id);
+                                                $upiId = $branch ? $branch->upi_id : null;
+                                            }
+                                            if (!$upiId) {
+                                                $restaurant = Restaurant::find($record->restaurant_id);
+                                                $upiId = $restaurant ? $restaurant->upi_id : null;
+                                            }
+
+                                            // 2. Handle missing UPI ID
+                                            if (empty($upiId)) {
+                                                return new HtmlString("
+                                                    <div class='p-4 bg-red-50 text-red-600 rounded-lg text-center border border-red-200 mt-4'>
+                                                        <strong class='block mb-1'>Missing UPI ID</strong>
+                                                        Please add a UPI ID to the Restaurant or Branch settings.
+                                                    </div>
+                                                ");
+                                            }
+
+                                            // 3. Generate internal SVG QR Code
+                                            $merchantName = urlencode($record->restaurant->name ?? 'Restaurant');
+                                            $upiString = "upi://pay?pa={$upiId}&pn={$merchantName}&am={$grandTotal}&cu=INR";
+                                            
+                                            $qrSvg = QrCode::format('svg')->size(180)->margin(1)->generate($upiString);
+                                            $qrSvg = preg_replace('/<\?xml.*?\?>/', '', $qrSvg);
+
+                                            return new HtmlString("
+                                                <div class='flex flex-col items-center justify-center p-6 bg-white dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl mt-4'>
+                                                    <span class='text-sm font-bold text-gray-500 dark:text-gray-400 mb-4 uppercase tracking-widest'>Scan to Pay ₹{$grandTotal}</span>
+                                                    <div class='bg-white p-2 rounded-lg shadow-sm border border-gray-100 flex justify-center items-center'>
+                                                        {$qrSvg}
+                                                    </div>
+                                                    <span class='text-xs text-gray-400 mt-4 text-center'>
+                                                        ID: {$upiId} <br>Amount is fixed.
+                                                    </span>
+                                                </div>
+                                            ");
+                                        }),
 
                                     Forms\Components\TextInput::make('transaction_reference')
                                         ->label('Transaction ID / UTR')
@@ -386,8 +450,9 @@ class TableBillingResource extends Resource
                         $activeSessions = $record->sessions()->where('is_active', true)->get();
                         $sessionIds = $activeSessions->pluck('id')->toArray();
 
+                        // 👇 FIX: ONLY bill unpaid orders!
                         $validOrders = Order::whereIn('qr_session_id', $sessionIds)
-                            ->where('status', '!=', 'cancelled')
+                            ->whereNotIn('status', ['completed', 'cancelled'])
                             ->get();
 
                         $orderIds = $validOrders->pluck('id')->toArray();
@@ -402,7 +467,7 @@ class TableBillingResource extends Resource
                         $taxAmt = $taxable * ($taxP / 100);
                         $grandTotal = $taxable + $taxAmt;
 
-                        if ($latestOrderId && $grandTotal >= 0) {
+                        if ($latestOrderId && $grandTotal > 0) {
                             Payment::create([
                                 'restaurant_id' => $record->restaurant_id,
                                 'branch_id' => $record->branch_id,
@@ -418,8 +483,8 @@ class TableBillingResource extends Resource
                             ]);
                         }
 
-                        // Just mark the orders as completed so the frontend knows it is paid
                         if (!empty($orderIds)) {
+                            // Mark orders as strictly paid
                             Order::whereIn('id', $orderIds)->update(['status' => 'completed']);
                             $updatedOrders = Order::whereIn('id', $orderIds)->get();
                             foreach ($updatedOrders as $ord) {
@@ -433,7 +498,6 @@ class TableBillingResource extends Resource
                             ->success()
                             ->send();
                     })
-                    // 👇 FIX: Gently refresh the DOM after action to prevent Livewire Unmount crash
                     ->after(fn (\Livewire\Component $livewire) => $livewire->dispatch('$refresh')),
             ]);
     }

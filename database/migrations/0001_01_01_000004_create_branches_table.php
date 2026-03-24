@@ -18,6 +18,7 @@ return new class extends Migration {
                 ->cascadeOnDelete();
 
             $table->string('name');
+             $table->string('upi_id')->nullable();
             $table->string('phone')->nullable();
             $table->text('address')->nullable();
             $table->boolean('is_active')->default(true);

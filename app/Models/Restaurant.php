@@ -21,6 +21,7 @@ class Restaurant extends Model
         'created_by',
         'has_branches',
         'max_branches',
+        'upi_id', // 👈 ADD THIS
     ];
 
     /**

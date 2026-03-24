@@ -12,7 +12,8 @@ class Branch extends Model
         'name',
         'phone',
         'address',
-        'is_active'
+        'is_active',
+        'upi_id', // 👈 ADD THIS
     ];
 
     public function restaurant()

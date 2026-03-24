@@ -54,7 +54,7 @@ class ManagerDashboard extends Page
         }
     }
 
-    // 👇 NEW: Toggle Reservation Method
+    // Toggle Reservation Method
     public function toggleReservation($tableId)
     {
         $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
@@ -79,6 +79,33 @@ class ManagerDashboard extends Page
         }
         
         $this->selectedTableId = null; // Close the right panel to refresh view
+    }
+
+    // Clean Table Method
+    public function cleanTable($tableId)
+    {
+        $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
+        
+        // Find and deactivate all active sessions for this table
+        $activeSessions = $table->qrSessions()->where('is_active', true)->get();
+        foreach ($activeSessions as $session) {
+            $session->update(['is_active' => false]);
+        }
+
+        // Set table status back to available
+        $table->update(['status' => 'available']);
+        
+        // Notify the manager
+        Notification::make()
+            ->title("Table {$table->table_number} Cleaned")
+            ->body('All sessions closed. Table is now available.')
+            ->success()
+            ->send();
+            
+        // Reset selected table if the cleaned table was currently selected
+        if ($this->selectedTableId === $tableId) {
+            $this->selectedTableId = null;
+        }
     }
 
     public function updateStatus($orderId, $status)
@@ -120,15 +147,34 @@ class ManagerDashboard extends Page
 
         $tables = $tablesQuery
             ->withCount([
+                // Count active sessions
                 'qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true),
+                
+                // 👇 FIX: Added this to explicitly count all valid orders for this table
+                'orders as total_orders_count' => fn($q) => $q->whereIn('status', ['placed', 'preparing', 'ready', 'served']),
+                
                 'orders as preparing_count' => fn($q) => $q->where('status', 'preparing'),
                 'orders as ready_count' => fn($q) => $q->where('status', 'ready'),
             ])
             ->withSum([
                 'orders as total_bill' => fn($q) => $q->whereIn('status', ['preparing', 'ready', 'served'])
             ], 'total_amount')
-            ->orderBy('table_number', 'asc')
-            ->get();
+            ->get()
+            ->sortBy(function ($table) {
+                // Priority: 1 = Occupied, 2 = Reserved, 3 = Available
+                $isOccupied = $table->active_sessions_count > 0;
+                $isReserved = !$isOccupied && (($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false));
+                
+                $priority = 3;
+                if ($isOccupied) $priority = 1;
+                elseif ($isReserved) $priority = 2;
+
+                $numericPart = preg_replace('/[^0-9]/', '', $table->table_number);
+                $paddedNumber = str_pad($numericPart ?: '0', 5, '0', STR_PAD_LEFT);
+                $alphaPart = preg_replace('/[^a-zA-Z]/', '', $table->table_number);
+
+                return $priority . '-' . $alphaPart . '-' . $paddedNumber;
+            })->values();
 
         $totalTables = $tables->count();
         $activeTables = $tables->where('active_sessions_count', '>', 0)->count();
@@ -141,12 +187,16 @@ class ManagerDashboard extends Page
             $selectedTableData = RestaurantTable::with([
                 'qrSessions' => fn($q) => $q->where('is_active', true),
                 'orders' => function ($q) {
-                    $q->whereIn('status', ['preparing', 'ready', 'served'])
+                    $q->whereIn('status', ['placed', 'preparing', 'ready', 'served', 'cancelled'])
                         ->with('items.menuItem.category');
                 }
-            ])->find($this->selectedTableId);
+            ])
+            ->withCount([
+                'qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true)
+            ])
+            ->find($this->selectedTableId);
         }
-
+        
         $ordersQuery = Order::where('restaurant_id', $restaurantId)
             ->where('status', 'placed');
 
