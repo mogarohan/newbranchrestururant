@@ -392,6 +392,24 @@
             background: var(--border-strong);
             border-radius: 10px;
         }
+        
+        /* CUSTOMER LIST CSS */
+        .customer-pill {
+            display: inline-flex;
+            align-items: center;
+            background: var(--surface-card);
+            border: 1px solid var(--border-strong);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 2px;
+        }
+        .customer-pill.host {
+            border-color: var(--brand-orange);
+            background: var(--brand-orange-light);
+        }
     </style>
 
     <div class="pos-scope pos-container">
@@ -532,8 +550,7 @@
                                 <div class="ts-header">
                                     <div>
                                         <div class="ts-title">T-{{ $formattedTableNum }}</div>
-                                        {{-- 👇 FIX: Change '4-SEATER' to Occupancy string 👇 --}}
-                                        <div class="ts-subtitle">OCCUPANCY: {{ $table->active_sessions_count }} / {{ $table->capacity ?? 4 }}</div>
+                                        <div class="ts-subtitle">OCCUPANCY: {{ $table->active_sessions_count }} / {{ $table->seating_capacity ?? 4 }}</div>
                                     </div>
                                     <div class="ts-badge {{ $badgeClass }}">{{ $statusText }}</div>
                                 </div>
@@ -542,7 +559,6 @@
                                     @if($isOccupied)
                                         <div class="ts-info-row">
                                             <x-heroicon-s-clock class="ts-info-icon" />
-                                            {{-- 👇 FIX: Change '1 Active Diner' to 'X Order(s) Placed' based on new count 👇 --}}
                                             <span class="ts-info-text">{{ $table->total_orders_count ?? 0 }} Order(s) Placed</span>
                                         </div>
                                         <div class="ts-info-row">
@@ -580,19 +596,14 @@
             {{-- RIGHT COLUMN: DIGITAL RECEIPT SIDEBAR --}}
             {{-- ========================================== --}}
             <div class="w-full lg:w-auto">
-                @if($selectedTableData && $selectedTableData->active_sessions_count > 0)
+                @if($selectedTableData && $activeDinersList->count() > 0)
                     @php
-                        $groupedOrders = $selectedTableData->orders->groupBy('status');
+                        // 👇 FIX: Use the raw Eloquent collection from the Controller
+                        $groupedOrders = $tableOrders->groupBy('status');
                         
-                        // Calculate total bill manually from valid statuses to ensure completely exact amounts
-                        $validOrdersForBill = $selectedTableData->orders->whereIn('status', ['preparing', 'ready', 'served']);
+                        // Calculate total bill for valid statuses (placed, accepted, preparing, ready, served)
+                        $validOrdersForBill = $tableOrders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
                         $runningTotal = $validOrdersForBill->sum('total_amount');
-                        
-                        $primarySession = $selectedTableData->qrSessions->where('is_primary', true)->first();
-                        $guestSessions = $selectedTableData->qrSessions->where('is_primary', false)->where('join_status', 'approved');
-                        
-                        $hostName = $primarySession ? $primarySession->customer_name : 'Walk-in Customer';
-                        $totalDinersCount = 1 + $guestSessions->count();
                     @endphp
 
                     <div class="pos-receipt">
@@ -603,10 +614,6 @@
                                     <h3 style="color: var(--text-primary); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
                                         Table {{ $selectedTableData->table_number }}
                                     </h3>
-                                    <p style="color: var(--text-muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                        <x-heroicon-s-clock style="width: 14px;" /> Seated at
-                                        {{ $selectedTableData->qrSessions->first()?->created_at->format('h:i A') ?? 'N/A' }}
-                                    </p>
                                 </div>
                                 <button wire:click="$set('selectedTableId', null)"
                                     style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); transition: color 0.2s;"
@@ -618,24 +625,20 @@
                         </div>
 
                         <div class="pos-receipt-body pos-scroll">
-                            {{-- Info Box (Occupancy / Capacity / Host) --}}
-                            <div style="background: var(--surface-bg); border-radius: 8px; padding: 16px; margin-bottom: 1.5rem; border: 1px solid var(--border-light);">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">Occupancy:</span>
-                                    <span style="font-size: 0.8rem; color: var(--text-primary); font-weight: 800;">{{ $totalDinersCount }} / {{ $selectedTableData->capacity ?? 4 }} Seats</span>
+                            
+                            {{-- 👇 NEW: Customer Pill List 👇 --}}
+                            <div style="background: var(--surface-bg); border-radius: 8px; padding: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border-light);">
+                                <div style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">
+                                    Active Diners ({{ $activeDinersList->count() }}/{{ $selectedTableData->seating_capacity ?? 4 }})
                                 </div>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700;">Host:</span>
-                                    <span style="font-size: 0.8rem; color: var(--brand-orange); font-weight: 800;">👑 {{ $hostName }}</span>
+                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                    @foreach($activeDinersList as $diner)
+                                        <div class="customer-pill {{ $diner->is_primary ? 'host' : '' }}">
+                                            @if($diner->is_primary) 👑 @else 👤 @endif 
+                                            {{ $diner->customer_name }}
+                                        </div>
+                                    @endforeach
                                 </div>
-                                @if($guestSessions->count() > 0)
-                                <div style="display: flex; justify-content: space-between; align-items: flex-start; border-top: 1px dashed var(--border-strong); padding-top: 8px; margin-top: 8px;">
-                                    <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 700; flex-shrink: 0; margin-right: 8px;">Guests:</span>
-                                    <span style="font-size: 0.75rem; color: var(--text-primary); font-weight: 700; text-align: right;">
-                                        {{ $guestSessions->pluck('customer_name')->join(', ') }}
-                                    </span>
-                                </div>
-                                @endif
                             </div>
 
                             <div style="text-align: center; margin-bottom: 1.5rem;">
@@ -645,19 +648,29 @@
                             </div>
 
                             <div class="flex flex-col gap-6">
-                                {{-- Loop through all statuses including placed and cancelled --}}
-                                @foreach(['placed' => 'New / Pending', 'preparing' => 'Cooking', 'ready' => 'Ready to Serve', 'served' => 'Served', 'cancelled' => 'Cancelled'] as $statusKey => $label)
+                                {{-- 👇 FIX: Added 'accepted' and grouped 'cancelled/rejected' together 👇 --}}
+                                @foreach([
+                                    'placed' => 'New / Pending', 
+                                    'accepted' => 'Order Accepted', 
+                                    'preparing' => 'Cooking', 
+                                    'ready' => 'Ready to Serve', 
+                                    'served' => 'Served', 
+                                    'cancelled' => 'Cancelled / Rejected',
+                                    'rejected' => 'Cancelled / Rejected'
+                                ] as $statusKey => $label)
+                                
                                     @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
                                         <div>
-                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ $statusKey === 'placed' ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : ($statusKey === 'cancelled' ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-light); padding-bottom: 4px;">
+                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-light); padding-bottom: 4px;">
                                                 {{ $label }}
                                             </div>
 
                                             <div class="flex flex-col gap-4">
                                                 @foreach($groupedOrders[$statusKey] as $order)
                                                     @php
-                                                        $isHostOrder = $primarySession && $order->qr_session_id === $primarySession->id;
-                                                        $isCancelled = $statusKey === 'cancelled';
+                                                        // Using strong ID comparison to correctly tag the host
+                                                        $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                        $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
                                                     @endphp
                                                     
                                                     {{-- Order Container --}}

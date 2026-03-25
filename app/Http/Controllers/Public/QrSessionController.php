@@ -121,24 +121,30 @@ class QrSessionController extends Controller
         ]);
     }
     
-    public function callWaiter(Request $request)
+   public function callWaiter(Request $request)
     {
-        $token = $request->bearerToken();
+        // 👇 FIX: Try header first, fallback to JSON body
+        $token = $request->bearerToken() ?: $request->input('session_token');
+        
         $session = \App\Models\QrSession::where('session_token', $token)->first();
 
         if (!$session) {
-            return response()->json(['message' => 'Invalid session'], 404);
+            return response()->json(['message' => 'Invalid session token provided.'], 404);
         }
 
         $table = \App\Models\RestaurantTable::find($session->restaurant_table_id);
         $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
 
-        event(new \App\Events\WaiterCalled(
-            $session->restaurant_id,
-            $session->restaurant_table_id,
-            $tableNumber,
-            $session->customer_name
-        ));
+        try {
+            event(new \App\Events\WaiterCalled(
+                $session->restaurant_id,
+                $session->restaurant_table_id,
+                $tableNumber,
+                $session->customer_name
+            ));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Call Waiter Broadcast Failed: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'Waiter has been notified']);
     }

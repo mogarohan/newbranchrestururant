@@ -31,7 +31,7 @@ Route::post('/pusher/auth', function (Request $request) {
         return response()->json(['message' => 'Missing socket ID'], 400);
     }
 
-    // Safer token extraction and normalization
+    // Safer token extraction
     $token = $request->bearerToken();
     if (!$token && $request->hasHeader('Authorization')) {
         $token = str_replace('Bearer ', '', $request->header('Authorization'));
@@ -46,19 +46,29 @@ Route::post('/pusher/auth', function (Request $request) {
     $session = null;
 
     // 1. Customer QR Session Validation
-    if (str_contains((string) $token, '|') === false) {
+    // (If token does not contain a pipe '|', it's a UUID QR Token, not a Sanctum Token)
+    if (!str_contains((string) $token, '|')) {
         $session = QrSession::where('session_token', $token)->first();
-    }
-
-    if ($session && (str_starts_with($channelName, "session." . $session->id) || $channelName === "session." . $session->id)) {
-        $authorized = true;
+        
+        if ($session && str_starts_with($channelName, 'session.')) {
+            $requestedId = str_replace('session.', '', $channelName);
+            
+            // 👇 FIX: Allow connection if the channel matches Session ID, Host ID, or Table ID
+            if (
+                $requestedId == $session->id || 
+                $requestedId == $session->restaurant_table_id || 
+                ($session->host_session_id && $requestedId == $session->host_session_id)
+            ) {
+                $authorized = true;
+            }
+        }
     }
 
     // 2. Waiter Auth (Sanctum) Validation
     if (!$authorized) {
         $user = PersonalAccessToken::findToken($token)?->tokenable;
 
-        if ($user && (str_starts_with($channelName, "restaurant." . $user->restaurant_id) || $channelName === "restaurant." . $user->restaurant_id)) {
+        if ($user && str_starts_with($channelName, "restaurant." . $user->restaurant_id)) {
             $authorized = true;
         }
     }
@@ -106,7 +116,6 @@ Route::post('/waiter/login', [WaiterAppController::class, 'login'])->middleware(
 
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    // 🔥 NEW: Waiter Profile Data (Table Served count fetch karne ke liye)
     Route::get('/waiter/profile', [WaiterAppController::class, 'getProfile']);
 
     // Order Management
@@ -134,7 +143,7 @@ Route::post('/orders', [PlaceOrderController::class, 'store'])->middleware('thro
 Route::get('/orders/session/{token}', [PlaceOrderController::class, 'getSessionOrders']);
 
 // Session Actions
-Route::post('/session/call-waiter', [QrSessionController::class, 'callWaiter'])->middleware('throttle:2,1');
+Route::post('/session/call-waiter', [QrSessionController::class, 'callWaiter'])->middleware('throttle:15,1');
 Route::get('/table/{tableId}/pending-requests', [QrSessionController::class, 'getPendingRequests'])->middleware('throttle:20,1');
 Route::post('/session/{sessionId}/respond', [QrSessionController::class, 'respondToJoin'])->middleware('throttle:10,1');
 
