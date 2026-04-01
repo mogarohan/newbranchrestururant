@@ -19,6 +19,7 @@ class MenuItem extends Model
         'image_path',
         'is_available',
         'branch_id',
+        'type',
     ];
     protected $casts = [
         'price' => 'decimal:2',

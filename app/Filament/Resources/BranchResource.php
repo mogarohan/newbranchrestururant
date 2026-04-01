@@ -20,6 +20,7 @@ class BranchResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationGroup = 'Administration';
+    protected static ?int $navigationSort = 2;
 
     /* -----------------------------------------------------------
        ACCESS CONTROL (Kon is page ko dekh sakta hai)

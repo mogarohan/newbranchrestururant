@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use Filament\Pages\Page;
+use App\Models\ActivityLog; // 👈 NEW
 use Filament\Support\Enums\MaxWidth;
 use App\Events\OrderStatusUpdated;
 use Illuminate\Contracts\Support\Htmlable;
@@ -58,7 +59,8 @@ class ManagerDashboard extends Page
 
     public function toggleReservation($tableId)
     {
-        $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
+        $user = auth()->user(); // 👇 FIX: Defined $user
+        $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
         
         if ($table->qrSessions()->where('is_active', true)->count() > 0) {
             Notification::make()
@@ -69,6 +71,8 @@ class ManagerDashboard extends Page
             return;
         }
 
+        $oldStatus = $table->status; // 👇 FIX: Defined $oldStatus before changing it
+
         if ($table->status === 'reserved') {
             $table->update(['status' => 'available']);
             Notification::make()->title("Table {$table->table_number} is now Available")->success()->send();
@@ -77,22 +81,48 @@ class ManagerDashboard extends Page
             Notification::make()->title("Table {$table->table_number} is Reserved")->success()->send();
         }
         
+        // 👇 FIXED: Activity Log uses the defined variables
+        ActivityLog::create([
+            'actor_type' => 'manager',
+            'actor_id' => $user->id,
+            'action' => 'toggled_reservation',
+            'entity_type' => RestaurantTable::class,
+            'entity_id' => $table->id,
+            'metadata' => [
+                'from_status' => $oldStatus,
+                'to_status' => $table->status,
+            ]
+        ]);
+        
         $this->selectedTableId = null; 
     }
 
     public function cleanTable($tableId)
     {
-        $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
+        $user = auth()->user(); // 👇 FIX: Defined $user
+        $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
         
         $activeSessions = $table->qrSessions()->where('is_active', true)->get();
+        $closedSessionsCount = $activeSessions->count(); // 👇 FIX: Defined count for log
+
         foreach ($activeSessions as $session) {
             $session->update(['is_active' => false]);
-            
-            // 👇 FIX: Pass BOTH Session ID and Table ID to the event
             event(new \App\Events\SessionEnded($session->id, $table->id));
         }
 
         $table->update(['status' => 'available']);
+        
+        // 👇 FIXED: Activity Log uses the defined variables
+        ActivityLog::create([
+            'actor_type' => 'manager',
+            'actor_id' => $user->id,
+            'action' => 'cleaned_table',
+            'entity_type' => RestaurantTable::class,
+            'entity_id' => $table->id,
+            'metadata' => [
+                'sessions_closed' => $closedSessionsCount,
+            ]
+        ]);
         
         // Let waiters know the table is free again
         event(new \App\Events\TableStatusUpdated($table->id, 'available', $table->restaurant_id));
@@ -110,7 +140,9 @@ class ManagerDashboard extends Page
 
     public function updateStatus($orderId, $status)
     {
-        $order = Order::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($orderId);
+        $user = auth()->user(); // 👇 FIX: Defined $user
+        $order = Order::where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
+        
         $oldStatus = $order->status;
         $order->update(['status' => $status]);
 
@@ -125,7 +157,20 @@ class ManagerDashboard extends Page
             'order_id' => $order->id,
             'from_status' => $oldStatus,
             'to_status' => $status,
-            'changed_by' => auth()->id(),
+            'changed_by' => $user->id,
+        ]);
+        
+        // 👇 FIXED: Activity Log uses the defined variables
+        ActivityLog::create([
+            'actor_type' => 'manager',
+            'actor_id' => $user->id,
+            'action' => 'updated_order_status',
+            'entity_type' => Order::class,
+            'entity_id' => $order->id,
+            'metadata' => [
+                'from_status' => $oldStatus,
+                'to_status' => $status,
+            ]
         ]);
 
         OrderStatusUpdated::dispatch($order);
@@ -148,11 +193,9 @@ class ManagerDashboard extends Page
         $tables = $tablesQuery
             ->withCount([
                 'qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true),
-                // 👇 FIX: Included 'accepted' so the table card correctly counts accepted orders
                 'orders as total_orders_count' => fn($q) => $q->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']),
             ])
             ->withSum([
-                // 👇 FIX: Included 'placed' and 'accepted' so they are immediately billed
                 'orders as total_bill' => fn($q) => $q->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])
             ], 'total_amount')
             ->get()
@@ -194,7 +237,6 @@ class ManagerDashboard extends Page
                 $hostSession = $activeDinersList->where('is_primary', true)->first();
                 $hostSessionId = $hostSession ? $hostSession->id : null;
 
-                // 👇 FIX: Included 'accepted' and 'rejected' so they show in the sidebar perfectly
                 $tableOrders = Order::with('items.menuItem.category')
                     ->whereIn('qr_session_id', $sessionIds)
                     ->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served', 'cancelled', 'rejected'])

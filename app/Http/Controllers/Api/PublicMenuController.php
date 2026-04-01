@@ -45,7 +45,6 @@ class PublicMenuController extends Controller
             ->where('is_active', true)
             ->first();
 
-        // 👇 1. FETCH BRANCH SPECIFIC OFF/ON STATUSES FOR BOTH ITEMS AND CATEGORIES
         $branchItemStatuses = DB::table('branch_menu_item_status')
             ->where('branch_id', $table->branch_id)
             ->pluck('is_available', 'menu_item_id');
@@ -54,30 +53,41 @@ class PublicMenuController extends Controller
             ->where('branch_id', $table->branch_id)
             ->pluck('is_active', 'category_id');
 
-        // 👇 2. FETCH AND FILTER MENU
+        // 👇 FIX: Load BOTH Main Categories AND Branch Categories
         $categories = $restaurant->categories()
-            ->where('is_active', true)
-            ->whereNull('branch_id') // Main Menu Only
+            ->where(function($q) use ($table) {
+                $q->whereNull('branch_id'); 
+                if ($table->branch_id) {
+                    $q->orWhere('branch_id', $table->branch_id); 
+                }
+            })
             ->orderBy('sort_order')
             ->with([
-                'menuItems' => fn ($q) => $q->whereNull('branch_id')->orderBy('name')
+                'menuItems' => fn ($q) => $q->where(function($query) use ($table) {
+                    $query->whereNull('branch_id'); 
+                    if ($table->branch_id) {
+                        $query->orWhere('branch_id', $table->branch_id); 
+                    }
+                })->orderBy('name')
             ])
             ->get()
-            // 👇 3. FILTER CATEGORIES BASED ON BRANCH OVERRIDE
             ->filter(function($category) use ($branchCatStatuses) {
-                // Agar branch ne category OFF ki hai toh hide kar do
-                if ($branchCatStatuses->has($category->id)) {
+                // If Main Category, check branch override
+                if ($category->branch_id === null && $branchCatStatuses->has($category->id)) {
                     return (bool) $branchCatStatuses->get($category->id);
                 }
-                return (bool) $category->is_active; // Warna original default chalne do
+                // If Branch Category, use standard status
+                return (bool) $category->is_active; 
             })
             ->map(function ($category) use ($branchItemStatuses) {
                 
-                // 👇 4. FILTER ITEMS INSIDE CATEGORY BASED ON BRANCH OVERRIDE
                 $filteredItems = $category->menuItems->filter(function($item) use ($branchItemStatuses) {
-                    return $branchItemStatuses->has($item->id) 
-                        ? (bool) $branchItemStatuses->get($item->id) 
-                        : (bool) $item->is_available;
+                    // If Main Item, check branch override
+                    if ($item->branch_id === null && $branchItemStatuses->has($item->id)) {
+                        return (bool) $branchItemStatuses->get($item->id);
+                    }
+                    // If Branch Item, use standard status
+                    return (bool) $item->is_available;
                 })->values();
 
                 return [
@@ -88,13 +98,13 @@ class PublicMenuController extends Controller
                         'name' => $item->name,
                         'description' => $item->description,
                         'price' => $item->price,
+                        'type' => $item->type ?? 'veg', // 👈 Dietary Type Included for App Filtering
                         'image' => $item->image_path
                             ? asset('storage/' . $item->image_path)
                             : null,
                     ]),
                 ];
             })
-            // Remove categories that have 0 items available
             ->filter(fn($cat) => count($cat['items']) > 0)
             ->values();
 

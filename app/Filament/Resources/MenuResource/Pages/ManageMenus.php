@@ -4,11 +4,14 @@ namespace App\Filament\Resources\MenuResource\Pages;
 
 use App\Filament\Resources\MenuResource;
 use App\Models\Category;
+use App\Models\MenuItem;
+use App\Models\Branch;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
 use Filament\Forms;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Support\HtmlString;
 
 class ManageMenus extends ManageRecords
@@ -24,136 +27,203 @@ class ManageMenus extends ManageRecords
 
     protected function getHeaderActions(): array
     {
+        $fixedModalCss = new HtmlString('
+            <style>
+                .fi-modal-window { display: flex !important; flex-direction: column !important; max-height: 85vh !important; overflow: hidden !important; }
+                .fi-modal-header { flex-shrink: 0 !important; border-bottom: 1px solid rgba(156, 163, 175, 0.3) !important; padding-bottom: 1rem !important; }
+                .fi-modal-content { flex-grow: 1 !important; overflow-y: auto !important; padding: 1.5rem !important; }
+                .fi-modal-footer { flex-shrink: 0 !important; border-top: 1px solid rgba(156, 163, 175, 0.3) !important; padding-top: 1rem !important; margin-top: 0 !important; }
+            </style>
+        ');
+
         return [
-            // 1. HIDDEN CATEGORY ACTION (Quick Add)
+            // 1. BULK ADD CATEGORY ACTION
             Actions\Action::make('addCategory')
-                ->label('Add Category')
+                ->label('Add Categories')
+                ->modalHeading('Add New Categories')
+                ->modalDescription($fixedModalCss) 
                 ->extraAttributes(['class' => 'hidden-add-category hidden'])
                 ->form([
-                    Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
-                    Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
-                    Forms\Components\TextInput::make('name')->required()->maxLength(100),
-                    Forms\Components\Toggle::make('is_active')->default(true)->label('Active'),
+                    Forms\Components\Repeater::make('categories')
+                        ->label('Categories to Add')
+                        ->addActionLabel('Add Another Category')
+                        ->minItems(1)
+                        ->defaultItems(1)
+                        ->schema([
+                            Forms\Components\TextInput::make('name')
+                                ->label('Category Name')
+                                ->required()
+                                ->maxLength(100),
+                            
+                            Forms\Components\Toggle::make('is_active')
+                                ->label('Active by Default')
+                                ->default(true),
+                        ])
+                        ->columns(2)
+                        ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
                 ])
                 ->action(function (array $data) {
-                    Category::create($data);
-                    Notification::make()->title('Category Added Successfully')->success()->send();
-                })
-                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+                    $user = auth()->user();
+                    $categoriesAdded = 0;
 
-            // 2. HIDDEN ITEM ACTION (Quick Add)
-            Actions\CreateAction::make('addItem')
-                ->label('Add Item')
+                    foreach ($data['categories'] as $catData) {
+                        Category::create([
+                            'restaurant_id' => $user->restaurant_id,
+                            'branch_id' => $user->branch_id, // Associates with branch automatically if branch admin
+                            'name' => $catData['name'],
+                            'is_active' => $catData['is_active'],
+                        ]);
+                        $categoriesAdded++;
+                    }
+
+                    Notification::make()->title("{$categoriesAdded} Categor(ies) Added Successfully")->success()->send();
+                }),
+
+            // 2. BULK ADD ITEM ACTION
+            Actions\Action::make('addItem')
+                ->label('Add Items')
+                ->modalHeading('Add Items to Category')
+                ->modalDescription($fixedModalCss) 
                 ->extraAttributes(['class' => 'hidden-add-item hidden'])
-                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+                ->form([
+                    Forms\Components\Select::make('category_id')
+                        ->label('Target Category')
+                        ->required()
+                        ->options(function () {
+                            $user = auth()->user();
+                            $query = Category::withoutGlobalScopes()
+                                ->where('restaurant_id', $user->restaurant_id)
+                                ->where('is_active', true)
+                                ->where(function($q) use ($user) {
+                                    $q->whereNull('branch_id');
+                                    if ($user->branch_id) {
+                                        $q->orWhere('branch_id', $user->branch_id);
+                                    }
+                                });
+                            return $query->pluck('name', 'id');
+                        })
+                        ->searchable()
+                        ->columnSpanFull()
+                        ->helperText('Select the category these items belong to.'),
 
-            // 👇 3. MANAGE CATEGORIES ACTION (Native Repeater Form)
+                    Forms\Components\Repeater::make('items')
+                        ->label('Menu Items')
+                        ->addActionLabel('Add Another Item')
+                        ->minItems(1)
+                        ->defaultItems(1)
+                        ->schema([
+                            Forms\Components\TextInput::make('name')->required()->maxLength(150),
+                            Forms\Components\TextInput::make('price')->numeric()->minValue(0)->required()->prefix('₹'),
+                            Forms\Components\Select::make('type')->label('Type')
+                                ->options(['veg' => 'Veg','non-veg' => 'Non-Veg',])
+                                ->default('veg')
+                                ->required(),
+                            Forms\Components\Textarea::make('description')->maxLength(500)->rows(6),
+                            
+                            Forms\Components\FileUpload::make('image_path')
+                                ->label('Item Image')
+                                ->image()
+                                ->disk('public')
+                                ->directory(function (callable $get) {
+                                    $user = auth()->user();
+                                    $restaurantSlug = Str::slug($user->restaurant->name ?? 'restaurant');
+                                    
+                                    $categoryId = $get('../../category_id');
+                                    $categoryName = Category::find($categoryId)?->name ?? 'uncategorized';
+                                    $categorySlug = Str::slug($categoryName);
+
+                                    // Branch Storage Path Rule
+                                    if ($user->branch_id) {
+                                        $branchName = Branch::find($user->branch_id)?->name ?? 'branch';
+                                        $branchSlug = Str::slug($branchName);
+                                        return "restaurants/{$restaurantSlug}/branches/{$branchSlug}/Categories/{$categorySlug}";
+                                    }
+
+                                    return "restaurants/{$restaurantSlug}/Categories/{$categorySlug}";
+                                })
+                                ->getUploadedFileNameForStorageUsing(function (\Livewire\Features\SupportFileUploads\TemporaryUploadedFile $file, callable $get): string {
+                                    $itemName = Str::slug($get('name') ?? 'item');
+                                    $extension = $file->getClientOriginalExtension();
+                                    return "{$itemName}.{$extension}";
+                                })
+                                ->imageEditor()
+                                ->required()
+                                ->maxSize(2048),
+
+                            Forms\Components\Toggle::make('is_available')
+                                ->default(true)
+                                ->label('Available')
+                                ->columnSpanFull(),
+                        ])
+                        ->columns(2)
+                        ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
+                ])
+                ->action(function (array $data) {
+                    $user = auth()->user();
+                    $categoryId = $data['category_id'];
+                    $itemsAdded = 0;
+
+                    foreach ($data['items'] as $itemData) {
+                        MenuItem::create([
+                            'restaurant_id' => $user->restaurant_id,
+                            'branch_id' => $user->branch_id, // Associates with branch automatically if branch admin
+                            'category_id' => $categoryId,
+                            'name' => $itemData['name'],
+                            'price' => $itemData['price'],
+                            'type' => $itemData['type'], // 👈 ADD THIS LINE TO SAVE IT
+                            'description' => $itemData['description'] ?? null,
+                            'image_path' => $itemData['image_path'],
+                            'is_available' => $itemData['is_available'],
+                        ]);
+                        $itemsAdded++;
+                    }
+
+                    Notification::make()->title("{$itemsAdded} Item(s) Added Successfully")->success()->send();
+                }),
+
+            // 3. MANAGE CATEGORIES ACTION
+            // 3. MANAGE CATEGORIES ACTION
             Actions\Action::make('manageCategories')
                 ->label('Manage Categories')
                 ->extraAttributes(['class' => 'hidden-manage-category hidden'])
-
                 ->modalHeading('Manage Categories')
-                // 👇 Injecting CSS to create the specific Vertical Card Layout, Scroll Lock & Alternating Colors
                 ->modalDescription(new HtmlString('
                     Update category names or toggle their availability.
                     <style>
-                        /* 👇 Scroll Lock Logic 👇 */
-                        /* Target the Filament Slide-over window content */
-                        .fi-modal-window {
-                            display: flex !important;
-                            flex-direction: column !important;
-                            height: 100vh !important; /* Force full height */
-                        }
-                        .fi-modal-content {
-                            flex-grow: 1 !important;
-                            overflow-y: auto !important; /* Allow scrolling inside */
-                            padding-bottom: 2rem !important; /* Give some breathing room at the bottom */
-                        }
-                        .fi-modal-header, .fi-modal-footer {
-                            flex-shrink: 0 !important; /* Prevent header/footer from shrinking */
-                            background: white !important; /* Keep background solid */
-                            z-index: 20 !important;
-                        }
-                        .dark .fi-modal-header, .dark .fi-modal-footer {
-                            background: #111827 !important;
-                        }
-                        /* 👇 End Scroll Lock Logic 👇 */
-
-                        /* Hide the main header text/icon */
-                        .fi-fo-repeater-item-header-title,
-                        .fi-fo-repeater-item-header-icon {
-                            display: none !important;
-                        }
-                        
-                        /* Re-position the header (which holds the delete button) to the bottom right */
-                        .fi-fo-repeater-item-header {
-                            background: transparent !important;
-                            border-bottom: none !important;
-                            padding: 0 !important;
-                            position: absolute !important;
-                            bottom: 1rem !important; /* Pin to bottom */
-                            right: 1rem !important;  /* Pin to right */
-                            top: auto !important;
-                            min-height: auto !important;
-                            z-index: 10;
-                        }
-
-                        /* Main card styling base */
-                        .fi-fo-repeater-item {
-                            position: relative !important;
-                            border-radius: 12px !important;
-                            padding: 1rem 1rem 4rem 1rem !important; /* Big padding at bottom for the toggle & delete btn */
-                            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
-                            background-color: white !important;
-                        }
-
-                        .dark .fi-fo-repeater-item {
-                            background-color: #1f2937 !important;
-                        }
-                        
-                        /* 👇 ALTERNATING COLORS FOR CARDS & TOGGLES 👇 */
-                        /* ODD CARDS - BLUE */
-                        .fi-fo-repeater-item:nth-child(odd) {
-                            border: 2px solid #3B82F6 !important;
-                        }
-                        .fi-fo-repeater-item:nth-child(odd) button[role="switch"][aria-checked="true"] {
-                            background-color: #3B82F6 !important;
-                        }
-
-                        /* EVEN CARDS - ORANGE */
-                        .fi-fo-repeater-item:nth-child(even) {
-                            border: 2px solid #F47D20 !important;
-                        }
-                        .fi-fo-repeater-item:nth-child(even) button[role="switch"][aria-checked="true"] {
-                            background-color: #F47D20 !important;
-                        }
-                        
-                        /* Make delete button icon red */
-                        .fi-fo-repeater-item-header button {
-                            color: #ef4444 !important;
-                        }
-
-                        /* Position the toggle switch at the absolute bottom left */
-                        .absolute-bottom-left-toggle {
-                            position: absolute !important;
-                            bottom: 1rem !important;
-                            left: 1rem !important;
-                            margin: 0 !important;
-                            z-index: 20;
-                        }
+                        /* Lock Modal Height to screen */
+                        .fi-modal-window { display: flex !important; flex-direction: column !important; max-height: 85vh !important; overflow: hidden !important; }
+                        .fi-modal-header { flex-shrink: 0 !important; border-bottom: 1px solid rgba(156, 163, 175, 0.3) !important; padding-bottom: 1rem !important; }
+                        .fi-modal-content { flex-grow: 1 !important; overflow-y: auto !important; padding: 1.5rem !important; }
+                        .fi-modal-footer { flex-shrink: 0 !important; border-top: 1px solid rgba(156, 163, 175, 0.3) !important; padding-top: 1rem !important; margin-top: 0 !important; }
+                        .fi-fo-repeater-item-header-title, .fi-fo-repeater-item-header-icon { display: none !important; }
+                        .fi-fo-repeater-item-header { background: transparent !important; border-bottom: none !important; padding: 0 !important; position: absolute !important; bottom: 1rem !important; right: 1rem !important; top: auto !important; min-height: auto !important; z-index: 10; }
+                        .fi-fo-repeater-item { position: relative !important; border-radius: 12px !important; padding: 1rem 1rem 4rem 1rem !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important; background-color: white !important; }
+                        .dark .fi-fo-repeater-item { background-color: #1f2937 !important; }
+                        .fi-fo-repeater-item:nth-child(odd) { border: 2px solid #3B82F6 !important; }
+                        .fi-fo-repeater-item:nth-child(odd) button[role="switch"][aria-checked="true"] { background-color: #3B82F6 !important; }
+                        .fi-fo-repeater-item:nth-child(even) { border: 2px solid #F47D20 !important; }
+                        .fi-fo-repeater-item:nth-child(even) button[role="switch"][aria-checked="true"] { background-color: #F47D20 !important; }
+                        .fi-fo-repeater-item-header button { color: #ef4444 !important; }
+                        .absolute-bottom-left-toggle { position: absolute !important; bottom: 1rem !important; left: 1rem !important; margin: 0 !important; z-index: 20; }
                     </style>
                 '))
                 ->fillForm(function () {
                     $user = auth()->user();
-                    $query = Category::withoutGlobalScopes()->where('restaurant_id', $user->restaurant_id);
-
-                    if ($user->isBranchAdmin() || $user->isManager()) {
-                        $query->whereNull('branch_id');
-                    }
+                    
+                    $query = Category::withoutGlobalScopes()
+                        ->where('restaurant_id', $user->restaurant_id)
+                        ->where(function($q) use ($user) {
+                            $q->whereNull('branch_id'); // Load main categories
+                            if ($user->branch_id) {
+                                $q->orWhere('branch_id', $user->branch_id); // Load branch's own categories
+                            }
+                        });
 
                     $categories = $query->get()->map(function ($cat) use ($user) {
                         $isActive = $cat->is_active;
-                        if ($user->isBranchAdmin() || $user->isManager()) {
+                        
+                        // Check pivot status if branch admin is looking at a main category
+                        if ($user->branch_id !== null && $cat->branch_id === null) {
                             $status = DB::table('branch_category_status')
                                 ->where('category_id', $cat->id)
                                 ->where('branch_id', $user->branch_id)
@@ -165,6 +235,7 @@ class ManageMenus extends ManageRecords
                             'id' => $cat->id,
                             'name' => $cat->name,
                             'is_active' => $isActive,
+                            'branch_id' => $cat->branch_id, // 👈 Ensures branch_id is loaded into the form
                         ];
                     })->toArray();
 
@@ -173,72 +244,76 @@ class ManageMenus extends ManageRecords
                 ->form([
                     Forms\Components\Repeater::make('categories')
                         ->hiddenLabel()
-                        // 👇 THIS CREATES THE MULTIPLE CARDS IN A ROW 👇
                         ->grid([
                             'default' => 1,
                             'sm' => 3,
                             'md' => 4,
-                            'xl' => 5, // Shows 4 cards per row on large screens
+                            'xl' => 5,
                         ])
                         ->schema([
                             Forms\Components\Hidden::make('id'),
+                            
+                            // 👇 FIX: Added Hidden field to hold the branch_id in the repeater state
+                            Forms\Components\Hidden::make('branch_id'),
 
-                            // 👇 Name Input at the top
                             Forms\Components\TextInput::make('name')
                                 ->label('Name')
                                 ->placeholder('Category Name')
                                 ->required()
                                 ->maxLength(100)
-                                ->disabled(fn() => auth()->user()->isBranchAdmin() || auth()->user()->isManager()),
+                                // Prevent branch admin from editing the NAME of a main category
+                                ->disabled(fn(Forms\Get $get) => auth()->user()->branch_id !== null && $get('branch_id') === null),
 
-                            // 👇 Toggle anchored to the bottom left via custom CSS class
                             Forms\Components\Toggle::make('is_active')
                                 ->hiddenLabel()
                                 ->inline(false)
                                 ->extraAttributes(['class' => 'absolute-bottom-left-toggle']),
                         ])
                         ->addable(false)
-                        ->deletable(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager())
                         ->reorderable(false)
+                        // 👇 FIX: Only allow Branch Admin to delete their OWN categories (and safely checks for null)
+                        ->deletable(fn(array $state) => auth()->user()->branch_id === null 
+                            ? empty($state['branch_id']) 
+                            : ($state['branch_id'] ?? null) === auth()->user()->branch_id
+                        )
                         ->itemLabel(null),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
 
-                    $submittedIds = collect($data['categories'] ?? [])
-                        ->pluck('id')
-                        ->filter()
-                        ->toArray();
+                    $submittedIds = collect($data['categories'] ?? [])->pluck('id')->filter()->toArray();
 
-                    if (!$user->isBranchAdmin() && !$user->isManager()) {
-                        $existingIds = Category::withoutGlobalScopes()
-                            ->where('restaurant_id', $user->restaurant_id)
-                            ->pluck('id')
-                            ->toArray();
+                    // 👇 FIX: Safely delete missing IDs based on role
+                    $existingIdsQuery = Category::withoutGlobalScopes()->where('restaurant_id', $user->restaurant_id);
+                    
+                    if ($user->branch_id === null) {
+                        $existingIdsQuery->whereNull('branch_id'); // Main admin compares/deletes only main categories
+                    } else {
+                        $existingIdsQuery->where('branch_id', $user->branch_id); // Branch admin compares/deletes only their own categories
+                    }
+                    
+                    $existingIds = $existingIdsQuery->pluck('id')->toArray();
+                    $idsToDelete = array_diff($existingIds, $submittedIds);
 
-                        $idsToDelete = array_diff($existingIds, $submittedIds);
-
-                        if (!empty($idsToDelete)) {
-                            Category::withoutGlobalScopes()
-                                ->whereIn('id', $idsToDelete)
-                                ->delete();
-                        }
+                    if (!empty($idsToDelete)) {
+                        Category::withoutGlobalScopes()->whereIn('id', $idsToDelete)->delete();
                     }
 
+                    // Resolve Updates
                     foreach ($data['categories'] ?? [] as $catData) {
-                        if (empty($catData['id']))
-                            continue;
+                        if (empty($catData['id'])) continue;
 
                         $category = Category::withoutGlobalScopes()->find($catData['id']);
-                        if (!$category)
-                            continue;
+                        if (!$category) continue;
 
-                        if ($user->isBranchAdmin() || $user->isManager()) {
+                        // If Branch Admin is modifying a Main Category -> Update Status Pivot
+                        if ($user->branch_id !== null && $category->branch_id === null) {
                             DB::table('branch_category_status')->updateOrInsert(
                                 ['category_id' => $category->id, 'branch_id' => $user->branch_id],
                                 ['is_active' => $catData['is_active'], 'updated_at' => now()]
                             );
                         } else {
+                            // Main Admin modifying Main, OR Branch Admin modifying Branch
                             $category->update([
                                 'name' => $catData['name'],
                                 'is_active' => $catData['is_active'],

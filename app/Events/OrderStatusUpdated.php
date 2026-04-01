@@ -7,45 +7,58 @@ use App\Models\QrSession;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 
 class OrderStatusUpdated implements ShouldBroadcastNow
 {
-    use Dispatchable, SerializesModels;
+    use Dispatchable; 
 
-    public $order;
+    public array $orderPayload;
+    protected int $restaurantId;
+    protected int $qrSessionId;
+    protected ?int $branchId;
 
     public function __construct(Order $order)
     {
-        $this->order = $order->fresh(['items.menuItem.category', 'restaurantTable']);
+        $this->restaurantId = $order->restaurant_id;
+        $this->qrSessionId = $order->qr_session_id;
+        $this->branchId = $order->branch_id;
+
+        // 👇 FIX: Strip EVERYTHING heavy. Send ONLY the scalar fields.
+        $this->orderPayload = [
+            'id' => $order->id,
+            'restaurant_id' => $order->restaurant_id,
+            'branch_id' => $order->branch_id,
+            'restaurant_table_id' => $order->restaurant_table_id,
+            'qr_session_id' => $order->qr_session_id,
+            'customer_name' => $order->customer_name,
+            'status' => $order->status,
+            'total_amount' => (float) $order->total_amount,
+            'created_at' => $order->created_at ? $order->created_at->toIso8601String() : null,
+            'updated_at' => $order->updated_at ? $order->updated_at->toIso8601String() : null,
+            // ❌ Intentionally NOT sending 'items' to avoid the 10KB crash!
+        ];
     }
 
     public function broadcastOn(): array
     {
-        // 1. Always notify the Restaurant/Waiter
         $channels = [
-            new PrivateChannel('restaurant.' . $this->order->restaurant_id)
+            new PrivateChannel('restaurant.' . $this->restaurantId)
         ];
 
-        // 2. Notify the exact person who placed the order
-        $channels[] = new PrivateChannel('session.' . $this->order->qr_session_id);
+        $channels[] = new PrivateChannel('session.' . $this->qrSessionId);
 
-        // 3. GROUP BILLING NOTIFICATIONS: Ping the rest of the table!
-        $session = QrSession::find($this->order->qr_session_id);
+        $session = QrSession::find($this->qrSessionId);
 
         if ($session) {
             if ($session->is_primary) {
-                // If Host ordered, notify all their guests
                 $guestIds = QrSession::where('host_session_id', $session->id)->pluck('id');
                 foreach ($guestIds as $guestId) {
                     $channels[] = new PrivateChannel('session.' . $guestId);
                 }
             } else if ($session->host_session_id) {
-                // If a Guest ordered, notify the Host
                 $channels[] = new PrivateChannel('session.' . $session->host_session_id);
 
-                // And notify any other guests at the same table
                 $otherGuestIds = QrSession::where('host_session_id', $session->host_session_id)
                     ->where('id', '!=', $session->id)
                     ->pluck('id');
@@ -69,8 +82,8 @@ class OrderStatusUpdated implements ShouldBroadcastNow
         return [
             'version' => 1,
             'event_id' => Str::uuid()->toString(),
-            'branch_id' => $this->order->branch_id, // 🔥 FE can easily check this now
-            'order' => $this->order
+            'branch_id' => $this->branchId,
+            'order' => $this->orderPayload
         ];
     }
 }

@@ -5,141 +5,205 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use App\Models\QrSession;
 use App\Models\Restaurant;
 use App\Models\RestaurantTable;
 use App\Models\MenuItem;
+use App\Models\Payment;
+use App\Models\IdempotencyKey;
+use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Events\OrderStatusUpdated;
-use App\Models\Payment;
 
 class PlaceOrderController extends Controller
 {
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'restaurant_id' => 'required|exists:restaurants,id',
-            'table_id' => 'required|exists:restaurant_tables,id',
-            'session_token' => 'required|string',
-            'notes' => 'nullable|string|max:1000',
-            'items' => 'required|array|min:1',
-            'items.*.menu_item_id' => 'required|exists:menu_items,id',
-            'items.*.quantity' => 'required|integer|min:1',
-            'items.*.notes' => 'nullable|string|max:500',
-        ]);
-
-        $restaurant = Restaurant::findOrFail($validated['restaurant_id']);
-        $table = RestaurantTable::findOrFail($validated['table_id']);
-
-        if ($table->restaurant_id !== $restaurant->id) {
-            throw ValidationException::withMessages([
-                'table_id' => ['Table does not belong to this restaurant.']
-            ]);
-        }
-
-        $session = QrSession::where('session_token', $validated['session_token'])
-            ->where('restaurant_table_id', $table->id)
-            ->where('is_active', true)
-            ->first();
-
-        if (!$session || $session->expires_at < now()) {
-            throw ValidationException::withMessages([
-                'session_token' => ['Session expired or invalid.']
-            ]);
-        }
-
-        if (!$session->is_primary && $session->join_status !== 'approved') {
-            throw ValidationException::withMessages([
-                'session_token' => ['Waiting for primary approval.']
-            ]);
-        }
-
-        $subtotal = 0;
-        $preparedItems = [];
-
-        foreach ($validated['items'] as $item) {
-            $menuItem = MenuItem::where('id', $item['menu_item_id'])
-                ->where('restaurant_id', $restaurant->id)
+        // 1. Check Idempotency Key first to prevent double-charging/double-ordering
+        $idempotencyKeyStr = $request->header('X-Idempotency-Key');
+        
+        if ($idempotencyKeyStr) {
+            $existingKey = IdempotencyKey::where('key', $idempotencyKeyStr)
+                ->where('scope', 'place_order')
                 ->first();
 
-            if (!$menuItem) {
-                throw ValidationException::withMessages([
-                    'items' => ['One or more items are invalid.']
+            if ($existingKey) {
+                if ($existingKey->status === 'completed') {
+                    // Return the original success response without recreating the order
+                    return response()->json([
+                        'message' => 'Order already placed successfully (Idempotent replay).',
+                        'order_id' => $existingKey->reference_id,
+                        'is_replay' => true
+                    ], 200);
+                }
+                
+                if ($existingKey->status === 'processing') {
+                    return response()->json(['message' => 'Order is currently processing. Please wait.'], 409);
+                }
+
+                // FIX 1: If the status is 'failed', UPDATE it to processing instead of crashing on create()
+                $existingKey->update(['status' => 'processing']);
+            } else {
+                // FIX 2: Catch Race Conditions (Double-taps) gracefully
+                try {
+                    IdempotencyKey::create([
+                        'key' => $idempotencyKeyStr,
+                        'scope' => 'place_order',
+                        'status' => 'processing'
+                    ]);
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // 1062 is the MySQL code for Duplicate Entry
+                    if ($e->errorInfo[1] == 1062) {
+                        return response()->json(['message' => 'Order is currently processing. Please wait.'], 409);
+                    }
+                    throw $e; // Rethrow if it's some other database error
+                }
+            }
+        }
+
+        try {
+            $validated = $request->validate([
+                'restaurant_id' => 'required|exists:restaurants,id',
+                'table_id' => 'required|exists:restaurant_tables,id',
+                'session_token' => 'required|string',
+                'notes' => 'nullable|string|max:1000',
+                'items' => 'required|array|min:1',
+                'items.*.menu_item_id' => 'required|exists:menu_items,id',
+                'items.*.quantity' => 'required|integer|min:1',
+                'items.*.notes' => 'nullable|string|max:500',
+            ]);
+
+            $restaurant = Restaurant::findOrFail($validated['restaurant_id']);
+            $table = RestaurantTable::findOrFail($validated['table_id']);
+
+            if ($table->restaurant_id !== $restaurant->id) {
+                throw ValidationException::withMessages(['table_id' => ['Table does not belong to this restaurant.']]);
+            }
+
+            $session = QrSession::where('session_token', $validated['session_token'])
+                ->where('restaurant_table_id', $table->id)
+                ->where('is_active', true)
+                ->first();
+
+            if (!$session || $session->expires_at < now()) {
+                throw ValidationException::withMessages(['session_token' => ['Session expired or invalid.']]);
+            }
+
+            if (!$session->is_primary && $session->join_status !== 'approved') {
+                throw ValidationException::withMessages(['session_token' => ['Waiting for primary approval.']]);
+            }
+
+            $subtotal = 0;
+            $preparedItems = [];
+
+            foreach ($validated['items'] as $item) {
+                $menuItem = MenuItem::where('id', $item['menu_item_id'])->where('restaurant_id', $restaurant->id)->first();
+
+                if (!$menuItem) {
+                    throw ValidationException::withMessages(['items' => ['One or more items are invalid.']]);
+                }
+
+                $branchStatus = DB::table('branch_menu_item_status')
+                    ->where('menu_item_id', $menuItem->id)
+                    ->where('branch_id', $table->branch_id)
+                    ->first();
+
+                $isAvailable = $branchStatus ? (bool) $branchStatus->is_available : (bool) $menuItem->is_available;
+
+                if (!$isAvailable) {
+                    throw ValidationException::withMessages(['items' => ["{$menuItem->name} is currently unavailable at this branch."]]);
+                }
+
+                $totalPrice = $menuItem->price * $item['quantity'];
+                $subtotal += $totalPrice;
+
+                $preparedItems[] = [
+                    'menu_item_id' => $menuItem->id,
+                    'item_name' => $menuItem->name,
+                    'unit_price' => $menuItem->price,
+                    'quantity' => $item['quantity'],
+                    'total_price' => $totalPrice,
+                    'notes' => $item['notes'] ?? null,
+                ];
+            }
+
+            $totalAmount = $subtotal;
+            $order = null;
+
+            DB::transaction(function () use ($restaurant, $table, $session, $validated, $preparedItems, $totalAmount, &$order) {
+
+                $order = Order::create([
+                    'restaurant_id' => $restaurant->id,
+                    'branch_id' => $table->branch_id,
+                    'restaurant_table_id' => $table->id,
+                    'qr_session_id' => $session->id,
+                    'customer_name' => $session->customer_name,
+                    'status' => 'placed',
+                    'tax_amount' => 0,
+                    'total_amount' => $totalAmount,
+                    'notes' => $validated['notes'] ?? null,
+                ]);
+
+                foreach ($preparedItems as $itemData) {
+                    $order->items()->create($itemData);
+                }
+
+                OrderStatusLog::create([
+                    'order_id' => $order->id,
+                    'from_status' => null,
+                    'to_status' => 'placed',
+                    'changed_by_type' => 'customer',
+                    'changed_by_id' => null,
+                ]);
+
+                ActivityLog::create([
+                    'actor_type' => 'customer',
+                    'actor_id' => $session->id, 
+                    'action' => 'placed_order',
+                    'entity_type' => Order::class,
+                    'entity_id' => $order->id,
+                    'metadata' => [
+                        'total_amount' => $totalAmount,
+                        'item_count' => count($preparedItems),
+                        'table_number' => $table->table_number ?? $table->number
+                    ]
+                ]);
+            });
+
+            // Mark Idempotency Key as Completed
+            if ($idempotencyKeyStr) {
+                IdempotencyKey::where('key', $idempotencyKeyStr)->update([
+                    'status' => 'completed',
+                    'reference_id' => $order->id
                 ]);
             }
 
-            // 👇 SAFETY FIX: Check branch availability override
-            $branchStatus = DB::table('branch_menu_item_status')
-                ->where('menu_item_id', $menuItem->id)
-                ->where('branch_id', $table->branch_id)
-                ->first();
-
-            $isAvailable = $branchStatus ? (bool) $branchStatus->is_available : (bool) $menuItem->is_available;
-
-            if (!$isAvailable) {
-                throw ValidationException::withMessages([
-                    'items' => ["{$menuItem->name} is currently unavailable at this branch."]
-                ]);
+            if ($order) {
+                // 👇 THE ULTIMATE FIX: Strip out all relations (items, activity logs, etc) to ensure the payload is < 1KB
+                $order->unsetRelations();
+                
+                \App\Events\OrderStatusUpdated::dispatch($order);
             }
 
-            $totalPrice = $menuItem->price * $item['quantity'];
-            $subtotal += $totalPrice;
-
-            $preparedItems[] = [
-                'menu_item_id' => $menuItem->id,
-                'item_name' => $menuItem->name,
-                'unit_price' => $menuItem->price,
-                'quantity' => $item['quantity'],
-                'total_price' => $totalPrice,
-                'notes' => $item['notes'] ?? null,
-            ];
-        }
-
-        $totalAmount = $subtotal;
-        $order = null;
-
-        DB::transaction(function () use ($restaurant, $table, $session, $validated, $preparedItems, $totalAmount, &$order) {
-
-            $order = Order::create([
-                'restaurant_id' => $restaurant->id,
-                'branch_id' => $table->branch_id,
-                'restaurant_table_id' => $table->id,
-                'qr_session_id' => $session->id,
-                'customer_name' => $session->customer_name,
-                'status' => 'placed',
-                'tax_amount' => 0,
+            return response()->json([
+                'message' => 'Order placed successfully.',
                 'total_amount' => $totalAmount,
-                'notes' => $validated['notes'] ?? null,
-            ]);
+                'order_id' => $order->id
+            ], 201);
 
-            foreach ($preparedItems as $itemData) {
-                $order->items()->create($itemData);
+        } catch (\Exception $e) {
+            // Mark Idempotency Key as Failed so they can retry
+            if ($idempotencyKeyStr) {
+                IdempotencyKey::where('key', $idempotencyKeyStr)->update(['status' => 'failed']);
             }
-
-            OrderStatusLog::create([
-                'order_id' => $order->id,
-                'from_status' => null,
-                'to_status' => 'placed',
-                'changed_by_type' => 'customer',
-                'changed_by_id' => null,
-            ]);
-        });
-
-        if ($order) {
-            OrderStatusUpdated::dispatch($order);
+            throw $e;
         }
-
-        return response()->json([
-            'message' => 'Order placed successfully.',
-            'total_amount' => $totalAmount
-        ], 201);
     }
 
-   public function getSessionOrders($token)
+    public function getSessionOrders($token)
     {
         $session = QrSession::where('session_token', $token)->first();
 
@@ -173,13 +237,11 @@ class PlaceOrderController extends Controller
             ];
         });
 
-        // 👇 NEW: Check if a payment has been made for any of these orders
         $orderIds = $orders->pluck('id');
         $payment = Payment::whereIn('order_id', $orderIds)
             ->where('status', 'paid')
             ->first();
 
-        // 👇 NEW: Return both Orders AND Payment Data
         return response()->json([
             'orders' => $formattedOrders,
             'payment' => $payment ? [

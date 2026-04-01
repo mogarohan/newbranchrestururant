@@ -19,6 +19,7 @@ class RestaurantResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
     protected static ?string $navigationLabel = 'Restaurants';
     protected static ?string $navigationGroup = 'Administration';
+    protected static ?int $navigationSort = 1;
 
     /**
      * 🔐 Only Super Admin can see this resource

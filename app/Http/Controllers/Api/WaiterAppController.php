@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
+use App\Models\ActivityLog; // 👈 NEW
 use App\Models\Order;
 use App\Models\OrderStatusLog;
 use App\Models\RestaurantTable;
@@ -93,6 +94,17 @@ class WaiterAppController extends Controller
                 'to_status' => 'served',
                 'changed_by' => $user->id,
             ]);
+            // 👇 NEW: Record Activity Log for Waiter
+            ActivityLog::create([
+                'actor_type' => 'staff',
+                'actor_id' => $user->id,
+                'action' => 'marked_served',
+                'entity_type' => Order::class,
+                'entity_id' => $order->id,
+                'metadata' => [
+                    'table_id' => $order->restaurant_table_id,
+                ]
+            ]);
         });
 
         event(new OrderStatusUpdated($order));
@@ -159,6 +171,17 @@ class WaiterAppController extends Controller
         $user = $request->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($id);
         $table->update(['status' => $request->status]);
+        ActivityLog::create([
+            'actor_type' => 'staff',
+            'actor_id' => $user->id,
+            'action' => 'updated_table_status',
+            'entity_type' => RestaurantTable::class,
+            'entity_id' => $table->id,
+            'metadata' => [
+                'from_status' => $oldStatus,
+                'to_status' => $request->status,
+            ]
+        ]);
         event(new \App\Events\TableStatusUpdated($table->id, $table->status, $table->restaurant_id));
         return response()->json(['message' => 'Table status updated', 'table' => $table]);
     }
