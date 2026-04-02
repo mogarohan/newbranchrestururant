@@ -69,4 +69,8 @@ class CreateUser extends CreateRecord
                 ->enforce($actor->restaurant);
         }
     }
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

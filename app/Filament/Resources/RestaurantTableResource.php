@@ -157,6 +157,261 @@ class RestaurantTableResource extends Resource
                 ]),
             ])
             ->headerActions([
+                Tables\Actions\Action::make('generateTables')
+                    ->label('Generate Tables')
+                    ->icon('heroicon-o-qr-code')
+                    ->color('primary') 
+                    ->form(function () {
+                        return [
+                            \Filament\Forms\Components\TextInput::make('total_tables')->numeric()->minValue(1)->required(),
+                            \Filament\Forms\Components\TextInput::make('seating_capacity')->label('Seating Capacity Per Table')->numeric()->default(1),
+                        ];
+                    })
+                    ->action(function (array $data) {
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
+                        
+                        $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        if ($branchId) {
+                            $startQuery->where('branch_id', $branchId);
+                        } else {
+                            $startQuery->whereNull('branch_id');
+                        }
+
+                        $currentCount = $startQuery->count();
+                        $qrService = app(\App\Services\Restaurant\QrCodeService::class);
+
+                        for ($i = 1; $i <= $data['total_tables']; $i++) {
+                            $table = \App\Models\RestaurantTable::create([
+                                'restaurant_id' => $restaurant->id,
+                                'branch_id' => $branchId,
+                                'table_number' => 'T-0' . ($currentCount + $i), // Formatted to match T-01 design
+                                'seating_capacity' => $data['seating_capacity'],
+                            ]);
+                            $qrService->generate($table);
+                        }
+                    }),
+                    
+                
+                Tables\Actions\Action::make('download_pdf_qr')
+                    ->label('Download QRs as PDF')
+                    ->icon('heroicon-o-document-arrow-down')
+                    ->color('info')
+                    ->outlined()
+                    ->action(function () {
+                        // 1. Temporarily boost memory limits
+                        ini_set('memory_limit', '1024M');
+                        set_time_limit(300);
+
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
+
+                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        if ($branchId) {
+                            $query->where('branch_id', $branchId);
+                        } else {
+                            $query->whereNull('branch_id');
+                        }
+                        $tables = $query->get();
+
+                        // 2. Compress PNG into memory
+                        $bgImagePath = public_path('images/QR-BG.png'); 
+                        $bgBase64 = '';
+                        
+                        if (file_exists($bgImagePath)) {
+                            if (extension_loaded('gd')) {
+                                $img = @imagecreatefrompng($bgImagePath);
+                                if ($img) {
+                                    $width = imagesx($img);
+                                    $height = imagesy($img);
+                                    
+                                    $newWidth = 400;
+                                    $newHeight = 500;
+                                    $resizedImg = imagecreatetruecolor($newWidth, $newHeight);
+                                    
+                                    $white = imagecolorallocate($resizedImg, 255, 255, 255);
+                                    imagefill($resizedImg, 0, 0, $white);
+                                    
+                                    imagecopyresampled($resizedImg, $img, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                                    
+                                    ob_start();
+                                    imagejpeg($resizedImg, null, 40); 
+                                    $compressedData = ob_get_clean();
+                                    
+                                    imagedestroy($img);
+                                    imagedestroy($resizedImg);
+                                    
+                                    $bgBase64 = 'data:image/jpeg;base64,' . base64_encode($compressedData);
+                                }
+                            } else {
+                                $bgData = file_get_contents($bgImagePath);
+                                $bgBase64 = 'data:image/png;base64,' . base64_encode($bgData);
+                            }
+                        }
+
+                        // 3. Strict DomPDF HTML/CSS Layout with FIXED VERTICAL SPACING
+                        $html = '<!DOCTYPE html><html><head><style>
+                            @page { margin: 15px; size: A4 portrait; }
+                            body { margin: 0; padding: 0; background-color: #ffffff; font-family: "Helvetica", "Arial", sans-serif; }
+                            
+                            .page-table { 
+                                width: 100%; 
+                                border-collapse: separate; 
+                                border-spacing: 15px;
+                                table-layout: fixed; 
+                                page-break-after: always; 
+                            }
+                            .page-table:last-child { page-break-after: auto; }
+                            
+                            .quadrant { 
+                                width: 50%; 
+                                height: 460px; 
+                                padding: 0; 
+                                vertical-align: top; 
+                            }
+
+                            .card {
+                                border: 1px dashed #cbd5e1;
+                                border-radius: 8px;
+                                height: 460px;
+                                box-sizing: border-box;
+                                text-align: center;
+                                background-image: url("' . $bgBase64 . '");
+                                background-size: cover;
+                                background-position: center;
+                                background-repeat: no-repeat;
+                            }
+
+                            .content-wrapper {
+                                background-color: transparent; 
+                                width: 100%;
+                                height: 100%;
+                                padding-top: 25px; /* 👇 Reduced from 35px to pull content up */
+                                box-sizing: border-box;
+                            }
+
+                            .title { font-family: "Times", serif; font-size: 24px; font-weight: bold; color: #9A3B2A; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+                            .orange-line { border-top: 3px solid #E47A33; width: 40px; margin: 6px auto; } /* 👇 Reduced margin */
+                            .subtitle { font-size: 9px; color: #4B5320; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px; } /* 👇 Reduced from 20px */
+
+                            .qr-bracket-table {
+                                margin: 0 auto 12px auto; /* 👇 Reduced from 20px */
+                                border-collapse: collapse;
+                            }
+                            .qr-bracket-table td { padding: 0; }
+                            .br-tl { border-top: 3px solid #E47A33; border-left: 3px solid #E47A33; width: 25px; height: 25px; }
+                            .br-br { border-bottom: 3px solid #E47A33; border-right: 3px solid #E47A33; width: 25px; height: 25px; }
+                            
+                            .qr-img { 
+                                width: 135px; /* 👇 Scaled down slightly to guarantee fit */
+                                height: 135px; 
+                                border: 2px solid #8B5CF6;
+                                border-radius: 8px;
+                                padding: 4px;
+                                background-color: #ffffff; 
+                                display: block;
+                                margin: 8px; /* 👇 Reduced from 10px */
+                            }
+
+                            .btn-wrapper { margin-bottom: 12px; } /* 👇 Reduced from 15px */
+                            .scan-tag { background-color: #769772; color: #ffffff; padding: 4px 20px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; margin-bottom: 4px; }
+                            .scan-pill { background-color: #B85C4A; color: #ffffff; padding: 6px 25px; border-radius: 15px; font-size: 10px; font-weight: bold; display: inline-block; letter-spacing: 1px;}
+                            
+                            .loc-label { font-size: 9px; color: #7F8A74; font-weight: bold; margin-bottom: 2px; letter-spacing: 0.5px; } /* 👇 Reduced from 5px */
+                            .table-number { font-family: "Times", serif; font-size: 32px; font-style: italic; font-weight: bold; color: #32402A; margin: 0; }
+                            
+                        </style></head><body>';
+
+                        // 4. Generate 2x2 Grid Pages
+                        $pages = $tables->chunk(4);
+
+                        foreach ($pages as $pageItems) {
+                            $html .= '<table class="page-table">';
+                            $rows = $pageItems->chunk(2);
+
+                            foreach ($rows as $rowItems) {
+                                $html .= '<tr>';
+                                foreach ($rowItems as $table) {
+                                    $imagePath = storage_path('app/public/' . $table->qr_path);
+                                    $qrBase64 = '';
+                                    
+                                    if ($table->qr_path && file_exists($imagePath)) {
+                                        $svgData = file_get_contents($imagePath);
+                                        $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($svgData);
+                                    }
+
+                                    $restaurantName = strtoupper($restaurant->name ?? 'RESTAURANT');
+
+                                    // Render Card
+                                    $html .= '<td class="quadrant"><div class="card">';
+                                    
+                                    // Inner Content Box
+                                    $html .= '<div class="content-wrapper">';
+                                    
+                                    $html .= '<div class="title">' . $restaurantName . '</div>';
+                                    $html .= '<div class="orange-line"></div>';
+                                    $html .= '<div class="subtitle">EXQUISITE DINING EXPERIENCE</div>';
+
+                                    // QR Code Block
+                                    $html .= '<table class="qr-bracket-table">
+                                                <tr>
+                                                    <td class="br-tl"></td><td></td><td></td>
+                                                </tr>
+                                                <tr>
+                                                    <td></td><td><img src="' . $qrBase64 . '" class="qr-img" /></td><td></td>
+                                                </tr>
+                                                <tr>
+                                                    <td></td><td></td><td class="br-br"></td>
+                                                </tr>
+                                              </table>';
+
+                                    $html .= '<div class="btn-wrapper">';
+                                    $html .= '<div class="scan-pill">SCAN TO MENU</div>';
+                                    $html .= '</div>';
+
+                                    $html .= '<div class="loc-label">YOUR LOCATION</div>';
+                                    $html .= '<div class="table-number">Table ' . $table->table_number . '</div>';
+
+                                    // Close wrappers
+                                    $html .= '</div></div></td>';
+                                }
+
+                                // Fill empty column if only 1 item in the row
+                                if ($rowItems->count() == 1) {
+                                    $html .= '<td class="quadrant"></td>';
+                                }
+                                $html .= '</tr>';
+                            }
+
+                            // Fill empty row if only 1 row in the page
+                            if ($rows->count() == 1) {
+                                $html .= '<tr><td class="quadrant"></td><td class="quadrant"></td></tr>';
+                            }
+                            $html .= '</table>';
+                        }
+
+                        $html .= '</body></html>';
+
+                        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+                            // Render PDF
+                            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)
+                                ->setPaper('a4', 'portrait')
+                                ->setWarnings(false);
+
+                            return response()->streamDownload(function () use ($pdf) {
+                                echo $pdf->output();
+                            }, 'Restaurant_QRs.pdf');
+                        } else {
+                            \Filament\Notifications\Notification::make()
+                                ->title('PDF Library Missing')
+                                ->danger()
+                                ->send();
+                        }
+                    }),
+               
+               
                 Tables\Actions\Action::make('delete_all_qr')
                     ->label('Delete All QRs')
                     ->icon('heroicon-o-trash')
@@ -314,255 +569,6 @@ class RestaurantTableResource extends Resource
                
                // 👇 PDF DOWNLOAD ACTION (PERFECT 2x2 GRID & STRICT DESIGN) 👇
                 // 👇 PDF DOWNLOAD ACTION (PERFECT 2x2 GRID WITH GUARANTEED DOODLE BACKGROUND) 👇
-                Tables\Actions\Action::make('download_pdf_qr')
-                    ->label('Download QRs as PDF')
-                    ->icon('heroicon-o-document-arrow-down')
-                    ->color('info')
-                    ->outlined()
-                    ->action(function () {
-                        $user = auth()->user();
-                        $restaurant = $user->restaurant;
-                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
-
-                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
-                        if ($branchId) {
-                            $query->where('branch_id', $branchId);
-                        } else {
-                            $query->whereNull('branch_id');
-                        }
-                        $tables = $query->get();
-
-                        // 1. Generate the Faint Light-Mode Food Doodle as raw inline SVG
-                        // We scatter them manually so they fill a 400x500 box beautifully.
-                        $inlineDoodleSvg = '<svg width="100%" height="100%" viewBox="0 0 400 500" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-                            <g stroke="#cbd5e1" stroke-width="2" fill="none" opacity="0.3">
-                                <g transform="translate(40, 40)"><path d="M0,0 v15 M-5,0 v8 M5,0 v8 M-8,8 h13 M15,0 q8,8 0,15 v15 M0,15 v15" /></g>
-                                <g transform="translate(180, 60)"><path d="M0,10 v15 a8,8 0 0,0 16,0 v-15 z M16,15 h5 a4,4 0 0,1 0,8 h-5 M3,2 q4,-6 8,0" /></g>
-                                <g transform="translate(320, 40)"><path d="M-15,0 q15,-15 30,0 v4 h-30 v-4 M-15,6 h30 v3 h-30 v-3 M-15,11 h30 q-15,8 -30,0 M-7,-7 v2 M0,-7 v2 M7,-7 v2" /></g>
-                                
-                                <g transform="translate(70, 160)"><path d="M0,0 l25,30 l-40,-8 z M10,15 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M20,23 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M-2,18 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" /></g>
-                                <g transform="translate(260, 150)"><path d="M0,0 v15 M-5,0 v8 M5,0 v8 M-8,8 h13 M15,0 q8,8 0,15 v15 M0,15 v15" /></g>
-                                
-                                <g transform="translate(40, 280)"><path d="M0,10 v15 a8,8 0 0,0 16,0 v-15 z M16,15 h5 a4,4 0 0,1 0,8 h-5 M3,2 q4,-6 8,0" /></g>
-                                <g transform="translate(330, 260)"><path d="M-15,0 q15,-15 30,0 v4 h-30 v-4 M-15,6 h30 v3 h-30 v-3 M-15,11 h30 q-15,8 -30,0 M-7,-7 v2 M0,-7 v2 M7,-7 v2" /></g>
-
-                                <g transform="translate(80, 380)"><path d="M0,0 l25,30 l-40,-8 z M10,15 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M20,23 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M-2,18 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" /></g>
-                                <g transform="translate(200, 360)"><path d="M0,0 v15 M-5,0 v8 M5,0 v8 M-8,8 h13 M15,0 q8,8 0,15 v15 M0,15 v15" /></g>
-                                <g transform="translate(320, 390)"><path d="M0,10 v15 a8,8 0 0,0 16,0 v-15 z M16,15 h5 a4,4 0 0,1 0,8 h-5 M3,2 q4,-6 8,0" /></g>
-
-                                <g transform="translate(60, 480)"><path d="M-15,0 q15,-15 30,0 v4 h-30 v-4 M-15,6 h30 v3 h-30 v-3 M-15,11 h30 q-15,8 -30,0 M-7,-7 v2 M0,-7 v2 M7,-7 v2" /></g>
-                                <g transform="translate(250, 470)"><path d="M0,0 l25,30 l-40,-8 z M10,15 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M20,23 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0 M-2,18 a1.5,1.5 0 1,0 3,0 a1.5,1.5 0 1,0 -3,0" /></g>
-                            </g>
-                        </svg>';
-
-                        // 2. strict DomPDF CSS Layout
-                        $html = '<!DOCTYPE html><html><head><style>
-                            @page { margin: 15px; size: A4 portrait; }
-                            body { margin: 0; padding: 0; background-color: #ffffff; font-family: "Helvetica", "Arial", sans-serif; }
-                            
-                            .page-table { 
-                                width: 100%; 
-                                border-collapse: separate; 
-                                border-spacing: 15px;
-                                table-layout: fixed; 
-                                page-break-after: always; 
-                            }
-                            .page-table:last-child { page-break-after: auto; }
-                            
-                            .quadrant { 
-                                width: 50%; 
-                                height: 480px; 
-                                padding: 0; 
-                                vertical-align: top; 
-                            }
-
-                            .card {
-                                border: 1px dashed #cbd5e1;
-                                border-radius: 8px;
-                                background-color: #f8fafc; /* Very light slate base */
-                                height: 480px;
-                                box-sizing: border-box;
-                                text-align: center;
-                                position: relative;
-                            }
-
-                            /* 👇 THE FIX: Forces the doodle to sit BEHIND the text natively 👇 */
-                            .doodle-bg {
-                                position: absolute;
-                                top: 0;
-                                left: 0;
-                                width: 100%;
-                                height: 100%;
-                                z-index: 1;
-                                overflow: hidden;
-                            }
-
-                            /* The content sits ON TOP of the doodle */
-                            .content-wrapper {
-                                position: relative;
-                                z-index: 10;
-                                padding: 30px 10px 10px 10px;
-                            }
-
-                            .title { font-family: "Times", serif; font-size: 24px; font-weight: bold; color: #1e293b; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                            .orange-line { border-top: 3px solid #F47D20; width: 40px; margin: 8px auto; }
-                            .subtitle { font-size: 9px; color: #64748b; font-weight: bold; letter-spacing: 1px; margin-bottom: 25px; }
-
-                            .qr-wrapper {
-                                position: relative;
-                                width: 180px;
-                                height: 180px;
-                                margin: 0 auto 20px auto;
-                            }
-                            
-                            .bracket-tl { position: absolute; top: 0; left: 0; width: 25px; height: 25px; border-top: 3px solid #F47D20; border-left: 3px solid #F47D20; }
-                            .bracket-br { position: absolute; bottom: 0; right: 0; width: 25px; height: 25px; border-bottom: 3px solid #F47D20; border-right: 3px solid #F47D20; }
-                            
-                            .qr-img { 
-                                position: absolute;
-                                top: 15px;
-                                left: 15px;
-                                width: 140px; 
-                                height: 140px; 
-                                border: 2px solid #7c3aed; 
-                                border-radius: 8px;
-                                padding: 4px;
-                                background-color: #ffffff; /* Guarantees QR is readable against the doodle background */
-                            }
-
-                            .btn-wrapper { margin-bottom: 20px; }
-                            .scan-tag { background-color: #7c3aed; color: #ffffff; padding: 4px 20px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; margin-bottom: 4px; }
-                            .scan-pill { background-color: #334155; color: #ffffff; padding: 6px 25px; border-radius: 15px; font-size: 10px; font-weight: bold; display: inline-block; letter-spacing: 1px;}
-                            
-                            .loc-label { font-size: 9px; color: #94a3b8; font-weight: bold; margin-bottom: 5px; letter-spacing: 0.5px; }
-                            .table-number { font-family: "Times", serif; font-size: 32px; font-style: italic; font-weight: bold; color: #0f172a; margin: 0 0 25px 0; }
-                            
-                            .premium-line { color: #cbd5e1; font-size: 8px; font-weight: bold; letter-spacing: 1px; }
-                        </style></head><body>';
-
-                        $pages = $tables->chunk(4);
-
-                        foreach ($pages as $pageItems) {
-                            $html .= '<table class="page-table">';
-                            $rows = $pageItems->chunk(2);
-
-                            foreach ($rows as $rowItems) {
-                                $html .= '<tr>';
-                                foreach ($rowItems as $table) {
-                                    $imagePath = storage_path('app/public/' . $table->qr_path);
-                                    $qrBase64 = '';
-                                    
-                                    // Load the pure black & white SVG we generated in QrCodeService
-                                    if ($table->qr_path && file_exists($imagePath)) {
-                                        $svgData = file_get_contents($imagePath);
-                                        $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($svgData);
-                                    }
-
-                                    $restaurantName = strtoupper($restaurant->name ?? 'RESTAURANT');
-
-                                    $html .= '<td class="quadrant"><div class="card">';
-                                    
-                                    // Inject Doodle SVG as Absolute Background
-                                    $html .= '<div class="doodle-bg">' . $inlineDoodleSvg . '</div>';
-
-                                    // Content layer starts
-                                    $html .= '<div class="content-wrapper">';
-                                    
-                                    $html .= '<div class="title">' . $restaurantName . '</div>';
-                                    $html .= '<div class="orange-line"></div>';
-                                    $html .= '<div class="subtitle">EXQUISITE DINING EXPERIENCE</div>';
-
-                                    // Absolute brackets locked to the corners of the box
-                                    $html .= '<div class="qr-wrapper">
-                                                <div class="bracket-tl"></div>
-                                                <img src="' . $qrBase64 . '" class="qr-img" />
-                                                <div class="bracket-br"></div>
-                                              </div>';
-
-                                    $html .= '<div class="btn-wrapper">';
-                                    $html .= '<div class="scan-tag">SCAN</div><br>';
-                                    $html .= '<div class="scan-pill">SCAN TO MENU</div>';
-                                    $html .= '</div>';
-
-                                    $html .= '<div class="loc-label">YOUR LOCATION</div>';
-                                    $html .= '<div class="table-number">Table ' . $table->table_number . '</div>';
-
-                                    $html .= '<div class="premium-line">&mdash;&mdash;&mdash; &nbsp; PREMIUM COLLECTION &nbsp; &mdash;&mdash;&mdash;</div>';
-
-                                    // Close wrappers
-                                    $html .= '</div></div></td>';
-                                }
-
-                                // Fill empty column
-                                if ($rowItems->count() == 1) {
-                                    $html .= '<td class="quadrant"></td>';
-                                }
-                                $html .= '</tr>';
-                            }
-
-                            // Fill empty row
-                            if ($rows->count() == 1) {
-                                $html .= '<tr><td class="quadrant"></td><td class="quadrant"></td></tr>';
-                            }
-                            $html .= '</table>';
-                        }
-
-                        $html .= '</body></html>';
-
-                        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-                            // Render PDF
-                            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)
-                                ->setPaper('a4', 'portrait')
-                                ->setWarnings(false);
-
-                            return response()->streamDownload(function () use ($pdf) {
-                                echo $pdf->output();
-                            }, 'Restaurant_QRs.pdf');
-                        } else {
-                            \Filament\Notifications\Notification::make()
-                                ->title('PDF Library Missing')
-                                ->danger()
-                                ->send();
-                        }
-                    }),
-               
-               
-                Tables\Actions\Action::make('generateTables')
-                    ->label('Generate Tables')
-                    ->icon('heroicon-o-qr-code')
-                    ->color('primary') 
-                    ->form(function () {
-                        return [
-                            \Filament\Forms\Components\TextInput::make('total_tables')->numeric()->minValue(1)->required(),
-                            \Filament\Forms\Components\TextInput::make('seating_capacity')->numeric()->default(1),
-                        ];
-                    })
-                    ->action(function (array $data) {
-                        $user = auth()->user();
-                        $restaurant = $user->restaurant;
-                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
-                        
-                        $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
-                        if ($branchId) {
-                            $startQuery->where('branch_id', $branchId);
-                        } else {
-                            $startQuery->whereNull('branch_id');
-                        }
-
-                        $currentCount = $startQuery->count();
-                        $qrService = app(\App\Services\Restaurant\QrCodeService::class);
-
-                        for ($i = 1; $i <= $data['total_tables']; $i++) {
-                            $table = \App\Models\RestaurantTable::create([
-                                'restaurant_id' => $restaurant->id,
-                                'branch_id' => $branchId,
-                                'table_number' => 'T-0' . ($currentCount + $i), // Formatted to match T-01 design
-                                'seating_capacity' => $data['seating_capacity'],
-                            ]);
-                            $qrService->generate($table);
-                        }
-                    })
-                    
                 ]);
     }
 

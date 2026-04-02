@@ -80,7 +80,8 @@ class UserResource extends Resource
         // Sirf Super, Restaurant aur Branch admin delete kar sakte hain
         return auth()->user()->isSuperAdmin()
             || auth()->user()->isRestaurantAdmin()
-            || auth()->user()->isBranchAdmin();
+            || auth()->user()->isBranchAdmin()
+            || auth()->user()->isManager();
     }
 
   /* ---------------------------------------------------
@@ -199,6 +200,7 @@ class UserResource extends Resource
 
             /* NAME */
             Forms\Components\TextInput::make('name')
+                ->label('User Name')
                 ->required()
                 ->maxLength(255),
 

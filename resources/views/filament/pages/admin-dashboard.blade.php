@@ -192,10 +192,10 @@
                 <div class="stat-value">{{ $totalCategories }}</div>
                 <div class="sa-card-actions">
                     {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
-                    @if($isRestaurantAdmin)
+                    {{-- @if($isRestaurantAdmin)
                         <button wire:click="mountAction('addCategory')" type="button" class="sa-card-btn orange-solid">+
                             Add</button>
-                    @endif
+                    @endif --}}
                     {{-- The categories manage link still goes to menus because of the unified page --}}
                     <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}"
                         class="sa-card-btn orange-outline">Manage</a>
@@ -213,10 +213,10 @@
                 <div class="stat-value">{{ $totalItems }}</div>
                 <div class="sa-card-actions">
                     {{-- 👇 LIVEWIRE TRIGGER FOR SLIDE-OVER 👇 --}}
-                    @if($isRestaurantAdmin)
+                    {{-- @if($isRestaurantAdmin)
                         <button wire:click="mountAction('addItem')" type="button" class="sa-card-btn blue-solid">+
                             Add</button>
-                    @endif
+                    @endif --}}
                     <a href="{{ App\Filament\Resources\MenuResource::getUrl('index') }}"
                         class="sa-card-btn blue-outline">Manage</a>
                 </div>

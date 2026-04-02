@@ -112,7 +112,7 @@ class ManageMenus extends ManageRecords
                         ->minItems(1)
                         ->defaultItems(1)
                         ->schema([
-                            Forms\Components\TextInput::make('name')->required()->maxLength(150),
+                            Forms\Components\TextInput::make('name')->label('Item Name')->required()->maxLength(150),
                             Forms\Components\TextInput::make('price')->numeric()->minValue(0)->required()->prefix('₹'),
                             Forms\Components\Select::make('type')->label('Type')
                                 ->options(['veg' => 'Veg','non-veg' => 'Non-Veg',])

@@ -288,6 +288,7 @@ class MenuResource extends Resource
                             }),
                         
                         Forms\Components\TextInput::make('name')
+                            ->label('Item Name')
                             ->required()
                             ->maxLength(150)
                             ->disabled(fn($record) => $record && auth()->user()->branch_id !== null && $record->branch_id === null),

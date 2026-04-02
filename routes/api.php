@@ -153,5 +153,7 @@ Route::prefix('qr')->group(function () {
     Route::post('/session/start/{restaurant}/{table}/{token}', [QrSessionController::class, 'startSession'])->middleware('throttle:10,1');
 });
 
+Route::post('/session/request-bill', [\App\Http\Controllers\Api\PlaceOrderController::class, 'requestBill']);
+
 // Public Menu Access
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');

@@ -211,17 +211,19 @@ class PlaceOrderController extends Controller
             return response()->json(['message' => 'Session not found'], 404);
         }
 
-        if ($session->is_primary) {
-            $groupIds = QrSession::where('host_session_id', $session->id)
-                ->orWhere('id', $session->id)
-                ->pluck('id');
-        } else {
-            $groupIds = QrSession::where('host_session_id', $session->host_session_id)
-                ->orWhere('id', $session->host_session_id)
-                ->pluck('id');
-        }
+        // 👇 FIX: Group by host_session_id BUT filter strictly by active sessions
+        $groupIds = QrSession::where(function($q) use ($session) {
+                if ($session->is_primary) {
+                    $q->where('host_session_id', $session->id)->orWhere('id', $session->id);
+                } else {
+                    $q->where('host_session_id', $session->host_session_id)->orWhere('id', $session->host_session_id);
+                }
+            })
+            // Ensure we don't pull orders from completely expired/dead sessions from yesterday
+            ->where('created_at', '>=', now()->subHours(12)) 
+            ->pluck('id');
 
-        $orders = Order::with(['items.menuItem'])
+        $orders = Order::with(['items']) // Load lightweight items
             ->whereIn('qr_session_id', $groupIds)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -233,7 +235,19 @@ class PlaceOrderController extends Controller
                 'total_amount' => $order->total_amount,
                 'customer_name' => $order->customer_name,
                 'created_at' => $order->created_at,
-                'items' => $order->items
+                // Map items so React Native doesn't break
+                'items' => $order->items->map(function($item) {
+                    return [
+                        'id' => $item->id,
+                        'menu_item_id' => $item->menu_item_id,
+                        'item_name' => $item->item_name,
+                        'unit_price' => $item->unit_price,
+                        'quantity' => $item->quantity,
+                        'total_price' => $item->total_price,
+                        'notes' => $item->notes,
+                        'menu_item' => ['name' => $item->item_name]
+                    ];
+                })
             ];
         });
 
@@ -252,5 +266,31 @@ class PlaceOrderController extends Controller
                 'status' => $payment->status,
             ] : null
         ]);
+    }
+    public function requestBill(Request $request)
+    {
+        $token = $request->bearerToken() ?: $request->input('session_token');
+        $session = QrSession::where('session_token', $token)->first();
+
+        if (!$session) {
+            return response()->json(['message' => 'Invalid session.'], 404);
+        }
+
+        $table = RestaurantTable::find($session->restaurant_table_id);
+        $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
+
+        try {
+            // Trigger the manager notification
+            event(new \App\Events\BillRequested(
+                $session->restaurant_id,
+                $session->restaurant_table_id,
+                $tableNumber,
+                $session->customer_name
+            ));
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Bill Request Broadcast Failed: ' . $e->getMessage());
+        }
+
+        return response()->json(['message' => 'Bill requested successfully.']);
     }
 }

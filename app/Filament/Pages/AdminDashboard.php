@@ -31,43 +31,43 @@ class AdminDashboard extends Page
     }
 
     // 👇 ADD THESE ACTIONS TO THE DASHBOARD 👇
-    protected function getHeaderActions(): array
-    {
-        return [
-            // 1. ADD CATEGORY SLIDE-OVER
-            Actions\Action::make('addCategory')
-                ->label('Add Category')
-                ->model(Category::class)
+    // protected function getHeaderActions(): array
+    // {
+    //     return [
+    //         // 1. ADD CATEGORY SLIDE-OVER
+    //         Actions\Action::make('addCategory')
+    //             ->label('Add Category')
+    //             ->model(Category::class)
 
-                ->form([
-                    Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
-                    Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
-                    Forms\Components\TextInput::make('name')->required()->maxLength(100),
-                    Forms\Components\Toggle::make('is_active')->default(true)->label('Active'),
-                ])
-                ->action(function (array $data) {
-                    Category::create($data);
-                    \Filament\Notifications\Notification::make()->title('Category Added')->success()->send();
-                })
-                // Only Restaurant Admins can see/use this
-                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+    //             ->form([
+    //                 Forms\Components\Hidden::make('restaurant_id')->default(auth()->user()->restaurant_id),
+    //                 Forms\Components\Hidden::make('branch_id')->default(auth()->user()->branch_id),
+    //                 Forms\Components\TextInput::make('name')->required()->maxLength(100),
+    //                 Forms\Components\Toggle::make('is_active')->default(true)->label('Active'),
+    //             ])
+    //             ->action(function (array $data) {
+    //                 Category::create($data);
+    //                 \Filament\Notifications\Notification::make()->title('Category Added')->success()->send();
+    //             })
+    //             // Only Restaurant Admins can see/use this
+    //             ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
 
-            // 2. ADD ITEM SLIDE-OVER (Requires MenuItem form fields)
-            Actions\CreateAction::make('addItem')
-                ->label('Add Item')
-                ->model(MenuItem::class)
+    //         // 2. ADD ITEM SLIDE-OVER (Requires MenuItem form fields)
+    //         Actions\CreateAction::make('addItem')
+    //             ->label('Add Item')
+    //             ->model(MenuItem::class)
 
-                // We use your exact form from MenuResource
-                ->form(\App\Filament\Resources\MenuResource::form(new \Filament\Forms\Form($this))->getComponents())
-                ->action(function (array $data) {
-                    $data['restaurant_id'] = auth()->user()->restaurant_id;
-                    MenuItem::create($data);
-                    \Filament\Notifications\Notification::make()->title('Item Added')->success()->send();
-                })
-                // Only Restaurant Admins can see/use this
-                ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
-        ];
-    }
+    //             // We use your exact form from MenuResource
+    //             ->form(\App\Filament\Resources\MenuResource::form(new \Filament\Forms\Form($this))->getComponents())
+    //             ->action(function (array $data) {
+    //                 $data['restaurant_id'] = auth()->user()->restaurant_id;
+    //                 MenuItem::create($data);
+    //                 \Filament\Notifications\Notification::make()->title('Item Added')->success()->send();
+    //             })
+    //             // Only Restaurant Admins can see/use this
+    //             ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+    //     ];
+    // }
 
     protected function getViewData(): array
     {

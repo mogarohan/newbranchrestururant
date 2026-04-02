@@ -33,9 +33,22 @@ class ManagerDashboard extends Page
             "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => '$refresh',
             "echo-private:restaurant.{$restaurantId}.alerts,.TableStatusUpdated" => '$refresh',
             "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => '$refresh',
+            "echo-private:restaurant.{$restaurantId}.alerts,.BillRequested" => 'notifyBillRequested',
         ];
     }
+// 👇 ADD THIS FUNCTION
+    public function notifyBillRequested($event)
+    {
+        $tableNum = $event['table_number'] ?? '?';
+        $customer = $event['customer_name'] ?? 'A customer';
 
+        Notification::make()
+            ->title("Bill Requested: Table {$tableNum}")
+            ->body("{$customer} has requested their final bill.")
+            ->warning() // Orange warning color grabs attention
+            ->persistent() // Stays on screen until dismissed
+            ->send();
+    }
     public function getMaxContentWidth(): MaxWidth|string|null
     {
         return MaxWidth::Full;

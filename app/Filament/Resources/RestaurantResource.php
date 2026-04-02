@@ -34,6 +34,7 @@ class RestaurantResource extends Resource
     {
         return $form->schema([
             Forms\Components\TextInput::make('name')
+                ->label('Restaurant Name')
                 ->required()
                 ->maxLength(255)
                 ->live(onBlur: true)
@@ -73,6 +74,7 @@ class RestaurantResource extends Resource
                 ->required(fn(string $operation) => $operation === 'create'),
 
             Forms\Components\TextInput::make('user_limits')
+                ->label('User Limit of restaurant including branches')
                 ->numeric()
                 ->minValue(1)
                 ->required(),
