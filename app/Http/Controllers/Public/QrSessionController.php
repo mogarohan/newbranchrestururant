@@ -42,7 +42,8 @@ class QrSessionController extends Controller
             'is_full' => $isFull,
             'is_reserved' => $isReserved, // 👈 PASS THIS FLAG TO THE APP
             'capacity' => $table->seating_capacity,
-            'occupancy' => $currentOccupancy
+            'occupancy' => $currentOccupancy,
+            'table_number' => $table->table_number ?? $table->number ?? $table->id,
         ]);
     }
 
