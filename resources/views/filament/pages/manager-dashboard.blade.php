@@ -710,19 +710,97 @@
                             </div>
                         </div>
 
-                        {{-- Receipt Footer (Checkout Button) --}}
+                        {{-- =============================================== --}}
+                        {{-- NEW: IN-DASHBOARD BILLING & PAYMENT CONTROL --}}
+                        {{-- =============================================== --}}
                         <div class="pos-receipt-footer">
-                            <div class="flex justify-between items-end mb-6">
-                                <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Total</span>
-                                <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($runningTotal, 2) }}</span>
-                            </div>
+                            
+                            @if($pendingPayment && $pendingPayment->status === 'paid')
+                                {{-- ALREADY PAID --}}
+                                <div style="background: var(--accent-green-light); border: 1px solid var(--accent-green); padding: 1rem; border-radius: 12px; text-align: center;">
+                                    <x-heroicon-s-check-circle style="width: 32px; height: 32px; color: var(--accent-green); margin: 0 auto 0.5rem auto;" />
+                                    <div style="color: var(--accent-green); font-weight: 900; font-size: 1.1rem; text-transform: uppercase;">Payment Settled</div>
+                                    <div style="color: var(--text-primary); font-weight: bold; margin-top: 4px;">Grand Total: ₹{{ number_format($pendingPayment->amount, 2) }}</div>
+                                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;">Customer can now download PDF.</div>
+                                </div>
+                            @else
+                                {{-- CALCULATE LIVE PREVIEW TOTALS --}}
+                                @php
+                                    $taxable = max(0, $runningTotal - (float)$discountAmount);
+                                    $liveTax = $taxable * ((float)$taxPercentage / 100);
+                                    $liveTotal = $taxable + $liveTax;
+                                @endphp
 
-                            <a href="{{ \App\Filament\Resources\TableBillingResource::getUrl('index') }}"
-                                style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--brand-orange); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none; box-shadow: 0 4px 15px rgba(244, 125, 32, 0.3); transition: all 0.2s;"
-                                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 20px rgba(244, 125, 32, 0.4)';"
-                                onmouseout="this.style.transform='none'; this.style.boxShadow='0 4px 15px rgba(244, 125, 32, 0.3)';">
-                                Go to Billing Section
-                            </a>
+                                <div class="flex justify-between items-end mb-4">
+                                    <span style="color: var(--text-muted); font-size: 1rem; font-weight: 800;">Subtotal</span>
+                                    <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">₹{{ number_format($runningTotal, 2) }}</span>
+                                </div>
+
+                                @if(!$pendingPayment)
+                                    {{-- STEP 1: GENERATE BILL --}}
+                                    <div class="flex gap-3 mb-4">
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Discount (₹)</label>
+                                            <input type="number" wire:model.live="discountAmount" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-bg); color: var(--text-primary); font-weight: bold;" placeholder="0">
+                                        </div>
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Tax (%)</label>
+                                            <input type="number" wire:model.live="taxPercentage" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-bg); color: var(--text-primary); font-weight: bold;" placeholder="0">
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 2px dashed var(--border-strong);">
+                                        <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
+                                        <div style="text-align: right;">
+                                            <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($liveTotal, 2) }}</span>
+                                            @if($liveTax > 0)
+                                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: bold;">Includes ₹{{ number_format($liveTax, 2) }} Tax</div>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    <button wire:click="sendBillToCustomer"
+                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--brand-blue); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.2s;"
+                                        onmouseover="this.style.transform='translateY(-2px)';"
+                                        onmouseout="this.style.transform='none';">
+                                        <x-heroicon-s-paper-airplane style="width: 20px; height: 20px;" />
+                                        Send Bill to Customer
+                                    </button>
+                                @else
+                                    {{-- STEP 2: BILL PENDING / CONFIRM PAYMENT --}}
+                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 2px dashed var(--border-strong);">
+                                        <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
+                                        <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
+                                    </div>
+
+                                    <div style="background: var(--surface-bg); border: 1px solid var(--border-strong); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
+                                        <span style="display: block; font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Customer Selected Method</span>
+                                        @if($pendingPayment->payment_method === 'pending')
+                                            <span class="animate-pulse" style="color: var(--brand-orange); font-weight: 900; font-size: 1.1rem;">Waiting for Customer...</span>
+                                        @else
+                                            <span style="color: var(--brand-blue); font-weight: 900; font-size: 1.5rem; text-transform: uppercase;">{{ $pendingPayment->payment_method }}</span>
+                                        @endif
+                                    </div>
+
+                                    {{-- 👇 NEW: Cancel Bill & Reopen Orders Button 👇 --}}
+                                    <button wire:click="cancelPendingBill"
+                                        onclick="confirm('Are you sure you want to cancel this bill? The customer will be able to order again.') || event.stopImmediatePropagation()"
+                                        style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: transparent; color: var(--accent-red); padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--accent-red); cursor: pointer; transition: all 0.2s;"
+                                        onmouseover="this.style.backgroundColor='var(--accent-red)'; this.style.color='white';"
+                                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='var(--accent-red)';">
+                                        <x-heroicon-o-arrow-path style="width: 18px; height: 18px;" />
+                                        Cancel Bill & Reopen Orders
+                                    </button>
+
+                                    <button wire:click="confirmPayment"
+                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--accent-green); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
+                                        onmouseover="this.style.transform='translateY(-2px)';"
+                                        onmouseout="this.style.transform='none';">
+                                        <x-heroicon-s-check-circle style="width: 24px; height: 24px;" />
+                                        Confirm Payment Received
+                                    </button>
+                                @endif
+                            @endif
                         </div>
                     </div>
                 @else

@@ -154,6 +154,7 @@ Route::prefix('qr')->group(function () {
 });
 
 Route::post('/session/request-bill', [\App\Http\Controllers\Api\PlaceOrderController::class, 'requestBill']);
+Route::post('/session/select-payment-method', [\App\Http\Controllers\Api\PlaceOrderController::class, 'selectPaymentMethod']);
 
 // Public Menu Access
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');

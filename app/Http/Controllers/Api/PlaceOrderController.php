@@ -251,10 +251,21 @@ class PlaceOrderController extends Controller
             ];
         });
 
+        // inside getSessionOrders()... find the $payment query and replace it with:
         $orderIds = $orders->pluck('id');
         $payment = Payment::whereIn('order_id', $orderIds)
-            ->where('status', 'paid')
+            ->whereIn('status', ['pending', 'paid']) // 👈 FIX: Load pending bills too
+            ->latest()
             ->first();
+            
+        // Also fetch UPI ID so the app can generate the link
+        $upiId = $session->restaurantTable->branch->upi_id ?? $session->restaurant->upi_id ?? null;
+
+        return response()->json([
+            'orders' => $formattedOrders,
+            'payment' => $payment ? array_merge($payment->toArray(), ['upi_id' => $upiId]) : null
+        ]);
+
 
         return response()->json([
             'orders' => $formattedOrders,
@@ -292,5 +303,34 @@ class PlaceOrderController extends Controller
         }
 
         return response()->json(['message' => 'Bill requested successfully.']);
+    }
+    public function selectPaymentMethod(Request $request)
+    {
+        $token = $request->bearerToken() ?: $request->input('session_token');
+        $session = QrSession::where('session_token', $token)->first();
+
+        if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
+
+        $method = $request->input('method'); // 'cash' or 'upi'
+
+        // Find the pending payment
+        $groupIds = QrSession::where('host_session_id', $session->is_primary ? $session->id : $session->host_session_id)
+            ->orWhere('id', $session->is_primary ? $session->id : $session->host_session_id)
+            ->pluck('id');
+            
+        $orderIds = Order::whereIn('qr_session_id', $groupIds)->pluck('id');
+        
+        $payment = Payment::whereIn('order_id', $orderIds)->where('status', 'pending')->first();
+
+        if ($payment) {
+            $payment->update(['payment_method' => $method]);
+            
+            $tableNum = $session->restaurantTable->table_number ?? $session->restaurantTable->number ?? '?';
+            
+            // Alert the manager
+            event(new \App\Events\PaymentMethodSelected($session->restaurant_id, $tableNum, $method));
+        }
+
+        return response()->json(['message' => 'Method selected.']);
     }
 }

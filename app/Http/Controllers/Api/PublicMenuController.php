@@ -107,6 +107,10 @@ class PublicMenuController extends Controller
             })
             ->filter(fn($cat) => count($cat['items']) > 0)
             ->values();
+// 👇 Fetch the correct UPI ID for this table's location
+        $branchUpi = $table->branch_id ? \App\Models\Branch::find($table->branch_id)->upi_id : null;
+        $restaurantUpi = $restaurant->upi_id;
+        $finalUpiId = $branchUpi ?: $restaurantUpi;
 
         return response()->json([
             'session' => [
@@ -120,13 +124,15 @@ class PublicMenuController extends Controller
             'restaurant' => [
                 'id' => $restaurant->id,
                 'name' => $restaurant->name,
+                // 👇 FIX: Permanently attach the UPI ID to the app's global data
+                'upi_id' => $finalUpiId, 
                 'logo' => $restaurant->logo_path
                     ? asset('storage/' . $restaurant->logo_path)
                     : null,
             ],
             'table' => [
                 'id' => $table->id,
-                'number' => $table->table_number,
+                'number' => $table->table_number ?? $table->number ?? $table->name ?? $table->id,
                 'capacity' => $table->seating_capacity, 
             ],
             'categories' => $categories,

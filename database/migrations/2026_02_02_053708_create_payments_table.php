@@ -17,7 +17,7 @@ return new class extends Migration {
             $table->decimal('discount_amount', 10, 2)->default(0);
             $table->decimal('tax_amount', 10, 2)->default(0);
             $table->decimal('amount', 10, 2);
-            $table->enum('payment_method', ['cash', 'upi', 'card', 'online']);
+            $table->enum('payment_method', ['cash', 'upi', 'card', 'online', 'pending']);
             $table->enum('status', ['pending', 'paid', 'failed']);
             $table->string('transaction_reference')->nullable();
             $table->timestamp('paid_at')->nullable();
