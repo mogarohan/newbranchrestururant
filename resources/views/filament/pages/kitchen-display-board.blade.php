@@ -16,96 +16,192 @@
     @endphp
 
     <style>
-        /* Base Global Layout */
+        /* --- 🌟 MAKE FILAMENT WRAPPERS TRANSPARENT --- */
+        html, body, .fi-layout, .fi-main, .fi-page {
+            background-color: transparent !important;
+            background: transparent !important;
+        }
+
+        /* --- 🌟 BACKGROUND IMAGE WITH 0.15 OPACITY --- */
+        .custom-page-bg {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("/images/bg.png") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+            opacity: 0.15 !important;
+            z-index: -999 !important;
+            pointer-events: none;
+        }
+
+        /* 🎨 PREMIUM KDS CUSTOM UI (GLASSMORPHISM + BLACK BORDER) */
+        .kds-wrapper {
+            /* ☀️ VARIABLES WITH NEW COLOR PALETTE */
+            --text-main: #0f172a;
+            --text-sub: #475569;
+            
+            /* 🟠 Brand Orange Palette */
+            --brand-orange-primary: #f16b3f;
+            --brand-orange-light: #fe9a54;
+            --brand-orange-bg: rgba(241, 107, 63, 0.15);
+
+            /* 🔵 Brand Blue Palette */
+            --brand-blue-primary: #2a4795; 
+            --brand-blue-light: #456aba;
+            --brand-blue-bg: rgba(69, 106, 186, 0.15);
+
+            /* Status Colors */
+            --brand-green: #10b981;
+            --brand-green-bg: rgba(16, 185, 129, 0.15);
+            --brand-red: #ef4444;
+            --brand-red-bg: rgba(239, 68, 68, 0.15);
+
+            /* Glassmorphism Effects */
+            --glass-bg: rgba(255, 255, 255, 0.45);
+            --glass-border: #000000; /* BLACK BORDER */
+            --glass-shadow: 0 8px 32px rgba(42, 71, 149, 0.08);
+            --glass-blur: blur(16px) saturate(140%);
+        }
+
+        .dark .kds-wrapper {
+            --text-main: #f8fafc;
+            --text-sub: #cbd5e1;
+            --glass-bg: rgba(15, 15, 20, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+        }
+
         .kds-wrapper * { box-sizing: border-box; font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif; }
         
         /* ==========================================
-           4 WIDGETS GRID LAYOUT (NEW)
+           4 WIDGETS GRID LAYOUT
            ========================================== */
-        .kds-widgets { display: grid; grid-template-columns: repeat(1, 1fr); gap: 16px; margin-bottom: 24px; }
+        .kds-widgets { display: grid; grid-template-columns: repeat(1, 1fr); gap: 16px; margin-bottom: 24px; position: relative; z-index: 10; }
         @media (min-width: 768px) { .kds-widgets { grid-template-columns: repeat(4, 1fr); } }
         
         .kds-widget { 
-            background: #ffffff; border-radius: 16px; padding: 20px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.03); border: 1px solid #e2e8f0; 
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1.5px solid var(--glass-border);
+            border-radius: 1.25rem; 
+            padding: 20px; 
+            box-shadow: var(--glass-shadow); 
             position: relative; overflow: hidden;
-            transition: transform 0.2s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .dark .kds-widget { background: #1e293b; border-color: #334155; }
-        .kds-widget:hover { transform: translateY(-3px); }
         
-        .kds-w-title { font-size: 13px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-        .kds-w-value { font-size: 36px; font-weight: 900; margin-top: 8px; line-height: 1; }
+        /* Inner Glow */
+        .kds-widget::before, .kds-col::before, .kds-card::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+        }
+        .dark .kds-widget::before, .dark .kds-col::before, .dark .kds-card::before {
+            background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.02));
+        }
+
+        .kds-widget:hover { transform: translateY(-5px); box-shadow: 0 12px 40px rgba(42, 71, 149, 0.15); }
+        .dark .kds-widget:hover { box-shadow: 0 12px 40px rgba(0,0,0,0.9); }
         
-        .w-blue .kds-w-value { color: #3B82F6; }
-        .w-orange .kds-w-value { color: #F47D20; }
-        .w-green .kds-w-value { color: #10B981; }
-        .w-purple .kds-w-value { color: #8B5CF6; }
+        .kds-w-title { font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 800; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+        .kds-w-value { font-size: 2.4rem; font-weight: 700; margin-top: 8px; line-height: 1; }
+        
+        .w-blue .kds-w-value { color: var(--brand-blue-light); }
+        .w-orange .kds-w-value { color: var(--brand-orange-primary); }
+        .w-green .kds-w-value { color: var(--brand-green); }
+        .w-purple .kds-w-value { color: var(--brand-blue-primary); } /* Replaced Purple with Dark Blue */
 
         /* ==========================================
            KDS BOARD LAYOUT
            ========================================== */
-        .kds-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; min-height: 80vh; padding-bottom: 40px; align-items: start; }
+        .kds-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; min-height: 80vh; padding-bottom: 40px; align-items: start; position: relative; z-index: 10; }
         
         /* Columns */
-        .kds-col { background: #f8fafc; border-radius: 16px; padding: 16px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 16px; }
-        .dark .kds-col { background: #0f172a; border-color: #1e293b; }
+        .kds-col { 
+            background: rgba(255, 255, 255, 0.25); /* More transparent for columns */
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1.25rem; padding: 16px; 
+            border: 1.5px solid var(--glass-border); 
+            display: flex; flex-direction: column; gap: 16px; 
+            position: relative;
+        }
+        .dark .kds-col { background: rgba(15, 15, 20, 0.4); }
 
         /* Column Headers */
         .kds-col-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; padding: 0 4px; }
-        .kds-col-title { font-size: 16px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin: 0; }
+        .kds-col-title { font-size: 16px; font-weight: 800; letter-spacing: 1px; display: flex; align-items: center; gap: 8px; margin: 0; text-transform: uppercase; }
         .kds-dot { width: 12px; height: 12px; border-radius: 50%; }
-        .kds-col-count { font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 99px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .dark .kds-col-count { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+        
+        .kds-col-count { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 800; padding: 4px 12px; border-radius: 99px; background: var(--glass-bg); border: 1.5px solid var(--glass-border); color: var(--text-main); backdrop-filter: blur(4px); }
 
         /* Cards */
-        .kds-card { background: #ffffff; border-radius: 12px; padding: 16px; box-shadow: 0 4px 10px rgba(0,0,0,0.04); display: flex; flex-direction: column; gap: 16px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }
-        .dark .kds-card { background: #1e293b; border-color: #334155; }
-        .kds-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+        .kds-card { 
+            background: var(--glass-bg); 
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-radius: 12px; padding: 16px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
+            display: flex; flex-direction: column; gap: 16px; 
+            border: 1.5px solid var(--glass-border); 
+            transition: transform 0.2s, box-shadow 0.2s; 
+            position: relative;
+        }
+        .kds-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .dark .kds-card:hover { box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
 
-        /* Status Tops */
-        .kds-card.placed { border-top: 4px solid #3B82F6; }
-        .kds-card.prep { border-top: 4px solid #F47D20; }
-        .kds-card.urgent { border-top: 4px solid #ef4444; animation: pulseBorder 2s infinite; }
-        .kds-card.ready { border-top: 4px solid #10b981; }
+        /* Status Tops (Overriding black border just on top for status indicator) */
+        .kds-card.placed { border-top: 4px solid var(--brand-blue-light) !important; }
+        .kds-card.prep { border-top: 4px solid var(--brand-orange-primary) !important; }
+        .kds-card.urgent { border-top: 4px solid var(--brand-red) !important; animation: pulseBorder 2s infinite; }
+        .kds-card.ready { border-top: 4px solid var(--brand-green) !important; }
 
         /* Card Header & Order Number */
         .kds-card-top { display: flex; justify-content: space-between; align-items: flex-start; }
-        .kds-order-no { font-size: 24px; font-weight: 900; padding: 4px 12px; border-radius: 8px; letter-spacing: 1px; }
-        .kds-order-no.placed { background: rgba(59, 130, 246, 0.1); color: #3B82F6; }
-        .kds-order-no.prep { background: rgba(244, 125, 32, 0.1); color: #F47D20; }
-        .kds-order-no.urgent { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-        .kds-order-no.ready { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+        .kds-order-no { font-size: 24px; font-weight: 900; padding: 4px 12px; border-radius: 8px; letter-spacing: 1px; border: 1px solid var(--glass-border); }
+        .kds-order-no.placed { background: var(--brand-blue-bg); color: var(--brand-blue-light); }
+        .kds-order-no.prep { background: var(--brand-orange-bg); color: var(--brand-orange-primary); }
+        .kds-order-no.urgent { background: var(--brand-red-bg); color: var(--brand-red); }
+        .kds-order-no.ready { background: var(--brand-green-bg); color: var(--brand-green); }
 
         /* Timers */
         .kds-timer-box { text-align: right; }
-        .kds-timer-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; color: #64748b; }
-        .kds-timer-val { font-size: 18px; font-family: monospace; font-weight: 800; margin: 0; line-height: 1; color: #0f172a; }
-        .dark .kds-timer-val { color: #f8fafc; }
+        .kds-timer-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; color: var(--text-sub); }
+        .kds-timer-val { font-size: 18px; font-family: monospace; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); }
 
         /* Items */
         .kds-items { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
-        .kds-item { display: flex; align-items: flex-start; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0; }
-        .dark .kds-item { border-bottom-color: #334155; }
+        .kds-item { display: flex; align-items: flex-start; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed rgba(0,0,0,0.2); }
+        .dark .kds-item { border-bottom: 1px dashed rgba(255,255,255,0.2); }
         .kds-item:last-child { border-bottom: none; padding-bottom: 0; }
-        .kds-item-qty { font-size: 16px; font-weight: 900; color: #3B82F6; min-width: 24px; }
-        .kds-item-text { font-size: 16px; font-weight: 700; color: #334155; line-height: 1.3; flex: 1; }
-        .dark .kds-item-text { color: #e2e8f0; }
-        .kds-item-text.ready { color: #9ca3af; text-decoration: line-through; text-decoration-color: #10b981; text-decoration-thickness: 2px; }
-        .kds-item-notes { font-size: 13px; font-weight: 700; color: #ef4444; margin-top: 4px; background: rgba(239, 68, 68, 0.08); padding: 4px 8px; border-radius: 6px; display: inline-block; }
+        .kds-item-qty { font-size: 16px; font-weight: 900; color: var(--brand-blue-light); min-width: 24px; }
+        .kds-item-text { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700; color: var(--text-main); line-height: 1.3; flex: 1; }
+        .kds-item-text.ready { color: var(--text-sub); text-decoration: line-through; text-decoration-color: var(--brand-green); text-decoration-thickness: 2px; }
+        .kds-item-notes { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: var(--brand-red); margin-top: 4px; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 6px; display: inline-block; border: 1px solid rgba(239, 68, 68, 0.3); }
 
         /* Buttons */
-        .kds-btn { width: 100%; border: none; border-radius: 10px; padding: 14px; font-size: 14px; font-weight: 800; color: white; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+        .kds-btn { 
+            width: 100%; border: 1.5px solid var(--glass-border); border-radius: 10px; padding: 14px; 
+            font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 800; color: white; 
+            cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; 
+            transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; 
+        }
         .kds-btn:hover { opacity: 0.9; transform: scale(0.98); }
-        .kds-btn.btn-blue { background: #3B82F6; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3); }
-        .kds-btn.btn-orange { background: #F47D20; box-shadow: 0 4px 10px rgba(244, 125, 32, 0.3); }
-        .kds-btn.btn-red { background: #ef4444; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3); }
+        .kds-btn.btn-blue { background: linear-gradient(135deg, var(--brand-blue-primary), var(--brand-blue-light)); box-shadow: 0 4px 10px rgba(69, 106, 186, 0.3); }
+        .kds-btn.btn-orange { background: linear-gradient(135deg, var(--brand-orange-primary), var(--brand-orange-light)); box-shadow: 0 4px 10px rgba(241, 107, 63, 0.3); }
+        .kds-btn.btn-red { background: linear-gradient(135deg, #b91c1c, var(--brand-red)); box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3); }
 
-        @keyframes pulseBorder { 0% { border-top-color: #ef4444; } 50% { border-top-color: #fca5a5; } 100% { border-top-color: #ef4444; } }
+        @keyframes pulseBorder { 0% { border-top-color: var(--brand-red); } 50% { border-top-color: #fca5a5; } 100% { border-top-color: var(--brand-red); } }
         @media (max-width: 1024px) { .kds-board { grid-template-columns: 1fr; } }
     </style>
 
-    <div class="kds-wrapper" wire:poll.5s> <div class="kds-widgets">
+    <div class="custom-page-bg"></div>
+
+    <div class="kds-wrapper" wire:poll.5s> 
+        <div class="kds-widgets">
             <div class="kds-widget w-blue">
                 <div class="kds-w-title">Total Today</div>
                 <div class="kds-w-value">{{ $totalToday }}</div>
@@ -128,8 +224,8 @@
 
             <div class="kds-col placed">
                 <div class="kds-col-header">
-                    <h2 class="kds-col-title" style="color: #3B82F6;"><div class="kds-dot" style="background: #3B82F6;"></div> NEW / PLACED</h2>
-                    <span class="kds-col-count" style="color: #3B82F6;">{{ $this->placedOrders->count() }} Orders</span>
+                    <h2 class="kds-col-title" style="color: var(--brand-blue-light);"><div class="kds-dot" style="background: var(--brand-blue-light);"></div> NEW / PLACED</h2>
+                    <span class="kds-col-count">{{ $this->placedOrders->count() }} Orders</span>
                 </div>
 
                 @foreach($this->placedOrders as $queue)
@@ -163,8 +259,8 @@
 
             <div class="kds-col prep">
                 <div class="kds-col-header">
-                    <h2 class="kds-col-title" style="color: #F47D20;"><div class="kds-dot" style="background: #F47D20;"></div> PREPARING</h2>
-                    <span class="kds-col-count" style="color: #F47D20;">{{ $prepCount }} Orders</span>
+                    <h2 class="kds-col-title" style="color: var(--brand-orange-primary);"><div class="kds-dot" style="background: var(--brand-orange-primary);"></div> PREPARING</h2>
+                    <span class="kds-col-count">{{ $prepCount }} Orders</span>
                 </div>
 
                 @foreach($this->preparingOrders as $queue)
@@ -173,15 +269,15 @@
                         <div class="kds-card-top">
                             <div class="kds-order-no {{ $isUrgent ? 'urgent' : 'prep' }}">#{{ str_pad($queue->order->id, 2, '0', STR_PAD_LEFT) }}</div>
                             <div class="kds-timer-box">
-                                <div class="kds-timer-label" style="color: {{ $isUrgent ? '#ef4444' : '#64748b' }};">{{ $isUrgent ? 'URGENT' : 'ELAPSED' }}</div>
-                                <div class="kds-timer-val" style="color: {{ $isUrgent ? '#ef4444' : '' }};">{{ $queue->created_at->diff(now())->format('%I:%S') }}m</div>
+                                <div class="kds-timer-label" style="color: {{ $isUrgent ? 'var(--brand-red)' : 'var(--text-sub)' }};">{{ $isUrgent ? 'URGENT' : 'ELAPSED' }}</div>
+                                <div class="kds-timer-val" style="color: {{ $isUrgent ? 'var(--brand-red)' : '' }};">{{ $queue->created_at->diff(now())->format('%I:%S') }}m</div>
                             </div>
                         </div>
 
                         <div class="kds-items">
                             @foreach($queue->order->items as $item)
                                 <div class="kds-item">
-                                    <span class="kds-item-qty" style="color: #F47D20;">{{ $item->quantity }}x</span>
+                                    <span class="kds-item-qty" style="color: var(--brand-orange-primary);">{{ $item->quantity }}x</span>
                                     <div>
                                         <div class="kds-item-text">{{ $item->item_name }}</div>
                                         @if($item->notes) <div class="kds-item-notes">⚠️ {{ $item->notes }}</div> @endif
@@ -200,8 +296,8 @@
 
             <div class="kds-col ready">
                 <div class="kds-col-header">
-                    <h2 class="kds-col-title" style="color: #10b981;"><div class="kds-dot" style="background: #10b981;"></div> READY</h2>
-                    <span class="kds-col-count" style="color: #10b981;">{{ $readyCount }} Orders</span>
+                    <h2 class="kds-col-title" style="color: var(--brand-green);"><div class="kds-dot" style="background: var(--brand-green);"></div> READY</h2>
+                    <span class="kds-col-count">{{ $readyCount }} Orders</span>
                 </div>
 
                 @foreach($this->readyOrders as $queue)
@@ -209,15 +305,15 @@
                         <div class="kds-card-top">
                             <div class="kds-order-no ready">#{{ str_pad($queue->order->id, 2, '0', STR_PAD_LEFT) }}</div>
                             <div class="kds-timer-box">
-                                <div class="kds-timer-label" style="color: #10b981;">Wait Time</div>
-                                <div class="kds-timer-val" style="color: #10b981;">{{ $queue->created_at->diff(now())->format('%I:%S') }}m</div>
+                                <div class="kds-timer-label" style="color: var(--brand-green);">Wait Time</div>
+                                <div class="kds-timer-val" style="color: var(--brand-green);">{{ $queue->created_at->diff(now())->format('%I:%S') }}m</div>
                             </div>
                         </div>
 
                         <div class="kds-items">
                             @foreach($queue->order->items as $item)
                                 <div class="kds-item">
-                                    <span class="kds-item-qty" style="color: #10b981;">{{ $item->quantity }}x</span>
+                                    <span class="kds-item-qty" style="color: var(--brand-green);">{{ $item->quantity }}x</span>
                                     <div>
                                         <div class="kds-item-text ready">{{ $item->item_name }}</div>
                                     </div>
@@ -225,7 +321,7 @@
                             @endforeach
                         </div>
 
-                        <div style="text-align: center; margin-top: 8px; color: #10b981; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; background: rgba(16, 185, 129, 0.1); padding: 10px; border-radius: 8px;">
+                        <div style="text-align: center; margin-top: 8px; color: var(--brand-green); font-family: 'Inter', sans-serif; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--brand-green-bg); padding: 10px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
                             <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                             WAITING FOR WAITER
                         </div>

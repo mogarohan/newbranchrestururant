@@ -38,103 +38,84 @@ class UserResource extends Resource
         );
     }
 
-    // 👇 YEH 3 FUNCTIONS ADD KIYE HAIN "CREATE/EDIT" BUTTONS KO WAPAS LAANE KE LIYE 👇
     public static function canCreate(): bool
     {
-        return true; // Force enable Create Button
+        return true;
     }
 
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool
     {
         $currentUser = auth()->user();
 
-        // 1. Super Admin can edit absolutely anyone
         if ($currentUser->isSuperAdmin()) {
             return true;
         }
 
-        // Safely get the normalized role name of the user being edited
         $targetRole = strtolower(str_replace([' ', '-'], '_', $record->role?->name ?? ''));
 
-        // 2. Restaurant Admin cannot edit Super Admins
         if ($currentUser->isRestaurantAdmin()) {
             return $targetRole !== 'super_admin';
         }
 
-        // 3. Branch Admin cannot edit Super Admins or Restaurant Admins
         if ($currentUser->isBranchAdmin()) {
             return !in_array($targetRole, ['super_admin', 'restaurant_admin']);
         }
 
-        // 👇 4. Manager cannot edit Super Admins, Restaurant Admins, or Branch Admins 👇
         if ($currentUser->isManager()) {
             return !in_array($targetRole, ['super_admin', 'restaurant_admin', 'branch_admin']);
         }
 
-        // Default fallback (Waiters, Chefs, etc. cannot edit anyone)
         return false;
     }
 
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        // Sirf Super, Restaurant aur Branch admin delete kar sakte hain
         return auth()->user()->isSuperAdmin()
             || auth()->user()->isRestaurantAdmin()
             || auth()->user()->isBranchAdmin()
             || auth()->user()->isManager();
     }
 
-  /* ---------------------------------------------------
-     | DATA ISOLATION (FIXED)
+    /* ---------------------------------------------------
+     | DATA ISOLATION 
      |---------------------------------------------------*/
     public static function getEloquentQuery(): Builder
     {
         $query = parent::getEloquentQuery();
         $user = auth()->user();
 
-        // 1. Super Admin sees everyone
         if ($user->isSuperAdmin()) {
             return $query;
         }
 
-        // 2. Restaurant Admin sees everyone IN THEIR RESTAURANT
         if ($user->isRestaurantAdmin()) {
             return $query->where('restaurant_id', $user->restaurant_id);
         }
 
-        // 3. Branch Admin and Manager see everyone IN THEIR RESTAURANT AND THEIR SPECIFIC BRANCH
         if ($user->isBranchAdmin() || $user->isManager()) {
             return $query->where('restaurant_id', $user->restaurant_id)
-                         ->where('branch_id', $user->branch_id);
+                ->where('branch_id', $user->branch_id);
         }
 
-        // 4. Fallback security: If somehow a lower level user gets here, show them nothing.
-        return $query->where('id', -1); 
+        return $query->where('id', -1);
     }
 
     /* ---------------------------------------------------
-     | FORM (DYNAMICALLY BUILT TO FIX 404 BUG)
+     | FORM 
      |---------------------------------------------------*/
     public static function form(Form $form): Form
     {
         $user = auth()->user();
         $schema = [];
 
-        /* =========================================================
-           1. DYNAMIC RESTAURANT & BRANCH ASSIGNMENT
-           (Fixed 404 Not Found issue by preventing duplicate fields)
-        ========================================================= */
-
         if ($user->isSuperAdmin()) {
-            /* SUPER ADMIN CAN SELECT RESTAURANT */
             $schema[] = Forms\Components\Select::make('restaurant_id')
                 ->label('Restaurant')
                 ->options(Restaurant::pluck('name', 'id'))
                 ->searchable()
-                ->reactive() // Triggers update for Branch dropdown & User Stats
+                ->reactive()
                 ->required();
 
-            /* DYNAMIC BRANCH SELECTION FOR SUPER ADMIN */
             $schema[] = Forms\Components\Select::make('branch_id')
                 ->label('Branch')
                 ->placeholder('Main Restaurant (Leave empty)')
@@ -150,11 +131,9 @@ class UserResource extends Resource
                 });
 
         } elseif ($user->isRestaurantAdmin()) {
-            /* AUTO ASSIGN RESTAURANT FOR RESTAURANT ADMIN */
             $schema[] = Forms\Components\Hidden::make('restaurant_id')
                 ->default($user->restaurant_id);
 
-            /* DYNAMIC BRANCH SELECTION FOR RESTAURANT ADMIN */
             $schema[] = Forms\Components\Select::make('branch_id')
                 ->label('Branch')
                 ->placeholder('Main Restaurant (Leave empty)')
@@ -170,7 +149,6 @@ class UserResource extends Resource
                 });
 
         } else {
-            /* AUTO ASSIGN BOTH RESTAURANT AND BRANCH FOR MANAGERS/BRANCH ADMINS */
             $schema[] = Forms\Components\Hidden::make('restaurant_id')
                 ->default($user->restaurant_id);
 
@@ -178,11 +156,7 @@ class UserResource extends Resource
                 ->default($user->branch_id);
         }
 
-        /* =========================================================
-           2. COMMON USER FIELDS
-        ========================================================= */
         $commonFields = [
-            /* USER LIMIT INFO */
             Forms\Components\Placeholder::make('restaurant_user_stats')
                 ->label('Restaurant User Usage')
                 ->reactive()
@@ -198,165 +172,241 @@ class UserResource extends Resource
                     return $restaurant ? "{$restaurant->users()->count()} / {$restaurant->user_limits} users used" : 'No restaurant assigned';
                 }),
 
-            /* NAME */
             Forms\Components\TextInput::make('name')
                 ->label('User Name')
                 ->required()
                 ->maxLength(255),
 
-            /* EMAIL */
             Forms\Components\TextInput::make('email')
                 ->email()
                 ->required()
                 ->unique(ignoreRecord: true),
 
-            /* PASSWORD */
             Forms\Components\TextInput::make('password')
                 ->password()
                 ->required(fn($operation) => $operation === 'create')
                 ->dehydrateStateUsing(fn($state) => filled($state) ? Hash::make($state) : null)
                 ->dehydrated(fn($state) => filled($state)),
 
-            /* ROLE SELECT */
             Forms\Components\Select::make('role_id')
                 ->label('Role')
                 ->required()
                 ->reactive()
                 ->options(fn() => self::availableRoles())
                 ->default(function () {
-                    $requestedRole = request()->query('role'); // Get '?role=xxx' from URL
-        
+                    $requestedRole = request()->query('role');
                     if ($requestedRole) {
-                        // Fetch the ID directly from the DB
                         return \App\Models\Role::where('name', $requestedRole)->value('id');
                     }
-
                     return null;
                 }),
 
-            /* ACTIVE STATUS */
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
         ];
 
-        // Combine dynamic logic with regular fields
         return $form->schema(array_merge($schema, $commonFields));
     }
 
     /* ---------------------------------------------------
      | TABLE
      |---------------------------------------------------*/
-public static function table(Table $table): Table
-{
-    return $table
-        ->heading(new HtmlString('
-            <style>
-                /* --- LIGHT THEME (BLUE) --- */
-                .fi-ta-ctn {
-                    background-color: transparent !important;
-                    box-shadow: none !important;
-                    border: 1px solid rgba(156,163,175,0.2) !important;
-                    color: #000000 !important;
-                }
+    public static function table(Table $table): Table
+    {
+        $bgImageUrl = asset('images/bg.png');
 
-                .fi-ta-cell-content, 
-                .fi-ta-text-item-label,
-                .fi-ta-text-item-description,
-                .fi-ta-header-cell-label {
-                    color: #000000 !important;
-                }
+        return $table
+            ->heading(new HtmlString('
+                <style>
+                    /* --- 🌟 MAKE FILAMENT WRAPPERS TRANSPARENT --- */
+                    html, body, .fi-layout, .fi-main, .fi-page {
+                        background-color: transparent !important;
+                        background: transparent !important;
+                    }
 
-                .fi-ta-header-cell-label { font-weight: 800 !important; }
+                    /* --- 🌟 BACKGROUND IMAGE WITH 0.15 OPACITY --- */
+                    body::before {
+                        content: "";
+                        position: fixed;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background-image: url("' . $bgImageUrl . '") !important;
+                        background-size: cover !important;
+                        background-position: center !important;
+                        background-attachment: fixed !important;
+                        opacity: 0.15 !important;
+                        z-index: -999 !important;
+                        pointer-events: none;
+                    }
 
-                /* Row Hover - Blue with low opacity */
-                .fi-ta-record:hover {
-                    background-color: rgba(30, 64, 175, 0.1) !important;
-                }
+                    /* --- 🎨 TABLE CONTAINER (GLASS + BLACK BORDER) --- */
+                    .fi-ta-ctn {
+                        background: rgba(255, 255, 255, 0.45) !important;
+                        backdrop-filter: blur(16px) saturate(140%) !important;
+                        -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+                        border: 1.5px solid #000000 !important; /* BLACK BORDER */
+                        border-radius: 1.25rem !important;
+                        box-shadow: 0 8px 32px rgba(42, 71, 149, 0.08) !important;
+                        overflow: hidden !important;
+                        color: #000000 !important;
+                    }
 
-                /* Active Icon - Green */
-                .fi-ta-icon-item {
-                    color: #20af1e !important;
-                }
+                    /* --- TABLE HEADER --- */
+                    .fi-ta-header-ctn {
+                        background: rgba(255, 255, 255, 0.2) !important;
+                        border-bottom: 1.5px solid #000000 !important; /* Inner black separator */
+                    }
+                    
+                    .fi-ta-header-cell {
+                        background-color: transparent !important;
+                    }
 
-                /* --- DARK THEME (WHITE TEXT) --- */
-                .dark .fi-ta-ctn,
-                .dark .fi-ta-cell-content, 
-                .dark .fi-ta-text-item-label,
-                .dark .fi-ta-text-item-description,
-                .dark .fi-ta-header-cell-label {
-                    color: #ffffff !important;
-                }
+                    .fi-ta-header-cell-label {
+                        color: #2a4795 !important; /* BRAND BLUE */
+                        font-weight: 800 !important;
+                        text-transform: uppercase !important;
+                        letter-spacing: 0.05em !important;
+                    }
 
-                .dark .fi-ta-record:hover {
-                    background-color: rgba(255, 255, 255, 0.1) !important;
-                }
-            </style>
-        '))
-        ->columns([
-            Tables\Columns\ImageColumn::make('avatar_url')
-                ->label('Avatar')
-                ->circular()
-                ->defaultImageUrl(fn($record) =>
-                    'https://ui-avatars.com/api/?name='
-                    . urlencode($record->name)
-                    . '&color=FFFFFF&background=000000'), 
+                    /* --- TABLE ROWS (TEXT COLORS) --- */
+                    .fi-ta-cell-content, 
+                    .fi-ta-text-item-label,
+                    .fi-ta-text-item-description {
+                        color: #0f172a !important; /* Dark Slate Text */
+                        font-family: "Inter", sans-serif !important;
+                    }
 
-            Tables\Columns\TextColumn::make('name')
-                ->label('Name')
-                ->searchable()
-                ->sortable()
-                ->weight('bold')
-                ->description(
-                    fn(User $record) =>
-                    'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')
-                ),
+                    .fi-ta-record {
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+                        background: transparent !important;
+                        transition: all 0.2s ease !important;
+                    }
 
-            Tables\Columns\TextColumn::make('email')
-                ->label('Contact Info')
-                ->searchable()
-                ->copyable()
-                ->color('primary'), 
+                    /* --- 🔄 ALTERNATING ROW HOVER (BLUE & ORANGE) --- */
+                    .fi-ta-record:nth-child(odd):hover {
+                        background-color: rgba(42, 71, 149, 0.08) !important; /* Blue Tint */
+                    }
+                    .fi-ta-record:nth-child(even):hover {
+                        background-color: rgba(241, 107, 63, 0.08) !important; /* Orange Tint */
+                    }
 
-            Tables\Columns\TextColumn::make('branch.name')
-                ->label('Branch')
-                ->default('Main Restaurant') 
-                ->sortable()
-                ->searchable(),
+                    /* --- TABLE PAGINATION / FOOTER --- */
+                    .fi-ta-content + div {
+                        background: rgba(255, 255, 255, 0.2) !important;
+                        border-top: 1.5px solid #000000 !important; /* Black separator for footer */
+                    }
 
-            Tables\Columns\TextColumn::make('role.name')
-                ->label('Role')
-                ->badge()
-                ->color(function (string $state) {
-                    $normalized = strtolower(str_replace([' ', '-'], '_', $state));
-                    return match ($normalized) {
-                        'chef', 'waiter', 'manager', 'branch_admin', 'restaurant_admin' => 'warning',
-                        default => 'gray',
-                    };
-                })
-                ->formatStateUsing(fn(string $state) => ucfirst($state)),
+                    /* --- SEARCH INPUT STYLING --- */
+                    .fi-input-wrapper {
+                        background-color: rgba(255, 255, 255, 0.5) !important;
+                        border: 1.5px solid #2a4795 !important; /* Blue border */
+                        border-radius: 0.75rem !important;
+                    }
+                    .fi-input-wrapper:focus-within {
+                        border-color: #f16b3f !important; /* Orange border on focus */
+                        box-shadow: 0 0 0 3px rgba(241, 107, 63, 0.2) !important;
+                    }
 
-            Tables\Columns\IconColumn::make('is_active')
-                ->label('Active')
-                ->boolean()
-                ->alignCenter(),
+                    /* --- 🌙 DARK THEME OVERRIDES --- */
+                    .dark .fi-ta-ctn {
+                        background: rgba(15, 15, 20, 0.7) !important;
+                        border: 1.5px solid #000000 !important;
+                    }
+                    .dark .fi-ta-header-ctn {
+                        background: rgba(0, 0, 0, 0.3) !important;
+                        border-color: #000000 !important;
+                    }
+                    .dark .fi-ta-header-cell-label {
+                        color: #456aba !important; /* Light Blue */
+                    }
+                    .dark .fi-ta-cell-content, 
+                    .dark .fi-ta-text-item-label,
+                    .dark .fi-ta-text-item-description {
+                        color: #f8fafc !important; /* White Text */
+                    }
+                    .dark .fi-ta-record {
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+                    }
+                    .dark .fi-ta-record:nth-child(odd):hover {
+                        background-color: rgba(69, 106, 186, 0.15) !important; /* Blue Tint Dark */
+                    }
+                    .dark .fi-ta-record:nth-child(even):hover {
+                        background-color: rgba(241, 107, 63, 0.15) !important; /* Orange Tint Dark */
+                    }
+                    .dark .fi-ta-content + div {
+                        background: rgba(0, 0, 0, 0.3) !important;
+                        border-color: #000000 !important;
+                    }
+                    .dark .fi-input-wrapper {
+                        background-color: rgba(0, 0, 0, 0.5) !important;
+                        border-color: #456aba !important;
+                    }
+                </style>
+            '))
+            ->columns([
+                Tables\Columns\ImageColumn::make('avatar_url')
+                    ->label('Avatar')
+                    ->circular()
+                    ->defaultImageUrl(fn($record) =>
+                        'https://ui-avatars.com/api/?name='
+                        . urlencode($record->name)
+                        . '&color=FFFFFF&background=000000'),
 
-            Tables\Columns\TextColumn::make('updated_at')
-                ->label('Last Active')
-                ->since()
-                ->color('primary'),
-        ])
-        ->actions([
-            Tables\Actions\EditAction::make()
-                ->color('warning')
-                ->button()
-                ->outlined(),
+                Tables\Columns\TextColumn::make('name')
+                    ->label('Name')
+                    ->searchable()
+                    ->sortable()
+                    ->weight('bold')
+                    ->description(
+                        fn(User $record) =>
+                        'Joined ' . ($record->created_at ? $record->created_at->format('M Y') : 'N/A')
+                    ),
 
-            Tables\Actions\DeleteAction::make()
-                ->color('danger')
-                ->button()
-                ->outlined(),
-        ]);
-}
+                Tables\Columns\TextColumn::make('email')
+                    ->label('Contact Info')
+                    ->searchable()
+                    ->copyable()
+                    ->color('primary'),
+
+                Tables\Columns\TextColumn::make('branch.name')
+                    ->label('Branch')
+                    ->default('Main Restaurant')
+                    ->sortable()
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('role.name')
+                    ->label('Role')
+                    ->badge()
+                    ->color(function (string $state) {
+                        $normalized = strtolower(str_replace([' ', '-'], '_', $state));
+                        return match ($normalized) {
+                            'chef', 'waiter', 'manager', 'branch_admin', 'restaurant_admin' => 'warning',
+                            default => 'gray',
+                        };
+                    })
+                    ->formatStateUsing(fn(string $state) => ucfirst($state)),
+
+                Tables\Columns\IconColumn::make('is_active')
+                    ->label('Active')
+                    ->boolean()
+                    ->alignCenter(),
+
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->label('Last Active')
+                    ->since()
+                    ->color('primary'),
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make()
+                    ->color('warning')
+                    ->button()
+                    ->outlined(),
+
+                Tables\Actions\DeleteAction::make()
+                    ->color('danger')
+                    ->button()
+                    ->outlined(),
+            ]);
+    }
 
     /* ---------------------------------------------------
      | ROLE FILTER (BULLETPROOF)
@@ -364,34 +414,28 @@ public static function table(Table $table): Table
     protected static function availableRoles(): array
     {
         $user = auth()->user();
-        $allRoles = Role::all(); // Saare roles ek baar DB se nikal liye
+        $allRoles = Role::all();
 
-        /* SUPER ADMIN → ALL ROLES */
         if ($user->isSuperAdmin()) {
             return $allRoles->pluck('name', 'id')->toArray();
         }
 
-        /* RESTAURANT ADMIN */
         if ($user->isRestaurantAdmin()) {
             $rolesAllowed = ['manager', 'chef', 'waiter'];
 
-            // Agar restaurant me branches allowed hain, tabhi 'branch_admin' role create karne do
             if ($user->restaurant && $user->restaurant->has_branches) {
                 $rolesAllowed[] = 'branch_admin';
             }
 
-            // DB ke naam ko match karne ke liye smart filter
             return $allRoles->filter(function ($r) use ($rolesAllowed) {
                 $normalized = strtolower(str_replace([' ', '-'], '_', $r->name));
                 return in_array($normalized, $rolesAllowed);
             })->pluck('name', 'id')->toArray();
         }
 
-        /* MANAGER / BRANCH ADMIN */
         if ($user->isManager() || $user->isBranchAdmin()) {
             $rolesAllowed = ['chef', 'waiter'];
 
-            // Branch Admin ko apne managers create karne ki permission allow ki gayi hai
             if ($user->isBranchAdmin()) {
                 $rolesAllowed[] = 'manager';
             }

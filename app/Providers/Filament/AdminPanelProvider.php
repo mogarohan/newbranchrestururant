@@ -29,14 +29,15 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->brandLogo(asset('img/TsLogo.png'))
-            ->brandLogoHeight('10.5rem')
+            ->maxContentWidth('full')
+            ->brandLogo(asset('img/annsathilogo.png'))
+            ->brandLogoHeight('5rem')
+            ->darkMode(false)
             ->colors([
-                'primary' => '#F47D20', // Orange as primary
+                'primary' => Color::hex('#f16b3f'),
                 'gray' => Color::Slate,
             ])
             ->navigationGroups([
-
                 'Administration',
                 'Access Control',
                 'Menu Management',
@@ -61,113 +62,246 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+
+            // ── TOPBAR GREETING ──────────────────────────────────────
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_END,
+                fn(): string => Blade::render('
+                    <div id="fi-greeting-wrap" style="
+                        display: flex;
+                        align-items: center;
+                        height: 100%;
+                        padding: 0 0.5rem 0 0;
+                        font-family: Poppins, sans-serif;
+                        font-size: 0.95rem;
+                        font-weight: 600;
+                        color: #2a4795;
+                        letter-spacing: 0.01em;
+                        white-space: nowrap;
+                    ">
+                        Hello..!!&nbsp;<span style="color: #f16b3f;">{{ auth()->user()?->name ?? \'\' }}</span>&nbsp;👋
+                    </div>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function () {
+                            function fixOrder() {
+                                const greeting = document.getElementById("fi-greeting-wrap");
+                                const userMenu = document.querySelector(".fi-user-menu");
+                                if (!greeting || !userMenu) return;
+
+                                const parent = userMenu.parentElement;
+                                if (!parent) return;
+
+                                parent.insertBefore(greeting, userMenu);
+                            }
+                            fixOrder();
+                            setTimeout(fixOrder, 300);
+                        });
+                    </script>
+                ')
+            )
+
+            // ── HEAD: fonts + global styles ──────────────────────────────
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
                 fn(): string => Blade::render('
                     @vite([\'resources/js/app.js\'])
                     <link rel="preconnect" href="https://fonts.googleapis.com">
                     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+                    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&family=Lora:wght@500;600&display=swap" rel="stylesheet">
                     <style>
-                        /* --- GLOBAL FONTS --- */
+                        /* ── Brand Logo ── */
+                        .fi-logo img,
+                        .fi-sidebar-header img {
+                            height: 3.5rem !important;
+                            width: auto !important;
+                            object-fit: contain !important;
+                            max-width: 100% !important;
+                        }
+
+                        /* Force light mode always */
+                        html { color-scheme: light !important; }
+                        .dark, [data-theme="dark"] { display: revert !important; }
+
+                        /* ── Global fonts ── */
                         html, body, p, span, div, input, select, textarea, button, a, table, td, th {
                             font-family: "Inter", sans-serif !important;
                         }
-
-                        h1, h2, h3, h4, h5, h6, 
-                        .fi-header-heading, 
-                        .fi-modal-heading, 
+                        h1, h2, h3, h4, h5, h6,
+                        .fi-header-heading,
+                        .fi-modal-heading,
                         .fi-ta-header-heading,
                         .fi-fieldset-legend {
                             font-family: "Poppins", "Inter", sans-serif !important;
                             font-weight: 700 !important;
                         }
 
-                        /* ==========================================================
-                           ☀️ LIGHT MODE (CLEAN FULL LIGHT BACKGROUND)
-                           ========================================================== */
-                        
-                        .fi-main, .fi-sidebar { 
-                            background-color: #f8fafc !important; 
+                        /* ── Layout backgrounds ── */
+                        html, body,
+                        .fi-main, .fi-sidebar,
+                        .dark .fi-main, .dark .fi-sidebar,
+                        .dark .fi-topbar {
+                            background-color: #f8fafc !important;
                             background-image: none !important;
+                            color: #1e293b !important;
                         }
 
+                        /* ── Fix Content Cut-off behind Footer ── */
+                        .fi-main {
+                            /* यह पैडिंग कंटेंट को फुटर के ऊपर रखेगी ताकि कुछ कटे नहीं */
+                            padding-bottom: 5rem !important; 
+                        }
+
+                        /* ── Sidebar adjustments ── */
+                        .fi-sidebar-nav {
+                            background-color: #ffffff !important;
+                            border-right: none !important;
+                            box-shadow: 2px 0 8px rgba(42,71,149,0.08) !important;
+                        }
+
+                        /* ── Topbar styling ── */
                         .fi-topbar {
                             background-color: #ffffff !important;
-                           
+                            
                         }
 
-                        .fi-wi-stats-overview-stat, .fi-section, .fi-ta-record, .fi-wi-chart {
+                        /* ── Cards / sections / stats ── */
+                        .fi-wi-stats-overview-stat,
+                        .fi-section,
+                        .fi-ta-record,
+                        .fi-wi-chart {
                             background-color: #ffffff !important;
                             border: 1px solid #e2e8f0 !important;
-                            box-shadow: 0 1px 3px #F47D20 !important;
+                            box-shadow: 0 1px 3px rgba(241,107,63,0.18) !important;
                             border-radius: 0.75rem !important;
+                            color: #1e293b !important;
                         }
 
-                        /* ==========================================================
-                           🚀 SIDEBAR LABELS (CLEAN BRANDING)
-                           ========================================================== */
-                        
+                        /* ── Sidebar items ── */
                         .fi-sidebar-item {
                             background-color: transparent !important;
-                            margin-bottom: 0.25rem !important;
-                            margin-left: 0.75rem !important;
-                            margin-right: 0.75rem !important;
+                            margin: 0.15rem 0.6rem !important;
                             border-radius: 0.5rem !important;
                             transition: all 0.2s ease !important;
                         }
-
-                        /* Hover Effect - Light Orange tint */
                         .fi-sidebar-item:hover {
-                            background-color: rgba(32, 127, 244, 0.1) !important; /* Orange tint on hover */
+                            background-color: rgba(254,154,84,0.15) !important;
                             transform: translateX(3px) !important;
                         }
-
-                        /* ACTIVE ITEM - Fully Orange #F47D20 */
                         .fi-sidebar-item-active {
-                            background-color: #F47D20 !important;
-                            box-shadow: 0 4px 10px rgba(244, 125, 32, 0.3) !important;
+                            background: linear-gradient(135deg, #2a4795, #456aba) !important;
+                            box-shadow: 0 4px 12px rgba(42,71,149,0.28) !important;
                         }
-
-                        .fi-sidebar-item-active .fi-sidebar-item-label,
-                        .fi-sidebar-item-active .fi-sidebar-item-icon {
-                            color: #3B82F6 !important; /* White text on active orange */
-                        }
-
-                        /* Non-active Icon Color - Orange Branding */
-                        .fi-sidebar-item:not(.fi-sidebar-item-active) .fi-sidebar-item-icon {
-                            color: #F47D20 !important;
-                        }
-
+                        .fi-sidebar-item-active .fi-sidebar-item-label { color: #fe9a54 !important; }
+                        .fi-sidebar-item-active .fi-sidebar-item-icon { color: #456aba !important; }
+                        .fi-sidebar-item:not(.fi-sidebar-item-active) .fi-sidebar-item-icon { color: #f16b3f !important; }
+                        .fi-sidebar-item:not(.fi-sidebar-item-active) .fi-sidebar-item-label { color: #2a4795 !important; }
+                        
                         .fi-sidebar-item-label {
                             font-family: "Poppins", sans-serif !important;
-                            font-size: 0.95rem !important;
+                            font-size: 0.92rem !important;
                             font-weight: 600 !important;
                         }
 
-                        /* ==========================================================
-                           🌙 DARK MODE 
-                           ========================================================== */
-                        .dark .fi-main, .dark .fi-sidebar, .dark .fi-topbar { 
-                            background-color: #0C1136 !important; 
-                            background-image: none !important;
+                        /* ── Navigation group headings ── */
+                        .fi-sidebar-group-label {
+                            color: #f16b3f !important;
+                            font-family: "Poppins", sans-serif !important;
+                            font-weight: 700 !important;
+                            font-size: 0.75rem !important;
+                            letter-spacing: 0.08em !important;
+                            text-transform: uppercase !important;
                         }
 
-                        .dark .fi-wi-stats-overview-stat, .dark .fi-section, .dark .fi-ta-record {
-                            background-color: rgba(255, 255, 255, 0.03) !important;
-                            border: 1px solid rgba(255, 255, 255, 0.05) !important;
-                            backdrop-filter: blur(10px);
-                        }
-
-                        .dark .fi-sidebar-item-active {
-                            background-color: #F47D20 !important;
+                        /* ── Primary buttons ── */
+                        .fi-btn-primary {
+                            background: linear-gradient(135deg, #f16b3f, #fe9a54) !important;
                             border: none !important;
-                        }
-                        
-                        .dark .fi-sidebar-item-active .fi-sidebar-item-label {
+                            box-shadow: 0 4px 12px rgba(241,107,63,0.30) !important;
                             color: #fff !important;
                         }
+                        .fi-btn-primary:hover { background: linear-gradient(135deg, #d45a30, #f16b3f) !important; }
+
+                        /* ── Badges / tags ── */
+                        .fi-badge {
+                            background-color: rgba(254,154,84,0.18) !important;
+                            color: #f16b3f !important;
+                            border: 1px solid rgba(241,107,63,0.25) !important;
+                        }
+
+                        /* ── Table header ── */
+                        .fi-ta-header-cell {
+                            background-color: #eef2ff !important;
+                            color: #2a4795 !important;
+                            font-family: "Poppins", sans-serif !important;
+                            font-weight: 600 !important;
+                        }
+
+                        /* ── Inputs ── */
+                        .fi-input-wrapper {
+                            border-color: rgba(241,107,63,0.35) !important;
+                            border-radius: 0.6rem !important;
+                        }
+                        .fi-input-wrapper:focus-within {
+                            border-color: #f16b3f !important;
+                            box-shadow: 0 0 0 3px rgba(241,107,63,0.18) !important;
+                        }
+
+                        /* ── FIXED Footer ── */
+                        .fi-footer-custom {
+                            position: fixed !important;
+                            bottom: 0 !important;
+                            left: 0 !important;
+                            right: 0 !important;
+                            width: 100vw !important;
+                            z-index: 99999 !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: space-between !important;
+                            flex-wrap: wrap !important;
+                            gap: 0.15rem !important;
+                            padding: 0.6rem 2rem !important; /* Slightly more vertical padding */
+                            background: linear-gradient(90deg, #2a4795 0%, #456aba 100%) !important;
+                            color: #ffffff !important;
+                            border-top: 2px solid #fe9a54 !important;
+                            box-shadow: 0 -3px 14px rgba(42,71,149,0.22) !important;
+                        }
+                        .fi-footer-custom .footer-tagline {
+                            font-family: "Lora", "Times New Roman", serif !important;
+                            font-size: 0.88rem !important;
+                            font-weight: 600 !important;
+                            letter-spacing: 0.02em !important;
+                            white-space: nowrap !important;
+                            color: #ffffff !important;
+                        }
+                        .fi-footer-custom .footer-powered {
+                            font-family: "Inter", sans-serif !important;
+                            font-size: 0.78rem !important;
+                            font-weight: 500 !important;
+                            white-space: nowrap !important;
+                            color: rgba(255,255,255,0.82) !important;
+                        }
+                        @media (max-width: 640px) {
+                            .fi-footer-custom {
+                                flex-direction: column !important;
+                                align-items: center !important;
+                                justify-content: center !important;
+                                text-align: center !important;
+                                padding: 0.5rem 1rem !important;
+                                gap: 0.1rem !important;
+                            }
+                        }
                     </style>
+                ')
+            )
+
+            // ── FOOTER ───────────────────────────────────────────────────
+            ->renderHook(
+                PanelsRenderHook::FOOTER,
+                fn(): string => Blade::render('
+                    <div class="fi-footer-custom">
+                        <span class="footer-tagline">&ldquo;Sathi Of Your Food Journey&rdquo; &mdash; Ann Sathi.</span>
+                        <span class="footer-powered">Powerd By - Techstrota</span>
+                    </div>
                 ')
             );
     }

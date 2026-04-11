@@ -135,28 +135,132 @@ class RestaurantResource extends Resource
      |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
+        $bgImageUrl = asset('images/bg.png');
+
         return $table
             ->heading(new HtmlString('
                 <style>
-                    /* Make the entire table wrapper transparent */
+                    /* --- 🌟 MAKE FILAMENT WRAPPERS TRANSPARENT --- */
+                    html, body, .fi-layout, .fi-main, .fi-page {
+                        background-color: transparent !important;
+                        background: transparent !important;
+                    }
+
+                    /* --- 🌟 BACKGROUND IMAGE WITH 0.15 OPACITY --- */
+                    body::before {
+                        content: "";
+                        position: fixed;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background-image: url("' . $bgImageUrl . '") !important;
+                        background-size: cover !important;
+                        background-position: center !important;
+                        background-attachment: fixed !important;
+                        opacity: 0.15 !important;
+                        z-index: -999 !important;
+                        pointer-events: none;
+                    }
+
+                    /* --- 🎨 TABLE CONTAINER (GLASS + BLACK BORDER) --- */
                     .fi-ta-ctn {
-                        background-color: transparent !important;
-                        box-shadow: none !important;
-                        border: 1px solid rgba(156, 163, 175, 0.2) !important;
+                        background: rgba(255, 255, 255, 0.45) !important;
+                        backdrop-filter: blur(16px) saturate(140%) !important;
+                        -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+                        border: 1.5px solid #000000 !important; /* BLACK BORDER */
+                        border-radius: 1.25rem !important;
+                        box-shadow: 0 8px 32px rgba(42, 71, 149, 0.08) !important;
+                        overflow: hidden !important;
+                        color: #000000 !important;
                     }
-                    /* Headers, Toolbars, Footers */
-                    .fi-ta-header-toolbar, .fi-ta-footer, .fi-ta-content, .fi-ta-table thead, .fi-ta-table th {
-                        background-color: transparent !important;
-                        border-color: rgba(156, 163, 175, 0.2) !important;
+
+                    /* --- TABLE HEADER --- */
+                    .fi-ta-header-ctn {
+                        background: rgba(255, 255, 255, 0.2) !important;
+                        border-bottom: 1.5px solid #000000 !important; /* Inner black separator */
                     }
-                    /* Individual Rows */
+                    
+                    .fi-ta-header-cell {
+                        background-color: transparent !important;
+                    }
+
+                    .fi-ta-header-cell-label {
+                        color: #2a4795 !important; /* BRAND BLUE */
+                        font-weight: 800 !important;
+                        text-transform: uppercase !important;
+                        letter-spacing: 0.05em !important;
+                    }
+
+                    /* --- TABLE ROWS (TEXT COLORS) --- */
+                    .fi-ta-cell-content, 
+                    .fi-ta-text-item-label,
+                    .fi-ta-text-item-description {
+                        color: #0f172a !important; /* Dark Slate Text */
+                        font-family: "Inter", sans-serif !important;
+                    }
+
                     .fi-ta-record {
-                        background-color: transparent !important;
-                        border-bottom: 1px solid rgba(156, 163, 175, 0.2) !important;
-                        transition: background-color 0.2s ease;
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+                        background: transparent !important;
+                        transition: all 0.2s ease !important;
                     }
-                    .fi-ta-record:hover {
-                        background-color: rgba(234, 88, 12, 0.05) !important; /* Slight orange tint on hover */
+
+                    /* --- 🔄 ALTERNATING ROW HOVER (BLUE & ORANGE) --- */
+                    .fi-ta-record:nth-child(odd):hover {
+                        background-color: rgba(42, 71, 149, 0.08) !important; /* Blue Tint */
+                    }
+                    .fi-ta-record:nth-child(even):hover {
+                        background-color: rgba(241, 107, 63, 0.08) !important; /* Orange Tint */
+                    }
+
+                    /* --- TABLE PAGINATION / FOOTER --- */
+                    .fi-ta-content + div {
+                        background: rgba(255, 255, 255, 0.2) !important;
+                        border-top: 1.5px solid #000000 !important; /* Black separator for footer */
+                    }
+
+                    /* --- SEARCH INPUT STYLING --- */
+                    .fi-input-wrapper {
+                        background-color: rgba(255, 255, 255, 0.5) !important;
+                        border: 1.5px solid #2a4795 !important; /* Blue border */
+                        border-radius: 0.75rem !important;
+                    }
+                    .fi-input-wrapper:focus-within {
+                        border-color: #f16b3f !important; /* Orange border on focus */
+                        box-shadow: 0 0 0 3px rgba(241, 107, 63, 0.2) !important;
+                    }
+
+                    /* --- 🌙 DARK THEME OVERRIDES --- */
+                    .dark .fi-ta-ctn {
+                        background: rgba(15, 15, 20, 0.7) !important;
+                        border: 1.5px solid #000000 !important;
+                    }
+                    .dark .fi-ta-header-ctn {
+                        background: rgba(0, 0, 0, 0.3) !important;
+                        border-color: #000000 !important;
+                    }
+                    .dark .fi-ta-header-cell-label {
+                        color: #456aba !important; /* Light Blue */
+                    }
+                    .dark .fi-ta-cell-content, 
+                    .dark .fi-ta-text-item-label,
+                    .dark .fi-ta-text-item-description {
+                        color: #f8fafc !important; /* White Text */
+                    }
+                    .dark .fi-ta-record {
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+                    }
+                    .dark .fi-ta-record:nth-child(odd):hover {
+                        background-color: rgba(69, 106, 186, 0.15) !important; /* Blue Tint Dark */
+                    }
+                    .dark .fi-ta-record:nth-child(even):hover {
+                        background-color: rgba(241, 107, 63, 0.15) !important; /* Orange Tint Dark */
+                    }
+                    .dark .fi-ta-content + div {
+                        background: rgba(0, 0, 0, 0.3) !important;
+                        border-color: #000000 !important;
+                    }
+                    .dark .fi-input-wrapper {
+                        background-color: rgba(0, 0, 0, 0.5) !important;
+                        border-color: #456aba !important;
                     }
                 </style>
             '))
@@ -177,8 +281,7 @@ class RestaurantResource extends Resource
                     ->copyable()
                     ->color('gray')
                     ->toggleable(),
-                    
-                // 👇 NEW: Display UPI ID in Table 👇
+
                 Tables\Columns\TextColumn::make('upi_id')
                     ->label('UPI ID')
                     ->searchable()
@@ -213,15 +316,27 @@ class RestaurantResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
+                // 👇 BLUE EDIT BUTTON (WITH ORANGE HOVER) 👇
                 Tables\Actions\EditAction::make()
-                    ->color('warning')
-                    ->button()
-                    ->outlined(),
+                    ->label('')
+                    ->icon('heroicon-o-pencil-square')
+                    ->color('primary')
+                    ->extraAttributes([
+                        'style' => 'color: #456aba; transition: color 0.2s; display: inline-flex; padding: 6px; background: rgba(255,255,255,0.5); border-radius: 6px; border: 1.5px solid #000000;',
+                        'onmouseover' => "this.style.color='#f16b3f'",
+                        'onmouseout' => "this.style.color='#456aba'",
+                    ]),
 
+                // 👇 RED DELETE BUTTON (TO MATCH PREMIUM STYLE) 👇
                 Tables\Actions\DeleteAction::make()
+                    ->label('')
+                    ->icon('heroicon-o-trash')
                     ->color('danger')
-                    ->button()
-                    ->outlined(),
+                    ->extraAttributes([
+                        'style' => 'color: #ef4444; transition: color 0.2s; display: inline-flex; padding: 6px; background: rgba(255,255,255,0.5); border-radius: 6px; border: 1.5px solid #000000;',
+                        'onmouseover' => "this.style.color='#b91c1c'",
+                        'onmouseout' => "this.style.color='#ef4444'",
+                    ]),
             ])
             ->bulkActions([]);
     }

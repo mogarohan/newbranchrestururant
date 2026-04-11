@@ -1,12 +1,33 @@
 <x-filament-panels::page>
     <style>
-        /* 🎨 ULTRA-PREMIUM POS UI (EXACT IMAGE MATCH & STRICT THEME) */
+        /* --- 🌟 MAKE FILAMENT WRAPPERS TRANSPARENT --- */
+        html, body, .fi-layout, .fi-main, .fi-page {
+            background-color: transparent !important;
+            background: transparent !important;
+        }
+
+        /* --- 🌟 BACKGROUND IMAGE WITH 0.15 OPACITY --- */
+        .custom-page-bg {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image: url("/images/bg.png") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+            opacity: 0.15 !important;
+            z-index: -999 !important;
+            pointer-events: none;
+        }
+
+        /* 🎨 ULTRA-PREMIUM POS UI (GLASSMORPHISM & BLACK BORDER) */
         .pos-container {
             width: 100%;
             font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+            position: relative;
+            z-index: 10;
         }
 
-        /* 📐 Main Layout Grid (FIXED OVERLAP ISSUE) */
+        /* 📐 Main Layout Grid */
         .pos-layout {
             display: flex;
             flex-direction: column;
@@ -16,7 +37,6 @@
         @media (min-width: 1024px) {
             .pos-layout {
                 display: grid;
-                /* minmax(0, 1fr) ensures left column never pushes right column out of bounds */
                 grid-template-columns: minmax(0, 1fr) 320px;
                 align-items: flex-start;
             }
@@ -30,58 +50,45 @@
 
         /* 🌙 THEME ADAPTIVE VARIABLES */
         .pos-scope {
-            /* Light Theme Basics */
-            --surface-card: #ffffff;
-            --surface-bg: #f8fafc;
-            --border-light: #e5e7eb;
-            --border-strong: #d1d5db;
-            --text-primary: #111827;
-            --text-secondary: #374151;
-            --text-muted: #6b7280;
+            /* Text Colors */
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
 
             /* Status & Brand Colors */
-            --brand-blue: #3B82F6;
-            --brand-blue-light: rgba(59, 130, 246, 0.12);
+            --brand-blue: #2a4795;
+            --brand-blue-light: rgba(42, 71, 149, 0.15);
 
-            --brand-orange: #F47D20;
-            --brand-orange-light: rgba(244, 125, 32, 0.12);
+            --brand-orange: #f16b3f;
+            --brand-orange-light: rgba(241, 107, 63, 0.15);
 
             --accent-green: #10b981;
-            /* Available */
-            --accent-green-light: rgba(16, 185, 129, 0.1);
+            --accent-green-light: rgba(16, 185, 129, 0.15);
 
             --accent-pink: #f395a3;
-            /* Reserved (Baby Pink) */
-            --accent-pink-light: rgba(255, 182, 193, 0.3);
-            --accent-pink-light-1: rgba(255, 182, 193, 1);
+            --accent-pink-light: rgba(243, 149, 163, 0.15);
             --accent-red: #ef4444;
 
-            --card-radius: 12px;
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.3);
+            /* Glassmorphism Configuration */
+            --glass-bg: rgba(255, 255, 255, 0.45);
+            --glass-border: #000000; /* BLACK BORDER */
+            --glass-shadow: 0 8px 32px rgba(42, 71, 149, 0.08);
+            --glass-blur: blur(16px) saturate(140%);
+            --card-radius: 1.25rem;
         }
 
-        /* 👇 DARK THEME 👇 */
         .dark .pos-scope {
-            --surface-card: #0f172a;
-            --surface-bg: transparent;
-            --border-light: rgba(255, 255, 255, 0.08);
-            --border-strong: rgba(255, 255, 255, 0.15);
             --text-primary: #f9fafb;
             --text-secondary: #e5e7eb;
             --text-muted: #9ca3af;
-
-            --brand-blue-light: rgba(59, 130, 246, 0.15);
-            --brand-orange-light: rgba(244, 125, 32, 0.15);
-            --accent-green-light: rgba(16, 185, 129, 0.15);
-            --accent-pink-light: rgba(255, 182, 193, 0.15);
-            --accent-pink-light-1: rgba(255, 182, 193, 1);
-            --shadow-sm: none;
-            --shadow-md: 0 8px 25px rgba(0, 0, 0, 0.2);
+            --glass-bg: rgba(15, 15, 20, 0.7);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --brand-blue-light: rgba(69, 106, 186, 0.2);
+            --brand-orange-light: rgba(241, 107, 63, 0.2);
         }
 
         /* -------------------------------------------
-           📊 TOP STATS GRID (EXACT SCREENSHOT LAYOUT)
+           📊 TOP STATS GRID
         ----------------------------------------------*/
         .pos-stats {
             display: grid;
@@ -97,20 +104,34 @@
         }
 
         .stat-card-h {
-            background-color: var(--surface-card);
-            border: 1px solid var(--border-light);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1.5px solid var(--glass-border); /* BLACK BORDER */
             border-radius: var(--card-radius);
             padding: 1rem;
-            box-shadow: var(--shadow-sm);
+            box-shadow: var(--glass-shadow);
             display: flex;
             align-items: center;
             gap: 1rem;
-            transition: transform 0.2s ease;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .stat-card-h:hover {
-            transform: translateY(-2px);
+        .stat-card-h::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
         }
+        .dark .stat-card-h::before { background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.02)); }
+
+        .stat-card-h:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 40px rgba(42, 71, 149, 0.15);
+        }
+        .dark .stat-card-h:hover { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8); }
 
         .stat-icon-wrapper {
             width: 56px;
@@ -120,6 +141,7 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            backdrop-filter: blur(4px);
         }
 
         .stat-icon-wrapper svg {
@@ -131,6 +153,7 @@
             display: flex;
             flex-direction: column;
             justify-content: center;
+            z-index: 2;
         }
 
         .stat-label {
@@ -154,16 +177,20 @@
         .theme-blue .stat-icon-wrapper {
             background-color: var(--brand-blue-light);
             color: var(--brand-blue);
+            border: 1px solid rgba(42, 71, 149, 0.2);
         }
+        .theme-blue .stat-value { color: var(--brand-blue); }
 
         .theme-orange .stat-icon-wrapper {
             background-color: var(--brand-orange-light);
             color: var(--brand-orange);
+            border: 1px solid rgba(241, 107, 63, 0.2);
         }
+        .theme-orange .stat-value { color: var(--brand-orange); }
 
 
         /* -------------------------------------------
-           🪑 TABLE GRID (EXACT IMAGE DESIGN)
+           🪑 TABLE GRID (GLASS & BLACK BORDER)
         ----------------------------------------------*/
         .pos-table-grid {
             display: grid;
@@ -172,8 +199,11 @@
         }
 
         .ts-table {
-            background-color: var(--surface-card);
-            border-radius: 12px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1.5px solid var(--glass-border) !important; /* BLACK BORDER */
+            border-radius: var(--card-radius);
             padding: 1.25rem;
             display: flex;
             flex-direction: column;
@@ -181,46 +211,36 @@
             position: relative;
             cursor: pointer;
             transition: all 0.2s ease;
-            box-shadow: var(--shadow-sm);
+            box-shadow: var(--glass-shadow);
             overflow: hidden;
-            border: 2px solid var(--border-light);
         }
+
+        .ts-table::before {
+            content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+        }
+        .dark .ts-table::before { background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.02)); }
 
         .ts-table:hover {
             transform: translateY(-4px);
-            box-shadow: var(--shadow-md);
+            box-shadow: 0 12px 40px rgba(42, 71, 149, 0.15);
         }
+        .dark .ts-table:hover { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8); }
 
-        /* 🎨 TABLE STATUS DESIGNS (FULL BORDER) */
-        .ts-table.available {
-            border-color: var(--accent-green);
-            border-style: dashed;
-        }
-
-        .ts-table.occupied {
-            border-color: var(--brand-orange);
-            border-style: solid;
-        }
-
-        .ts-table.reserved {
-            border-color: var(--accent-pink);
-            border-style: solid;
-        }
-
-        .ts-table.selected {
-            border-width: 3px;
-            border-color: var(--text-primary) !important;
-        }
-
-        .dark .ts-table.selected {
-            border-color: white !important;
-        }
+        /* 🎨 TABLE STATUS DESIGNS (THICK TOP BORDER FOR STATUS) */
+        .ts-table.available { border-top: 4px dashed var(--accent-green) !important; }
+        .ts-table.occupied { border-top: 4px solid var(--brand-orange) !important; }
+        .ts-table.reserved { border-top: 4px solid var(--accent-pink) !important; }
+        .ts-table.selected { border-color: var(--brand-blue) !important; border-width: 2.5px !important; box-shadow: 0 0 0 4px var(--brand-blue-light) !important; }
 
         .ts-header {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
             margin-bottom: 1.25rem;
+            position: relative; z-index: 2;
         }
 
         .ts-title {
@@ -247,24 +267,25 @@
             border-radius: 12px;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            backdrop-filter: blur(4px);
         }
 
         .badge-available {
             background-color: var(--accent-green-light);
             color: var(--accent-green);
-            border: 1px solid rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .badge-occupied {
             background-color: var(--brand-orange-light);
             color: var(--brand-orange);
-            border: 1px solid rgba(244, 125, 32, 0.2);
+            border: 1px solid rgba(241, 107, 63, 0.3);
         }
 
         .badge-reserved {
             background-color: var(--accent-pink-light);
             color: var(--accent-pink);
-            border: 1px solid rgba(255, 182, 193, 100);
+            border: 1px solid rgba(243, 149, 163, 0.5);
         }
 
         /* Body Info */
@@ -273,6 +294,7 @@
             align-items: center;
             gap: 8px;
             margin-bottom: 0.75rem;
+            position: relative; z-index: 2;
         }
 
         .ts-info-icon {
@@ -298,17 +320,21 @@
             text-transform: uppercase;
             transition: all 0.2s;
             cursor: pointer;
+            position: relative; z-index: 2;
         }
 
         .ts-btn-reserve.make {
-            background-color: transparent;
+            background-color: rgba(255,255,255,0.2);
             color: var(--text-primary);
             border: 1px solid var(--border-strong);
+            backdrop-filter: blur(4px);
         }
+        .dark .ts-btn-reserve.make { background-color: rgba(0,0,0,0.2); }
 
         .ts-btn-reserve.make:hover {
-            background-color: var(--surface-bg);
-            border-color: var(--text-primary);
+            background-color: var(--brand-blue);
+            color: white;
+            border-color: var(--brand-blue);
         }
 
         .ts-btn-reserve.cancel {
@@ -326,7 +352,7 @@
             margin-top: 8px;
             width: 100%;
             padding: 0.5rem;
-            background-color: transparent;
+            background-color: var(--brand-orange-light);
             color: var(--brand-orange);
             border: 1px solid var(--brand-orange);
             border-radius: 8px;
@@ -336,6 +362,7 @@
             text-transform: uppercase;
             transition: all 0.2s;
             cursor: pointer;
+            position: relative; z-index: 2;
         }
 
         .ts-btn-clean:hover {
@@ -344,7 +371,7 @@
         }
 
         /* -------------------------------------------
-           🧾 RECEIPT SIDEBAR (FIXED SIZING)
+           🧾 RECEIPT SIDEBAR (GLASSMORPHISM)
         ----------------------------------------------*/
         .pos-receipt {
             height: calc(100vh - 6.5rem);
@@ -352,19 +379,22 @@
             top: 5.5rem;
             display: flex;
             flex-direction: column;
-            background-color: var(--surface-card);
-            border: 1px solid var(--border-light);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1.5px solid var(--glass-border); /* BLACK BORDER */
             border-radius: var(--card-radius);
-            box-shadow: var(--shadow-md);
+            box-shadow: var(--glass-shadow);
             overflow: hidden;
             width: 100%;
         }
 
         .pos-receipt-header {
             padding: 1.5rem;
-            border-bottom: 2px dashed var(--border-strong);
-            background-color: var(--surface-bg);
+            border-bottom: 1.5px dashed rgba(0,0,0,0.2);
+            background-color: rgba(255, 255, 255, 0.2);
         }
+        .dark .pos-receipt-header { border-color: rgba(255,255,255,0.2); background-color: rgba(0, 0, 0, 0.2); }
 
         .pos-receipt-body {
             flex-grow: 1;
@@ -374,43 +404,58 @@
 
         .pos-receipt-footer {
             padding: 1.5rem;
-            background-color: var(--surface-bg);
-            border-top: 2px dashed var(--border-strong);
+            background-color: rgba(255, 255, 255, 0.2);
+            border-top: 1.5px dashed rgba(0,0,0,0.2);
         }
+        .dark .pos-receipt-footer { border-color: rgba(255,255,255,0.2); background-color: rgba(0, 0, 0, 0.2); }
 
         /* SCROLLBAR */
-        .pos-scroll::-webkit-scrollbar {
-            width: 4px;
-            height: 4px;
-        }
-
-        .pos-scroll::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .pos-scroll::-webkit-scrollbar-thumb {
-            background: var(--border-strong);
-            border-radius: 10px;
-        }
+        .pos-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+        .pos-scroll::-webkit-scrollbar-track { background: transparent; }
+        .pos-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
+        .dark .pos-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
         
         /* CUSTOMER LIST CSS */
         .customer-pill {
             display: inline-flex;
             align-items: center;
-            background: var(--surface-card);
-            border: 1px solid var(--border-strong);
+            background: rgba(255,255,255,0.5);
+            border: 1px solid rgba(0,0,0,0.2);
             padding: 4px 10px;
             border-radius: 20px;
             font-size: 0.75rem;
             font-weight: 700;
             color: var(--text-primary);
             margin: 2px;
+            backdrop-filter: blur(4px);
         }
+        .dark .customer-pill { background: rgba(0,0,0,0.5); border-color: rgba(255,255,255,0.2); }
+        
         .customer-pill.host {
             border-color: var(--brand-orange);
             background: var(--brand-orange-light);
+            color: var(--brand-orange);
+        }
+        .dark .customer-pill.host { color: #ffffff; }
+
+        .urgent-strip {
+            border: 1.5px solid var(--glass-border); 
+            background: rgba(239, 68, 68, 0.15); 
+            backdrop-filter: var(--glass-blur);
+            padding: 1.25rem; 
+            border-radius: var(--card-radius);
+            margin-bottom: 1.5rem;
+            box-shadow: var(--glass-shadow);
+        }
+        .urgent-card {
+            border: 1.5px solid var(--glass-border); 
+            border-top: 4px solid var(--accent-red);
+            background: var(--glass-bg); 
+            border-radius: 12px;
         }
     </style>
+
+    <div class="custom-page-bg"></div>
 
     <div class="pos-scope pos-container">
 
@@ -455,15 +500,15 @@
 
                 {{-- 2. URGENT ACTION STRIP (KITCHEN TICKETS) --}}
                 @if($incomingOrders->count() > 0)
-                    <div class="mb-6" style="border: 2px solid var(--accent-red); background: rgba(239, 68, 68, 0.05); padding: 1.25rem; border-radius: 12px;">
+                    <div class="urgent-strip">
                         <h2 style="color: var(--accent-red); font-size: 0.9rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
                             <x-heroicon-s-bell-alert style="width: 18px;" class="animate-bounce" /> Kitchen Action Required ({{ $incomingOrders->count() }})
                         </h2>
 
                         <div class="pos-scroll flex gap-4 overflow-x-auto pb-2">
                             @foreach($incomingOrders as $order)
-                                <div class="min-w-[280px] flex-shrink-0 flex flex-col p-4 shadow-sm" style="border-left: 6px solid var(--accent-red); background: var(--surface-card); border-radius: 8px;">
-                                    <div class="flex justify-between items-start border-b pb-3 mb-3" style="border-color: var(--border-light);">
+                                <div class="urgent-card min-w-[280px] flex-shrink-0 flex flex-col p-4 shadow-sm">
+                                    <div class="flex justify-between items-start border-b pb-3 mb-3" style="border-color: rgba(0,0,0,0.1);">
                                         <div>
                                             <span style="color: var(--text-primary); font-weight: 900; font-size: 1.1rem; display: block; line-height: 1;">Table {{ $order->restaurantTable->table_number ?? 'TW' }}</span>
                                             <span style="color: var(--text-muted); font-size: 0.75rem; font-weight: 600; margin-top: 4px; display: block;">Order #{{ $order->id }} • {{ $order->customer_name ?? 'Guest' }}</span>
@@ -477,12 +522,12 @@
                                     <div class="flex flex-col gap-2 flex-grow mb-4">
                                         @foreach($order->items as $item)
                                             <div class="flex items-start gap-2">
-                                                <span style="background: var(--surface-bg); border: 1px solid var(--border-strong); color: var(--text-muted); font-size: 0.6rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; margin-top: 2px;">
+                                                <span style="background: rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.1); color: var(--text-muted); font-size: 0.6rem; font-weight: 900; padding: 2px 6px; border-radius: 4px; margin-top: 2px;">
                                                     {{ strtoupper($item->menuItem?->category?->name ?? 'GEN') }}
                                                 </span>
                                                 <div>
                                                     <span style="color: var(--text-primary); font-size: 0.85rem; font-weight: 700;">
-                                                        <strong>{{ $item->quantity }}x</strong> {{ $item->menuItem->name ?? $item->item_name }}
+                                                        <strong style="color: var(--brand-blue);">{{ $item->quantity }}x</strong> {{ $item->menuItem->name ?? $item->item_name }}
                                                     </span>
                                                 </div>
                                             </div>
@@ -490,10 +535,10 @@
                                     </div>
 
                                     <div class="flex gap-2 mt-auto">
-                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: var(--brand-orange); color: white; border: none; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
+                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: linear-gradient(135deg, var(--brand-orange), var(--brand-orange-light)); color: white; border: 1px solid #000000; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
                                             Accept & Cook
                                         </button>
-                                        <button wire:click="updateStatus({{ $order->id }}, 'cancelled')" onclick="confirm('Reject this order?')" style="background: var(--surface-bg); color: var(--text-primary); border: 1px solid var(--border-strong); padding: 0.6rem 0.8rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem;">
+                                        <button wire:click="updateStatus({{ $order->id }}, 'cancelled')" onclick="confirm('Reject this order?')" style="background: rgba(255,255,255,0.5); color: var(--text-primary); border: 1px solid #000000; padding: 0.6rem 0.8rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem;">
                                             Reject
                                         </button>
                                     </div>
@@ -507,7 +552,7 @@
                 {{-- 3. FLOOR PLAN GRID --}}
                 <div>
                     <div class="flex flex-col md:flex-row justify-center md:items-center mb-6 pb-2 gap-4">
-                        <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--surface-card); border: 1px solid var(--border-light);">
+                        <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--glass-bg); border: 1.5px solid #000000; backdrop-filter: var(--glass-blur);">
                             <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
                                 <div class="w-3 h-3 rounded-full" style="background: var(--accent-green);"></div> Available
                             </span>
@@ -565,21 +610,21 @@
                                             <x-heroicon-s-currency-rupee class="ts-info-icon" />
                                             <span class="ts-info-text">₹{{ number_format($table->total_bill, 2) }}</span>
                                         </div>
-                                        
+
                                         <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
                                             Clean Table
                                         </button>
-                                        
+
                                     @elseif($isReserved)
                                         <div class="ts-info-row justify-center mt-2 mb-3">
-                                            <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink-light-1);" />
+                                            <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink);" />
                                         </div>
                                         <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve cancel">
                                             Cancel Reserve
                                         </button>
                                     @else
                                         <div class="ts-info-row justify-center mt-2 mb-3">
-                                            <x-heroicon-s-check-circle class="w-10 h-10" style="color: var(--border-strong);" />
+                                            <x-heroicon-s-check-circle class="w-10 h-10" style="color: rgba(0,0,0,0.3);" />
                                         </div>
                                         <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve make">
                                             Reserve Table
@@ -598,10 +643,9 @@
             <div class="w-full lg:w-auto">
                 @if($selectedTableData && $activeDinersList->count() > 0)
                     @php
-                        // 👇 FIX: Use the raw Eloquent collection from the Controller
                         $groupedOrders = $tableOrders->groupBy('status');
-                        
-                        // Calculate total bill for valid statuses (placed, accepted, preparing, ready, served)
+
+                        // Calculate total bill for valid statuses
                         $validOrdersForBill = $tableOrders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
                         $runningTotal = $validOrdersForBill->sum('total_amount');
                     @endphp
@@ -611,7 +655,7 @@
                             <div class="flex justify-between items-start">
                                 <div>
                                     <span style="color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em;">CURRENTLY VIEWING</span>
-                                    <h3 style="color: var(--text-primary); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
+                                    <h3 style="color: var(--brand-blue); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
                                         Table {{ $selectedTableData->table_number }}
                                     </h3>
                                 </div>
@@ -625,9 +669,9 @@
                         </div>
 
                         <div class="pos-receipt-body pos-scroll">
-                            
-                            {{-- 👇 NEW: Customer Pill List 👇 --}}
-                            <div style="background: var(--surface-bg); border-radius: 8px; padding: 12px; margin-bottom: 1.5rem; border: 1px solid var(--border-light);">
+
+                            {{-- 👇 Customer Pill List 👇 --}}
+                            <div style="background: rgba(255,255,255,0.3); border-radius: 8px; padding: 12px; margin-bottom: 1.5rem; border: 1px solid rgba(0,0,0,0.1);">
                                 <div style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">
                                     Active Diners ({{ $activeDinersList->count() }}/{{ $selectedTableData->seating_capacity ?? 4 }})
                                 </div>
@@ -642,79 +686,77 @@
                             </div>
 
                             <div style="text-align: center; margin-bottom: 1.5rem;">
-                                <span style="background: var(--text-primary); color: var(--surface-card); padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">
+                                <span style="background: var(--text-primary); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">
                                     Active Orders
                                 </span>
                             </div>
 
                             <div class="flex flex-col gap-6">
-                                {{-- 👇 FIX: Added 'accepted' and grouped 'cancelled/rejected' together 👇 --}}
                                 @foreach([
-                                    'placed' => 'New / Pending', 
-                                    'accepted' => 'Order Accepted', 
-                                    'preparing' => 'Cooking', 
-                                    'ready' => 'Ready to Serve', 
-                                    'served' => 'Served', 
-                                    'cancelled' => 'Cancelled / Rejected',
-                                    'rejected' => 'Cancelled / Rejected'
-                                ] as $statusKey => $label)
-                                
-                                    @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
-                                        <div>
-                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 2px solid var(--border-light); padding-bottom: 4px;">
-                                                {{ $label }}
-                                            </div>
+                                        'placed' => 'New / Pending',
+                                        'accepted' => 'Order Accepted',
+                                        'preparing' => 'Cooking',
+                                        'ready' => 'Ready to Serve',
+                                        'served' => 'Served',
+                                        'cancelled' => 'Cancelled / Rejected',
+                                        'rejected' => 'Cancelled / Rejected'
+                                    ] as $statusKey => $label)
 
-                                            <div class="flex flex-col gap-4">
-                                                @foreach($groupedOrders[$statusKey] as $order)
-                                                    @php
-                                                        // Using strong ID comparison to correctly tag the host
-                                                        $isHostOrder = $order->qr_session_id === $hostSessionId;
-                                                        $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                    @endphp
-                                                    
-                                                    {{-- Order Container --}}
-                                                    <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(0,0,0,0.02); border: 1px solid var(--border-light); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
-                                                        
-                                                        <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: var(--border-strong);">
-                                                            <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
-                                                            <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
-                                                                {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
-                                                            </span>
-                                                        </div>
+                                        @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
+                                            <div>
+                                                <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
+                                                    {{ $label }}
+                                                </div>
 
-                                                        @if($order->notes && !$isCancelled)
-                                                            <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: rgba(239, 68, 68, 0.05); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
-                                                                Note: {{ $order->notes }}
-                                                            </div>
-                                                        @endif
+                                                <div class="flex flex-col gap-4">
+                                                    @foreach($groupedOrders[$statusKey] as $order)
+                                                        @php
+                                                            $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                            $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                        @endphp
 
-                                                        @foreach($order->items as $item)
-                                                            <div class="flex justify-between items-start mt-1">
-                                                                <div class="pr-4">
-                                                                    <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                        <span style="color: var(--text-muted); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
-                                                                    </span>
-                                                                </div>
-                                                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                    ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                        {{-- Order Container --}}
+                                                        <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+
+                                                            <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
+                                                                <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
+                                                                <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                    {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
                                                                 </span>
                                                             </div>
-                                                        @endforeach
-                                                    </div>
-                                                @endforeach
+
+                                                            @if($order->notes && !$isCancelled)
+                                                                <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
+                                                                    Note: {{ $order->notes }}
+                                                                </div>
+                                                            @endif
+
+                                                            @foreach($order->items as $item)
+                                                                <div class="flex justify-between items-start mt-1">
+                                                                    <div class="pr-4">
+                                                                        <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                            <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
+                                                                        </span>
+                                                                    </div>
+                                                                    <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                        ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                                    </span>
+                                                                </div>
+                                                            @endforeach
+                                                        </div>
+                                                    @endforeach
+                                                </div>
                                             </div>
-                                        </div>
-                                    @endif
+                                        @endif
                                 @endforeach
                             </div>
                         </div>
 
                         {{-- =============================================== --}}
-                        {{-- NEW: IN-DASHBOARD BILLING & PAYMENT CONTROL --}}
+                        {{-- IN-DASHBOARD BILLING & PAYMENT CONTROL --}}
                         {{-- =============================================== --}}
                         <div class="pos-receipt-footer">
-                            
+
                             @if($pendingPayment && $pendingPayment->status === 'paid')
                                 {{-- ALREADY PAID --}}
                                 <div style="background: var(--accent-green-light); border: 1px solid var(--accent-green); padding: 1rem; border-radius: 12px; text-align: center;">
@@ -726,8 +768,8 @@
                             @else
                                 {{-- CALCULATE LIVE PREVIEW TOTALS --}}
                                 @php
-                                    $taxable = max(0, $runningTotal - (float)$discountAmount);
-                                    $liveTax = $taxable * ((float)$taxPercentage / 100);
+                                    $taxable = max(0, $runningTotal - (float) $discountAmount);
+                                    $liveTax = $taxable * ((float) $taxPercentage / 100);
                                     $liveTotal = $taxable + $liveTax;
                                 @endphp
 
@@ -741,15 +783,15 @@
                                     <div class="flex gap-3 mb-4">
                                         <div style="flex: 1;">
                                             <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Discount (₹)</label>
-                                            <input type="number" wire:model.live="discountAmount" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-bg); color: var(--text-primary); font-weight: bold;" placeholder="0">
+                                            <input type="number" wire:model.live="discountAmount" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1.5px solid #000000; background: rgba(255,255,255,0.5); color: var(--text-primary); font-weight: bold;" placeholder="0">
                                         </div>
                                         <div style="flex: 1;">
                                             <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Tax (%)</label>
-                                            <input type="number" wire:model.live="taxPercentage" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-bg); color: var(--text-primary); font-weight: bold;" placeholder="0">
+                                            <input type="number" wire:model.live="taxPercentage" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1.5px solid #000000; background: rgba(255,255,255,0.5); color: var(--text-primary); font-weight: bold;" placeholder="0">
                                         </div>
                                     </div>
 
-                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 2px dashed var(--border-strong);">
+                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
                                         <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
                                         <div style="text-align: right;">
                                             <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($liveTotal, 2) }}</span>
@@ -760,7 +802,7 @@
                                     </div>
 
                                     <button wire:click="sendBillToCustomer"
-                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--brand-blue); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.2s;"
+                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--brand-blue); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid #000000; cursor: pointer; box-shadow: 0 4px 15px rgba(42, 71, 149, 0.3); transition: all 0.2s;"
                                         onmouseover="this.style.transform='translateY(-2px)';"
                                         onmouseout="this.style.transform='none';">
                                         <x-heroicon-s-paper-airplane style="width: 20px; height: 20px;" />
@@ -768,12 +810,12 @@
                                     </button>
                                 @else
                                     {{-- STEP 2: BILL PENDING / CONFIRM PAYMENT --}}
-                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 2px dashed var(--border-strong);">
+                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
                                         <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
                                         <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
                                     </div>
 
-                                    <div style="background: var(--surface-bg); border: 1px solid var(--border-strong); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
+                                    <div style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
                                         <span style="display: block; font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Customer Selected Method</span>
                                         @if($pendingPayment->payment_method === 'pending')
                                             <span class="animate-pulse" style="color: var(--brand-orange); font-weight: 900; font-size: 1.1rem;">Waiting for Customer...</span>
@@ -782,10 +824,9 @@
                                         @endif
                                     </div>
 
-                                    {{-- 👇 NEW: Cancel Bill & Reopen Orders Button 👇 --}}
                                     <button wire:click="cancelPendingBill"
                                         onclick="confirm('Are you sure you want to cancel this bill? The customer will be able to order again.') || event.stopImmediatePropagation()"
-                                        style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: transparent; color: var(--accent-red); padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid var(--accent-red); cursor: pointer; transition: all 0.2s;"
+                                        style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: transparent; color: var(--accent-red); padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid var(--accent-red); cursor: pointer; transition: all 0.2s;"
                                         onmouseover="this.style.backgroundColor='var(--accent-red)'; this.style.color='white';"
                                         onmouseout="this.style.backgroundColor='transparent'; this.style.color='var(--accent-red)';">
                                         <x-heroicon-o-arrow-path style="width: 18px; height: 18px;" />
@@ -793,7 +834,7 @@
                                     </button>
 
                                     <button wire:click="confirmPayment"
-                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--accent-green); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
+                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--accent-green); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid #000000; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
                                         onmouseover="this.style.transform='translateY(-2px)';"
                                         onmouseout="this.style.transform='none';">
                                         <x-heroicon-s-check-circle style="width: 24px; height: 24px;" />
@@ -806,12 +847,12 @@
                 @else
                     @if($this->selectedTableId)
                         @php 
-                            $tableInfo = $tables->firstWhere('id', $this->selectedTableId); 
+                                                $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
                             $isRes = $tableInfo && ($tableInfo->status === 'reserved');
                         @endphp
-                        
-                        <div class="pos-receipt justify-center items-center p-8 text-center" style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
-                            <div style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+
+                        <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
+                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; box-shadow: var(--glass-shadow); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: {{ $isRes ? 'var(--accent-pink)' : 'var(--accent-green)' }};" />
                             </div>
                             <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
@@ -822,8 +863,8 @@
                             </p>
                         </div>
                     @else
-                        <div class="pos-receipt justify-center items-center p-8 text-center" style="background: var(--surface-bg); border: 2px dashed var(--border-strong);">
-                            <div style="background: var(--surface-card); padding: 1.25rem; border-radius: 50%; border: 1px solid var(--border-light); margin-bottom: 1.5rem; box-shadow: var(--shadow-sm); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                        <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
+                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; box-shadow: var(--glass-shadow); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-hand-raised style="width: 40px; height: 40px; color: var(--text-muted);" />
                             </div>
                             <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">

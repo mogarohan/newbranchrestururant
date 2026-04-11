@@ -11,7 +11,6 @@ use Illuminate\Support\HtmlString;
 
 class StaffStatsWidget extends BaseWidget
 {
-    // 👇 FIX: Sirf 'int' return type lagaya aur 5 return kiya
     protected function getColumns(): int
     {
         return 5;
@@ -55,74 +54,116 @@ class StaffStatsWidget extends BaseWidget
 
         $createUrl = UserResource::getUrl('create');
 
-        // CSS INJECTED FOR THE IMAGE EXACT LOOK AND ALTERNATIVE COLORS
+        // --- INJECTED CSS FOR OLD SPACING & SHAPE WITH BLACK BORDER --- //
         $customCss = "
         <style>
-            /* 👇 CARDS KO FORCE KARKE EK HI LINE (5 COLUMNS) MEIN SET KAREGA 👇 */
+            /* 👇 Flexbox layout for exact old spacing and fixed width cards 👇 */
             .fi-wi-stats-overview-stats-ctn {
-                display: grid !important;
-                grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-                gap: 1rem !important; /* Proper spacing between cards */
-                align-items: stretch !important;
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 2rem !important; /* Increased gap for old layout feel */
+                align-items: flex-start !important;
+                justify-content: flex-start !important;
             }
 
-            @media (max-width: 1280px) {
-                .fi-wi-stats-overview-stats-ctn { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+            /* Variables */
+            .sa-scope {
+                --text-main: #0f172a;
+                --text-sub: #475569;
+                
+                --brand-orange-primary: #f16b3f;
+                --brand-orange-light: #fe9a54;
+                --brand-orange-bg: rgba(241, 107, 63, 0.12);
+                --brand-orange-border: rgba(241, 107, 63, 0.25);
+
+                --brand-blue-primary: #2a4795; 
+                --brand-blue-light: #456aba;
+                --brand-blue-bg: rgba(42, 71, 149, 0.12);
+                --brand-blue-border: rgba(42, 71, 149, 0.25);
+
+                --glass-bg: rgba(255, 255, 255, 0.45);
+                --glass-shadow: 0 8px 32px rgba(42, 71, 149, 0.08);
+                --glass-blur: blur(16px) saturate(140%);
             }
 
-            @media (max-width: 768px) {
-                .fi-wi-stats-overview-stats-ctn { grid-template-columns: repeat(1, minmax(0, 1fr)) !important; }
+            /* Dark Mode Variables */
+            .dark .sa-scope {
+                --text-main: #f8fafc;
+                --text-sub: #cbd5e1;
+                --glass-bg: rgba(15, 15, 20, 0.7);
+                --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+                --brand-orange-bg: rgba(241, 107, 63, 0.15);
+                --brand-blue-bg: rgba(69, 106, 186, 0.15);
+                --brand-blue-primary: #456aba;
             }
 
-            /* Light Theme Basics */
+            /* 👇 TALL CARD STYLING WITH BLACK BORDER 👇 */
             .sa-stat-card {
-                background-color: #ffffff !important;
-                border: 1px solid #e2e8f0 !important;
-                border-radius: 1rem !important;
+                background: var(--glass-bg) !important;
+                backdrop-filter: var(--glass-blur) !important;
+                -webkit-backdrop-filter: var(--glass-blur) !important;
+                
+                /* Black Border */
+                border: 1.5px solid #000000 !important; 
+                border-radius: 1.25rem !important;
                 padding: 1.5rem !important;
                 position: relative !important;
                 overflow: hidden !important;
-                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3) !important;
-                transition: transform 0.2s, box-shadow 0.2s !important;
+                box-shadow: var(--glass-shadow) !important;
+                transition: transform 0.3s ease, box-shadow 0.3s ease !important;
                 display: flex !important;
                 flex-direction: column !important;
                 justify-content: space-between !important;
-                min-height: 150px !important;
+                
+                /* Fixed width & taller height just like Image 3 */
+                width: 215px !important; 
+                min-height: 260px !important; 
                 height: 100% !important;
-                width: 215px !important;
                 z-index: 1 !important;
             }
-            .sa-stat-card:hover {
-                transform: translateY(-3px) !important;
-                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08) !important;
-            }
 
-            /* 👇 DARK THEME (EXACT MATCH TO 2ND IMAGE) 👇 */
-            .dark .sa-stat-card {
-                background-color: #0b0f19 !important; /* Very dark/transparent feel */
-                border: 1px solid rgba(255, 255, 255, 0.08) !important; /* Subtle thin border */
-                box-shadow: none !important;
+            .sa-stat-card:hover {
+                transform: translateY(-5px) !important;
+                box-shadow: 0 12px 40px rgba(42, 71, 149, 0.15) !important;
             }
             .dark .sa-stat-card:hover {
-                border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.9) !important;
             }
 
-            /* Colors & Layout inside Card */
+            /* Inner Glow */
+            .sa-stat-card::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border-radius: inherit;
+                padding: 1px;
+                background: linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.1));
+                -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+                -webkit-mask-composite: xor;
+                mask-composite: exclude;
+                pointer-events: none;
+            }
+            .dark .sa-stat-card::before {
+                background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.02));
+            }
+
+            /* Elements inside Card */
             .card-top-row {
                 display: flex !important;
                 justify-content: space-between !important;
                 align-items: flex-start !important;
+                margin-bottom: 2rem !important; /* Pushed down a bit for the tall shape */
             }
 
             .main-icon-wrapper {
-                width: 42px !important;
-                height: 42px !important;
+                width: 44px !important;
+                height: 44px !important;
                 border-radius: 12px !important;
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
+                backdrop-filter: blur(4px) !important;
             }
-            
             .main-icon-wrapper svg {
                 width: 22px !important;
                 height: 22px !important;
@@ -137,77 +178,66 @@ class StaffStatsWidget extends BaseWidget
                 justify-content: center !important;
                 text-decoration: none !important;
                 transition: all 0.2s !important;
+                backdrop-filter: blur(4px) !important;
             }
 
-            /* 🟠 ORANGE CARD LOGIC */
-            .card-orange .main-icon-wrapper, .card-orange .action-btn { 
-                background-color: rgba(244, 125, 32, 0.1) !important; 
-                color: #F47D20 !important; 
-            }
-            .dark .card-orange .main-icon-wrapper, .dark .card-orange .action-btn {
-                background-color: rgba(244, 125, 32, 0.06) !important; /* Dark mode tint */
-            }
-            .card-orange .action-btn:hover { background-color: #F47D20 !important; color: white !important; }
-
-            /* 🔵 BLUE CARD LOGIC */
-            .card-blue .main-icon-wrapper, .card-blue .action-btn { 
-                background-color: rgba(59, 130, 246, 0.1) !important; 
-                color: #3B82F6 !important; 
-            }
-            .dark .card-blue .main-icon-wrapper, .dark .card-blue .action-btn {
-                background-color: rgba(59, 130, 246, 0.06) !important; /* Dark mode tint */
-            }
-            .card-blue .action-btn:hover { background-color: #3B82F6 !important; color: white !important; }
-
-            /* Watermark Icon Logic */
-            .card-orange .watermark-icon { color: #F47D20 !important; }
-            .card-blue .watermark-icon { color: #3B82F6 !important; }
             .watermark-icon {
                 position: absolute !important;
                 right: -10% !important;
-                bottom: -15% !important;
-                width: 140px !important;
-                height: 140px !important;
-                opacity: 0.06 !important;
+                bottom: -5% !important; /* Adjusted for taller card */
+                width: 160px !important; /* Made slightly bigger for tall card */
+                height: 160px !important;
+                opacity: 0.15 !important;
                 transform: rotate(-15deg) !important;
                 z-index: -1 !important;
                 pointer-events: none !important;
             }
-            .dark .watermark-icon {
-                opacity: 0.04 !important; /* Very subtle in dark mode */
-            }
+            .dark .watermark-icon { opacity: 0.1 !important; }
+
+            /* 🟠 ORANGE CARD LOGIC */
+            .card-orange .watermark-icon, 
+            .card-orange .main-icon-wrapper svg { color: var(--brand-orange-primary) !important; }
+            .card-orange .main-icon-wrapper { background-color: var(--brand-orange-bg) !important; border: 1px solid var(--brand-orange-border) !important; }
+            .card-orange .action-btn { background-color: var(--brand-orange-bg) !important; color: var(--brand-orange-primary) !important; border: 1px solid var(--brand-orange-border) !important; }
+            .card-orange .action-btn:hover { background: linear-gradient(135deg, var(--brand-orange-primary), var(--brand-orange-light)) !important; color: white !important; border-color: transparent !important; }
+
+            /* 🔵 BLUE CARD LOGIC */
+            .card-blue .watermark-icon, 
+            .card-blue .main-icon-wrapper svg { color: var(--brand-blue-primary) !important; }
+            .card-blue .main-icon-wrapper { background-color: var(--brand-blue-bg) !important; border: 1px solid var(--brand-blue-border) !important; }
+            .card-blue .action-btn { background-color: var(--brand-blue-bg) !important; color: var(--brand-blue-primary) !important; border: 1px solid var(--brand-blue-border) !important; }
+            .card-blue .action-btn:hover { background: linear-gradient(135deg, var(--brand-blue-primary), var(--brand-blue-light)) !important; color: white !important; border-color: transparent !important; }
 
             /* Labels and Values */
             .sa-stat-label {
-                font-size: 0.75rem !important;
+                font-family: 'Inter', sans-serif !important;
+                font-size: 0.78rem !important;
                 font-weight: 800 !important;
                 text-transform: uppercase !important;
                 letter-spacing: 0.05em !important;
                 display: block !important;
-                margin-top: 1.5rem !important;
-                margin-bottom: 0.25rem !important;
-                color: #64748b !important; /* Slate gray */
+                margin-top: auto !important; /* Pushes content down like the image */
+                margin-bottom: 0.5rem !important;
+                color: var(--text-sub) !important;
             }
+            .dark .sa-stat-label { color: #9ca3af !important; }
             
             .sa-stat-value {
                 font-family: 'Poppins', sans-serif !important;
-                font-size: 2.25rem !important;
+                font-size: 2.8rem !important; /* Slightly bigger number for tall card */
                 font-weight: 700 !important;
-                color: #0f172a !important; /* Dark Navy */
+                color: var(--brand-blue-primary) !important;
                 line-height: 1 !important;
                 display: block !important;
             }
-
-            /* Dark Mode Labels and Values (Image 2 style) */
-            .dark .sa-stat-label { color: #9ca3af !important; } /* Gray Text */
-            .dark .sa-stat-value { color: #ffffff !important; } /* Big White Numbers */
+            .dark .sa-stat-value { color: var(--text-main) !important; }
         </style>
         ";
 
-        // --- HELPER FUNCTION TO BUILD EXACT SA-STAT-CARD MATCH --- //
-        $buildCard = function ($title, $count, $iconSvg, $roleQuery, $isSolidBlue = false, $isFirst = false) use ($createUrl, $customCss) {
+        // --- HELPER FUNCTION TO BUILD EXACT CARD MATCH --- //
+        $buildCard = function ($title, $count, $iconSvg, $roleQuery, $isFirst = false) use ($createUrl, $customCss) {
 
-            // 👇 MAGIC HERE: Static variable to alternate colors without changing bottom logic 👇
+            // Static variable to alternate colors automatically
             static $colorIndex = 0;
             $altClass = ($colorIndex % 2 === 0) ? 'card-orange' : 'card-blue';
             $colorIndex++;
@@ -215,12 +245,12 @@ class StaffStatsWidget extends BaseWidget
             $addUrl = $createUrl . "?role={$roleQuery}";
             $plusSvg = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" style="width: 16px; height: 16px; font-weight: bold;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>';
 
-            // Sirf pehle card par CSS load karenge taaki repeat na ho
+            // Load CSS only on the first card to avoid repetition
             $styleBlock = $isFirst ? $customCss : '';
 
             $html = "
                 {$styleBlock}
-                <div class='sa-scope' style='width: 100%; height: 100%;'>
+                <div class='sa-scope' style='height: 100%;'>
                     <div class='sa-stat-card {$altClass}'>
                         <div class='watermark-icon'>
                             {$iconSvg}
@@ -252,22 +282,25 @@ class StaffStatsWidget extends BaseWidget
         $isFirst = true;
 
         if ($user->isSuperAdmin()) {
-            $stats[] = $buildCard('Rest. Admins', $totalRestAdmins, $iconRestAdmin, 'restaurant_admin', false, $isFirst);
-            $isFirst = false; // CSS load ho gaya
-        }
-
-        if ($user->isSuperAdmin() || $user->isRestaurantAdmin()) {
-            $stats[] = $buildCard('Branch Admins', $totalBranchAdmins, $iconBranchAdmin, 'branch_admin', false, $isFirst);
+            $stats[] = $buildCard('Rest. Admins', $totalRestAdmins, $iconRestAdmin, 'restaurant_admin', $isFirst);
             $isFirst = false;
         }
 
-        $stats[] = $buildCard('Total Managers', $totalManagers, $iconManager, 'manager', false, $isFirst);
+        if ($user->isSuperAdmin() || $user->isRestaurantAdmin()) {
+            $stats[] = $buildCard('Branch Admins', $totalBranchAdmins, $iconBranchAdmin, 'branch_admin', $isFirst);
+            $isFirst = false;
+        }
+
+        $stats[] = $buildCard('Total Managers', $totalManagers, $iconManager, 'manager', $isFirst);
         $isFirst = false;
 
-        $stats[] = $buildCard('Total Chefs', $totalChefs, $iconChef, 'chef', false, $isFirst);
+        $stats[] = $buildCard('Total Chefs', $totalChefs, $iconChef, 'chef', $isFirst);
         $isFirst = false;
 
-        $stats[] = $buildCard('Total Waiters', $totalWaiters, $iconWaiter, 'waiter', true, $isFirst);
+        $stats[] = $buildCard('Total Waiters', $totalWaiters, $iconWaiter, 'waiter', $isFirst);
+
+        // Reset color index for the next page load
+        $buildCard('', 0, '', '', false);
 
         return $stats;
     }
