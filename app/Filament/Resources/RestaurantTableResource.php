@@ -5,7 +5,7 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\RestaurantTableResource\Pages;
 use App\Filament\Resources\RestaurantTableResource\RelationManagers;
 use App\Models\RestaurantTable;
-use App\Models\Branch; 
+use App\Models\Branch;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -71,41 +71,79 @@ class RestaurantTableResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $bgImageUrl = asset('images/bg.png');
+
         return $table
             ->heading(new HtmlString('
                 <style>
-                    /* Main Table Container */
-                    .fi-ta-ctn { background-color: transparent !important; box-shadow: none !important; border: none !important; }
-                    .fi-ta-header-toolbar, .fi-ta-footer { background-color: transparent !important; border-color: rgba(156, 163, 175, 0.2) !important; }
-                    .fi-ta-content { background-color: transparent !important; }
-                    
-                    /* Premium Gradient Layout for Table Cards */
+                    /* --- 🌟 MAKE WRAPPERS TRANSPARENT TO SHOW BG ── */
+                    html, body, .fi-layout, .fi-main, .fi-page {
+                        background-color: transparent !important;
+                        background: transparent !important;
+                    }
+
+                    /* --- 🌟 BACKGROUND IMAGE (bg.png at 15% Opacity) ── */
+                    body::before {
+                        content: "";
+                        position: fixed;
+                        top: 0; left: 0; right: 0; bottom: 0;
+                        background-image: url("' . $bgImageUrl . '") !important;
+                        background-size: cover !important;
+                        background-position: center !important;
+                        background-attachment: fixed !important;
+                        opacity: 0.15 !important;
+                        z-index: -999 !important;
+                        pointer-events: none;
+                    }
+
+                    /* --- 🎨 PREMIUM GLASS TABLE BOX WITH BLACK BORDER ── */
+                    .fi-ta-ctn {
+                        background: rgba(255, 255, 255, 0.55) !important;
+                        backdrop-filter: blur(18px) saturate(150%) !important;
+                        -webkit-backdrop-filter: blur(18px) saturate(150%) !important;
+                        border: 1.5px solid #000000 !important; /* BLACK BORDER */
+                        border-radius: 1.25rem !important;
+                        box-shadow: 0 8px 32px rgba(42, 71, 149, 0.10) !important;
+                        overflow: hidden !important;
+                    }
+                    .dark .fi-ta-ctn { background: rgba(15, 15, 20, 0.75) !important; border-color: #000 !important; }
+
+                    /* --- CARD STYLING ── */
                     .fi-ta-record {
-                        background-color: #ffffff !important;
-                        border: 2px solid transparent !important;
-                        background-image: linear-gradient(#ffffff, #ffffff), linear-gradient(135deg, #3B82F6, #F47D20);
-                        background-origin: border-box;
-                        background-clip: padding-box, border-box;
-                        border-radius: 16px !important;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
-                        transition: all 0.3s ease;
+                        background: rgba(255, 255, 255, 0.40) !important;
+                        border: 1.5px solid #000000 !important; /* BLACK BORDER ON CARDS */
+                        border-radius: 12px !important;
+                        transition: all 0.3s ease !important;
+                        cursor: pointer !important;
+                        margin: 0.5rem !important;
                     }
-                    .dark .fi-ta-record {
-                        background-color: #1e293b !important;
-                        background-image: linear-gradient(#1e293b, #1e293b), linear-gradient(135deg, #3B82F6, #F47D20);
+
+                    .fi-ta-record:hover {
+                        transform: translateY(-4px) !important;
+                        border-color: #f16b3f !important;
+                        box-shadow: 0 10px 24px rgba(241, 107, 63, 0.18) !important;
+                        background: rgba(255, 255, 255, 0.60) !important;
                     }
-                    .fi-ta-record:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(59, 130, 246, 0.15), 0 5px 15px rgba(244, 125, 32, 0.1) !important; }
+
+                    /* Header Toolbar Styling */
+                    .fi-ta-header-toolbar {
+                        background: rgba(252, 236, 221, 0.45) !important;
+                        border-bottom: 1.5px solid #000000 !important;
+                        padding: 1rem !important;
+                    }
+                    .fi-ta-header-cell-label { color: #2a4795 !important; font-weight: 900 !important; text-transform: uppercase !important; }
                     
-                    .fi-ta-record .fi-ta-text-item { color: #1e293b !important; }
-                    .dark .fi-ta-record .fi-ta-text-item { color: #f8fafc !important; }
-                    .fi-ta-record svg.text-success-500 { color: #3B82F6 !important; }
-                    
-                    .fi-ta-record .fi-ta-actions button:nth-of-type(1) { background-color: #3B82F6 !important; color: #ffffff !important; border: none !important; transition: 0.2s; }
-                    .fi-ta-record .fi-ta-actions button:nth-of-type(1):hover { background-color: #2563eb !important; }
-                    .fi-ta-record .fi-ta-actions button:nth-of-type(2) { color: #ef4444 !important; border: none !important; background-color: rgba(239, 68, 68, 0.05) !important; }
+                    /* Action Buttons Styling */
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(1) {
+                        background-color: #2a4795 !important; color: #ffffff !important; border: 1.5px solid #000 !important; border-radius: 8px !important;
+                    }
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(1):hover { background-color: #456aba !important; }
+                    .fi-ta-record .fi-ta-actions button:nth-of-type(2) {
+                        color: #ef4444 !important; background-color: rgba(239, 68, 68, 0.05) !important; border: 1.5px solid #ef4444 !important; border-radius: 8px !important;
+                    }
                     .fi-ta-record .fi-ta-actions button:nth-of-type(2):hover { background-color: rgba(239, 68, 68, 0.1) !important; }
                 </style>
-                <span style="font-size: 1.25rem; font-weight: 800;">Tables & QR Codes</span>
+                <span style="font-size: 1.5rem; font-weight: 900; color: #2a4795; font-family: Poppins, sans-serif; letter-spacing: 0.02em;">Tables & QR Setup Dashboard</span>
             '))
             ->contentGrid([
                 'md' => 2,
@@ -116,24 +154,32 @@ class RestaurantTableResource extends Resource
                 Stack::make([
                     Split::make([
                         Stack::make([
+                            // 👇 Table Number AND Seating Capacity Displayed Together 👇
                             Tables\Columns\TextColumn::make('table_number')
-                                ->label('Table No')
-                                ->weight(\Filament\Support\Enums\FontWeight::Bold)
-                                ->size('xl'),
+                                ->label('Table Details')
+                                ->formatStateUsing(function ($state, $record) {
+                                    return new HtmlString("
+                                        <div style='display: flex; flex-direction: column;'>
+                                            <span style='font-size: 1.4rem; font-weight: 900; color: #2a4795;'>{$state}</span>
+                                            <span style='font-size: 0.7rem; font-weight: 800; color: #f16b3f; background: rgba(241, 107, 63, 0.1); padding: 3px 8px; border-radius: 99px; width: fit-content; border: 1px solid rgba(241, 107, 63, 0.3); margin-top: 4px;'>
+                                                👥 Capacity: {$record->seating_capacity}
+                                            </span>
+                                        </div>
+                                    ");
+                                }),
                         ]),
                         Tables\Columns\IconColumn::make('is_active')
                             ->boolean()
                             ->grow(false),
                     ]),
 
-                    // QR Code Display Customization - Updated to fit the new portrait design
                     ImageColumn::make('qr_path')
                         ->label('QR')
                         ->disk('public')
-                        ->height(350) // 👈 Increased significantly to show the new portrait design
+                        ->height(120)
                         ->width('100%')
                         ->extraImgAttributes([
-                            'style' => 'object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));',
+                            'style' => 'object-fit: contain; margin-top: 1rem; margin-bottom: 0.5rem; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); border: 1.5px solid #000; border-radius: 8px; background: white;',
                         ])
                         ->visibility('public'),
                 ])->space(3),
@@ -160,7 +206,7 @@ class RestaurantTableResource extends Resource
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
-                    ->color('primary') 
+                    ->color('primary')
                     ->form(function () {
                         return [
                             \Filament\Forms\Components\TextInput::make('total_tables')->numeric()->minValue(1)->required(),
@@ -171,7 +217,7 @@ class RestaurantTableResource extends Resource
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
                         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
-                        
+
                         $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
                         if ($branchId) {
                             $startQuery->where('branch_id', $branchId);
@@ -186,14 +232,13 @@ class RestaurantTableResource extends Resource
                             $table = \App\Models\RestaurantTable::create([
                                 'restaurant_id' => $restaurant->id,
                                 'branch_id' => $branchId,
-                                'table_number' => 'T-0' . ($currentCount + $i), // Formatted to match T-01 design
+                                'table_number' => 'T-0' . ($currentCount + $i),
                                 'seating_capacity' => $data['seating_capacity'],
                             ]);
                             $qrService->generate($table);
                         }
                     }),
-                    
-                
+
                 Tables\Actions\Action::make('download_pdf_qr')
                     ->label('Download QRs as PDF')
                     ->icon('heroicon-o-document-arrow-down')
@@ -217,32 +262,32 @@ class RestaurantTableResource extends Resource
                         $tables = $query->get();
 
                         // 2. Compress PNG into memory
-                        $bgImagePath = public_path('images/QR-BG.png'); 
+                        $bgImagePath = public_path('images/bg.png');
                         $bgBase64 = '';
-                        
+
                         if (file_exists($bgImagePath)) {
                             if (extension_loaded('gd')) {
                                 $img = @imagecreatefrompng($bgImagePath);
                                 if ($img) {
                                     $width = imagesx($img);
                                     $height = imagesy($img);
-                                    
+
                                     $newWidth = 400;
                                     $newHeight = 500;
                                     $resizedImg = imagecreatetruecolor($newWidth, $newHeight);
-                                    
+
                                     $white = imagecolorallocate($resizedImg, 255, 255, 255);
                                     imagefill($resizedImg, 0, 0, $white);
-                                    
+
                                     imagecopyresampled($resizedImg, $img, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
-                                    
+
                                     ob_start();
-                                    imagejpeg($resizedImg, null, 40); 
+                                    imagejpeg($resizedImg, null, 40);
                                     $compressedData = ob_get_clean();
-                                    
+
                                     imagedestroy($img);
                                     imagedestroy($resizedImg);
-                                    
+
                                     $bgBase64 = 'data:image/jpeg;base64,' . base64_encode($compressedData);
                                 }
                             } else {
@@ -288,16 +333,16 @@ class RestaurantTableResource extends Resource
                                 background-color: transparent; 
                                 width: 100%;
                                 height: 100%;
-                                padding-top: 25px; /* 👇 Reduced from 35px to pull content up */
+                                padding-top: 25px; 
                                 box-sizing: border-box;
                             }
 
                             .title { font-family: "Times", serif; font-size: 24px; font-weight: bold; color: #9A3B2A; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-                            .orange-line { border-top: 3px solid #E47A33; width: 40px; margin: 6px auto; } /* 👇 Reduced margin */
-                            .subtitle { font-size: 9px; color: #4B5320; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px; } /* 👇 Reduced from 20px */
+                            .orange-line { border-top: 3px solid #E47A33; width: 40px; margin: 6px auto; } 
+                            .subtitle { font-size: 9px; color: #4B5320; font-weight: bold; letter-spacing: 1px; margin-bottom: 12px; }
 
                             .qr-bracket-table {
-                                margin: 0 auto 12px auto; /* 👇 Reduced from 20px */
+                                margin: 0 auto 12px auto; 
                                 border-collapse: collapse;
                             }
                             .qr-bracket-table td { padding: 0; }
@@ -305,21 +350,21 @@ class RestaurantTableResource extends Resource
                             .br-br { border-bottom: 3px solid #E47A33; border-right: 3px solid #E47A33; width: 25px; height: 25px; }
                             
                             .qr-img { 
-                                width: 135px; /* 👇 Scaled down slightly to guarantee fit */
+                                width: 135px; 
                                 height: 135px; 
                                 border: 2px solid #8B5CF6;
                                 border-radius: 8px;
                                 padding: 4px;
                                 background-color: #ffffff; 
                                 display: block;
-                                margin: 8px; /* 👇 Reduced from 10px */
+                                margin: 8px; 
                             }
 
-                            .btn-wrapper { margin-bottom: 12px; } /* 👇 Reduced from 15px */
+                            .btn-wrapper { margin-bottom: 12px; } 
                             .scan-tag { background-color: #769772; color: #ffffff; padding: 4px 20px; border-radius: 4px; font-size: 10px; font-weight: bold; display: inline-block; margin-bottom: 4px; }
                             .scan-pill { background-color: #B85C4A; color: #ffffff; padding: 6px 25px; border-radius: 15px; font-size: 10px; font-weight: bold; display: inline-block; letter-spacing: 1px;}
                             
-                            .loc-label { font-size: 9px; color: #7F8A74; font-weight: bold; margin-bottom: 2px; letter-spacing: 0.5px; } /* 👇 Reduced from 5px */
+                            .loc-label { font-size: 9px; color: #7F8A74; font-weight: bold; margin-bottom: 2px; letter-spacing: 0.5px; } 
                             .table-number { font-family: "Times", serif; font-size: 32px; font-style: italic; font-weight: bold; color: #32402A; margin: 0; }
                             
                         </style></head><body>';
@@ -336,7 +381,7 @@ class RestaurantTableResource extends Resource
                                 foreach ($rowItems as $table) {
                                     $imagePath = storage_path('app/public/' . $table->qr_path);
                                     $qrBase64 = '';
-                                    
+
                                     if ($table->qr_path && file_exists($imagePath)) {
                                         $svgData = file_get_contents($imagePath);
                                         $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($svgData);
@@ -346,10 +391,10 @@ class RestaurantTableResource extends Resource
 
                                     // Render Card
                                     $html .= '<td class="quadrant"><div class="card">';
-                                    
+
                                     // Inner Content Box
                                     $html .= '<div class="content-wrapper">';
-                                    
+
                                     $html .= '<div class="title">' . $restaurantName . '</div>';
                                     $html .= '<div class="orange-line"></div>';
                                     $html .= '<div class="subtitle">EXQUISITE DINING EXPERIENCE</div>';
@@ -410,8 +455,22 @@ class RestaurantTableResource extends Resource
                                 ->send();
                         }
                     }),
-               
-               
+
+                Tables\Actions\Action::make('download_all_qr')
+                    ->label('Download ZIP QRs')
+                    ->icon('heroicon-o-archive-box-arrow-down')
+                    ->color('gray')
+                    ->outlined()
+                    ->action(function () {
+                        $user = auth()->user();
+                        $restaurant = $user->restaurant;
+                        $zipPath = app(QrZipService::class)->createForRestaurant($restaurant, $user);
+
+                        return response()
+                            ->download($zipPath)
+                            ->deleteFileAfterSend(true);
+                    }),
+
                 Tables\Actions\Action::make('delete_all_qr')
                     ->label('Delete All QRs')
                     ->icon('heroicon-o-trash')
@@ -448,128 +507,7 @@ class RestaurantTableResource extends Resource
                             ->send();
                     })
                     ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin'])),
-
-                // 👇 PDF DOWNLOAD ACTION (UPDATED FOR 2x2 GRID WITH NEW DESIGN) 👇
-                // Tables\Actions\Action::make('download_pdf_qr')
-                //     ->label('Download QRs as PDF')
-                //     ->icon('heroicon-o-document-arrow-down')
-                //     ->color('info')
-                //     ->outlined()
-                //     ->action(function () {
-                //         $user = auth()->user();
-                //         $restaurant = $user->restaurant;
-                //         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
-
-                //         $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
-                //         if ($branchId) {
-                //             $query->where('branch_id', $branchId);
-                //         } else {
-                //             $query->whereNull('branch_id');
-                //         }
-                //         $tables = $query->get();
-
-                //         // 2x2 Grid PDF Styling
-                //         $html = '<!DOCTYPE html><html><head><style>
-                //             @page { margin: 10px; size: A4 portrait; }
-                //             @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,900;1,900&family=Inter:wght@600;700;800&display=swap");
-                //             body { font-family: "Inter", sans-serif; text-align: center; margin: 0; padding: 0; background: #fff; }
-                            
-                //             .page-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-after: always; height: 100vh; }
-                //             .page-table:last-child { page-break-after: auto; }
-                            
-                //             .quadrant { width: 50%; height: 50%; padding: 15px; vertical-align: middle; }
-                            
-                //             /* Clean wrapper for the SVG */
-                //             .qr-container { 
-                //                 border: 1px dashed #cbd5e1; 
-                //                 border-radius: 4px; 
-                //                 padding: 10px; 
-                //                 text-align: center; 
-                //                 box-sizing: border-box; 
-                //                 display: inline-block;
-                //             }
-                            
-                //             .qr-img { width: auto; height: 480px; display: block; margin: 0 auto; object-fit: contain; }
-                //         </style></head><body>';
-
-                //         $pages = $tables->chunk(4);
-
-                //         foreach ($pages as $pageItems) {
-                //             $html .= '<table class="page-table">';
-                //             $rows = $pageItems->chunk(2);
-
-                //             foreach ($rows as $rowItems) {
-                //                 $html .= '<tr>';
-                //                 foreach ($rowItems as $table) {
-                //                     $imagePath = storage_path('app/public/' . $table->qr_path);
-                //                     $base64 = '';
-                //                     if ($table->qr_path && file_exists($imagePath)) {
-                //                         $type = pathinfo($imagePath, PATHINFO_EXTENSION);
-                //                         $data = file_get_contents($imagePath);
-                //                         // Because it's an SVG, we use image/svg+xml
-                //                         $base64 = 'data:image/svg+xml;base64,' . base64_encode($data);
-                //                     }
-
-                //                     $html .= '<td class="quadrant"><div class="qr-container">';
-                //                     if ($base64) {
-                //                         $html .= '<img src="' . $base64 . '" alt="QR" class="qr-img">';
-                //                     } else {
-                //                         $html .= '<p style="color: red;">QR Not Found</p>';
-                //                     }
-                //                     $html .= '</div></td>';
-                //                 }
-
-                //                 if ($rowItems->count() == 1) {
-                //                     $html .= '<td class="quadrant"></td>';
-                //                 }
-                //                 $html .= '</tr>';
-                //             }
-
-                //             if ($rows->count() == 1) {
-                //                 $html .= '<tr><td class="quadrant"></td><td class="quadrant"></td></tr>';
-                //             }
-                //             $html .= '</table>';
-                //         }
-
-                //         $html .= '</body></html>';
-
-                //         if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-                //             // Enable SVG processing in DomPDF
-                //             $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadHTML($html)->setPaper('a4', 'portrait')->setWarnings(false);
-                //             return response()->streamDownload(function () use ($pdf) {
-                //                 echo $pdf->output();
-                //             }, 'Restaurant_QRs_Premium.pdf');
-                //         } else {
-                //             \Filament\Notifications\Notification::make()
-                //                 ->title('PDF Library Missing')
-                //                 ->body('Please run: composer require barryvdh/laravel-dompdf to download PDFs.')
-                //                 ->danger()
-                //                 ->send();
-                //         }
-                //     }),
-
-                // Tables\Actions\Action::make('download_all_qr')
-                //     ->label('Download ZIP QRs')
-                //     ->icon('heroicon-o-archive-box-arrow-down')
-                //     ->color('gray')
-                //     ->outlined()
-                //     ->action(function () {
-                //         $user = auth()->user();
-                //         $restaurant = $user->restaurant;
-                //         $zipPath = app(QrZipService::class)->createForRestaurant($restaurant, $user);
-
-                //         return response()
-                //             ->download($zipPath)
-                //             ->deleteFileAfterSend(true);
-                //     }),
-
-                // 👇 PDF DOWNLOAD ACTION (FIXED FOR PERFECT WHITE RENDERING) 👇
-                // 👇 PDF DOWNLOAD ACTION (EXACT SVGs IN 2x2 GRID) 👇
-               // 👇 PDF DOWNLOAD ACTION (USING IMAGICK TO CONVERT SVG TO PNG FOR DOMPDF) 👇
-               
-               // 👇 PDF DOWNLOAD ACTION (PERFECT 2x2 GRID & STRICT DESIGN) 👇
-                // 👇 PDF DOWNLOAD ACTION (PERFECT 2x2 GRID WITH GUARANTEED DOODLE BACKGROUND) 👇
-                ]);
+            ]);
     }
 
     public static function getRelations(): array

@@ -70,10 +70,10 @@
             inset: 0;
             z-index: 0;
             pointer-events: none;
-            background-image: url('{{ asset("images/QR-BG.png") }}');
+            background-image: url('{{ asset("images/bg.png") }}');
             background-size: cover;
             background-position: center;
-            opacity: 0.60;
+            opacity: 0.20;
             mix-blend-mode: multiply;
         }
 

@@ -27,9 +27,10 @@ class TableBillingResource extends Resource
 
     public static function canAccess(): bool
     {
-        return auth()->check()
-            && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? '', ['restaurant_admin', 'manager', 'branch_admin']);
+        // return auth()->check()
+        //     && auth()->user()->restaurant_id
+        //     && in_array(auth()->user()->role->name ?? '', ['restaurant_admin', 'manager', 'branch_admin']);
+        return false; // Temporarily disable access to billing resource for all users
     }
 
     public static function getEloquentQuery(): Builder
