@@ -32,6 +32,7 @@ class AdminPanelProvider extends PanelProvider
             ->maxContentWidth('full')
             ->brandLogo(asset('img/annsathilogo.png'))
             ->brandLogoHeight('5rem')
+            ->brandName('AnnSathi')
             ->darkMode(false)
             ->colors([
                 'primary' => Color::hex('#f16b3f'),
@@ -299,8 +300,8 @@ class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::FOOTER,
                 fn(): string => Blade::render('
                     <div class="fi-footer-custom">
-                        <span class="footer-tagline">&ldquo;Sathi Of Your Food Journey&rdquo; &mdash; Ann Sathi.</span>
-                        <span class="footer-powered">Powerd By - Techstrota</span>
+                        <span class="footer-tagline">&ldquo;Sathi Of Your Food Journey&rdquo; &mdash; AnnSathi.</span>
+                        <span class="footer-powered">Powered By - Techstrota</span>
                     </div>
                 ')
             );

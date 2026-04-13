@@ -535,7 +535,7 @@
                                     </div>
 
                                     <div class="flex gap-2 mt-auto">
-                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: linear-gradient(135deg, var(--brand-orange), var(--brand-orange-light)); color: white; border: 1px solid #000000; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
+                                        <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: linear-gradient(135deg, var(--brand-orange), var(--brand-orange-light)); color: Black ; border: 1px solid #000000; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
                                             Accept & Cook
                                         </button>
                                         <button wire:click="updateStatus({{ $order->id }}, 'cancelled')" onclick="confirm('Reject this order?')" style="background: rgba(255,255,255,0.5); color: var(--text-primary); border: 1px solid #000000; padding: 0.6rem 0.8rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem;">
@@ -702,52 +702,52 @@
                                         'rejected' => 'Cancelled / Rejected'
                                     ] as $statusKey => $label)
 
-                                        @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
-                                            <div>
-                                                <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
-                                                    {{ $label }}
-                                                </div>
+                                            @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
+                                                <div>
+                                                    <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
+                                                        {{ $label }}
+                                                    </div>
 
-                                                <div class="flex flex-col gap-4">
-                                                    @foreach($groupedOrders[$statusKey] as $order)
-                                                        @php
-                                                            $isHostOrder = $order->qr_session_id === $hostSessionId;
-                                                            $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                        @endphp
+                                                    <div class="flex flex-col gap-4">
+                                                        @foreach($groupedOrders[$statusKey] as $order)
+                                                            @php
+                                                                $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                                $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                            @endphp
 
-                                                        {{-- Order Container --}}
-                                                        <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                            {{-- Order Container --}}
+                                                            <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
 
-                                                            <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
-                                                                <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
-                                                                <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
-                                                                    {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
-                                                                </span>
-                                                            </div>
-
-                                                            @if($order->notes && !$isCancelled)
-                                                                <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
-                                                                    Note: {{ $order->notes }}
-                                                                </div>
-                                                            @endif
-
-                                                            @foreach($order->items as $item)
-                                                                <div class="flex justify-between items-start mt-1">
-                                                                    <div class="pr-4">
-                                                                        <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                            <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
-                                                                        </span>
-                                                                    </div>
-                                                                    <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                        ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                                <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
+                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
+                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                        {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
                                                                     </span>
                                                                 </div>
-                                                            @endforeach
-                                                        </div>
-                                                    @endforeach
+
+                                                                @if($order->notes && !$isCancelled)
+                                                                    <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
+                                                                        Note: {{ $order->notes }}
+                                                                    </div>
+                                                                @endif
+
+                                                                @foreach($order->items as $item)
+                                                                    <div class="flex justify-between items-start mt-1">
+                                                                        <div class="pr-4">
+                                                                            <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                                <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                            ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                                        </span>
+                                                                    </div>
+                                                                @endforeach
+                                                            </div>
+                                                        @endforeach
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        @endif
+                                            @endif
                                 @endforeach
                             </div>
                         </div>
@@ -847,7 +847,7 @@
                 @else
                     @if($this->selectedTableId)
                         @php 
-                                                $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
+                                                                    $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
                             $isRes = $tableInfo && ($tableInfo->status === 'reserved');
                         @endphp
 
