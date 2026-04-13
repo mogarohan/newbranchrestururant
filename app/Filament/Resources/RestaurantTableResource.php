@@ -262,7 +262,7 @@ class RestaurantTableResource extends Resource
                         $tables = $query->get();
 
                         // 2. Compress PNG into memory
-                        $bgImagePath = public_path('images/bg.png');
+                        $bgImagePath = public_path('images/b.png');
                         $bgBase64 = '';
 
                         if (file_exists($bgImagePath)) {
