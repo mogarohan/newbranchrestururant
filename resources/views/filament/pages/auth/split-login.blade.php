@@ -1,14 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
+<x-filament-panels::page.simple>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Ann Sathi</title>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@400;500;600&family=Lora:wght@400;500;600&display=swap"
-        rel="stylesheet">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;700&family=DM+Sans:wght@400;500;600&family=Lora:wght@400;500;600&display=swap');
+
         *,
         *::before,
         *::after {
@@ -20,22 +14,69 @@
         :root {
             --orange: #da6a22;
             --orange-dark: #b85517;
-            --orange-light: rgba(218, 106, 34, 0.18);
             --navy: #204080;
             --cream: #FCECDD;
-            --cream-soft: rgba(252, 236, 221, 0.38);
-            --glass-bg: rgba(252, 236, 221, 0.22);
             --glass-border: rgba(218, 106, 34, 0.28);
         }
 
+        /* ── MOBILE FIRST (SCROLL ON) ── */
         html,
         body {
-            height: 100%;
-            overflow: hidden;
-            font-family: 'DM Sans', sans-serif;
+            height: auto !important;
+            overflow-x: hidden !important;
+            overflow-y: auto !important;
+            padding: 0 !important;
+            margin: 0 !important;
         }
 
-        /* Hide Filament's injected white topbar */
+        /* ── DESKTOP ONLY SCROLL OFF ── */
+        @media (min-width: 1024px) {
+
+            html,
+            body {
+                height: 100% !important;
+                overflow: hidden !important;
+            }
+        }
+
+        /* ── Hide Filament wrappers ── */
+        .fi-simple-layout {
+            background-color: var(--orange) !important;
+            height: 100vh !important;
+            padding: 0.4rem 1.25rem !important;
+            display: flex !important;
+            align-items: stretch !important;
+        }
+
+        @media (min-width: 1024px) {
+            .fi-simple-layout {
+                height: 100vh !important;
+                padding: 0.5rem 1rem !important;
+                overflow: hidden !important;
+            }
+        }
+
+        .fi-simple-main {
+            background: transparent !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            border-radius: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        .fi-simple-page {
+            background: transparent !important;
+            padding: 0 !important;
+            width: 100% !important;
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+
+        .fi-simple-header,
         nav.fi-topbar,
         .fi-topbar,
         header.fi-header,
@@ -44,33 +85,15 @@
             display: none !important;
         }
 
-        /* ── Full-screen wrapper ── */
-        .page-wrap {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            height: 100vh;
-            width: 100vw;
-            overflow: hidden;
-            background-color: var(--orange);
-            display: flex;
-            align-items: stretch;
-            padding: 1.25rem;
-            z-index: 99999;
-        }
-
-        @media (min-width: 1024px) {
-            .page-wrap {
-                padding: 2rem;
-            }
+        .fi-footer-custom {
+            display: none !important;
         }
 
         /* ── Card ── */
         .card {
             position: relative;
             width: 100%;
+            flex: 1;
             border-radius: 2rem;
             overflow: hidden;
             background-color: var(--cream);
@@ -82,10 +105,11 @@
         @media (min-width: 1024px) {
             .card {
                 flex-direction: row;
+                height: 100%;
             }
         }
 
-        /* ── BG texture overlay ── */
+        /* ── BG texture ── */
         .card-bg {
             position: absolute;
             inset: 0;
@@ -96,6 +120,30 @@
             background-position: center;
             opacity: 0.20;
             mix-blend-mode: multiply;
+        }
+
+        /* ── Decorative circles ── */
+        .deco-circle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .deco-1 {
+            width: 280px;
+            height: 280px;
+            top: -80px;
+            right: -60px;
+            background: radial-gradient(circle, rgba(218, 106, 34, 0.12) 0%, transparent 70%);
+        }
+
+        .deco-2 {
+            width: 200px;
+            height: 200px;
+            bottom: -60px;
+            left: -40px;
+            background: radial-gradient(circle, rgba(32, 64, 128, 0.10) 0%, transparent 70%);
         }
 
         /* ── Left panel ── */
@@ -138,12 +186,10 @@
         }
 
         .tagline {
-            font-family: 'Lora', 'Times New Roman', Georgia, serif;
+            font-family: 'Lora', Georgia, serif;
             font-size: clamp(1.1rem, 2.5vw, 1.45rem);
             color: var(--navy);
-            font-style: normal;
             font-weight: 600;
-            letter-spacing: 0.03em;
         }
 
         .powered {
@@ -162,6 +208,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow-y: visible;
+            /* MOBILE scroll */
         }
 
         @media (min-width: 1024px) {
@@ -169,372 +217,75 @@
                 width: 50%;
                 padding: 3.5rem;
                 justify-content: flex-start;
+                overflow-y: auto;
+                /* DESKTOP scroll inside */
             }
         }
 
-        /* ── Glass login box ── */
+        /* ── Glass box ── */
         .glass-box {
             width: 100%;
             max-width: 26rem;
             border-radius: 1.75rem;
             border: 1.5px solid var(--glass-border);
             padding: 2.5rem 2rem;
-            backdrop-filter: blur(24px) saturate(160%);
-            -webkit-backdrop-filter: blur(24px) saturate(160%);
-            background: linear-gradient(135deg,
-                    rgba(252, 236, 221, 0.52) 0%,
-                    rgba(252, 236, 221, 0.28) 60%,
-                    rgba(218, 106, 34, 0.08) 100%);
-            box-shadow:
-                0 24px 60px rgba(32, 64, 128, 0.14),
-                inset 0 1px 0 rgba(255, 255, 255, 0.55),
-                inset 0 -1px 0 rgba(218, 106, 34, 0.12);
-        }
-
-        @media (min-width: 640px) {
-            .glass-box {
-                padding: 3rem 2.5rem;
-            }
+            backdrop-filter: blur(24px);
+            background: rgba(252, 236, 221, 0.6);
         }
 
         .glass-box h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: clamp(2rem, 4vw, 2.6rem);
-            font-weight: 700;
-            color: var(--navy);
-            letter-spacing: 0.04em;
+            font-family: 'Playfair Display';
+            font-size: 2.2rem;
             margin-bottom: 2rem;
             text-align: center;
         }
 
-        @media (min-width: 1024px) {
-            .glass-box h1 {
-                text-align: left;
-            }
-        }
-
-        /* ── Form fields ── */
-        .field {
-            margin-bottom: 1.4rem;
-        }
-
-        .field label {
-            display: block;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #1a1a2e;
-            margin-bottom: 0.4rem;
-        }
-
-        .field label span.req {
-            color: #dc2626;
-            margin-left: 2px;
-        }
-
-        .input-wrap {
-            display: flex;
-            align-items: center;
-            background: rgba(252, 236, 221, 0.35);
-            border: 1.5px solid rgba(218, 106, 34, 0.38);
-            border-radius: 0.9rem;
-            padding: 0 1rem;
-            transition: all 0.3s ease;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px rgba(218, 106, 34, 0.07);
-            backdrop-filter: blur(10px);
-        }
-
-        .input-wrap:focus-within {
-            border-color: var(--orange);
-            background: rgba(252, 236, 221, 0.55);
-            box-shadow: 0 0 0 3px rgba(218, 106, 34, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4);
-        }
-
-        .input-wrap input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            outline: none;
-            color: #111827;
-            font-size: 1rem;
-            font-family: 'DM Sans', sans-serif;
-            padding: 0.85rem 0;
-        }
-
-        .input-wrap input::placeholder {
-            color: rgba(32, 64, 128, 0.38);
-        }
-
-        .input-wrap .eye-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: rgba(32, 64, 128, 0.5);
-            padding: 0;
-            display: flex;
-            align-items: center;
-            transition: color 0.2s;
-        }
-
-        .input-wrap .eye-btn:hover {
-            color: var(--orange);
-        }
-
-        /* ── Remember me ── */
-        .remember {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 1.6rem;
-        }
-
-        .remember input[type=checkbox] {
-            width: 1.1rem;
-            height: 1.1rem;
-            accent-color: var(--orange);
-            border-radius: 0.35rem;
-            cursor: pointer;
-        }
-
-        .remember label {
-            font-size: 0.95rem;
-            color: #374151;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        /* ── Sign in button ── */
-        .btn-signin {
+        /* Button */
+        .fi-btn-primary {
             width: 100%;
-            padding: 0.9rem 1.5rem;
-            background: linear-gradient(135deg, var(--orange) 0%, #e8832e 50%, var(--orange-dark) 100%);
-            color: #fff;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 1.1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 0.75rem;
-            cursor: pointer;
-            letter-spacing: 0.03em;
-            box-shadow:
-                0 10px 28px rgba(218, 106, 34, 0.35),
-                inset 0 1px 0 rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-signin::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15) 0%, transparent 60%);
-            border-radius: inherit;
-        }
-
-        .btn-signin:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 16px 36px rgba(218, 106, 34, 0.42);
-            background: linear-gradient(135deg, #e07728 0%, var(--orange-dark) 100%);
-        }
-
-        .btn-signin:active {
-            transform: translateY(0);
-        }
-
-        /* ── Decorative circles ── */
-        .deco-circle {
-            position: absolute;
-            border-radius: 50%;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        .deco-1 {
-            width: 280px;
-            height: 280px;
-            top: -80px;
-            right: -60px;
-            background: radial-gradient(circle, rgba(218, 106, 34, 0.12) 0%, transparent 70%);
-        }
-
-        .deco-2 {
-            width: 200px;
-            height: 200px;
-            bottom: -60px;
-            left: -40px;
-            background: radial-gradient(circle, rgba(32, 64, 128, 0.10) 0%, transparent 70%);
         }
     </style>
-</head>
 
-<body>
+    <div class="card">
 
-    <div class="page-wrap">
-        <div class="card">
+        <div class="card-bg"></div>
+        <div class="deco-circle deco-1"></div>
+        <div class="deco-circle deco-2"></div>
 
-            <!-- BG texture -->
-            <div class="card-bg"></div>
-
-            <!-- Decorative blobs -->
-            <div class="deco-circle deco-1"></div>
-            <div class="deco-circle deco-2"></div>
-
-            <!-- ── LEFT: Branding ── -->
-            <div class="left-panel">
-                <img class="logo" src="{{ asset('images/ann-sathi.png') }}" alt="Ann Sathi">
-                <p class="tagline">"Sathi Of Your Food Journey"</p>
-                <p class="powered">Powered By - Techstrota</p>
-            </div>
-
-            <!-- ── RIGHT: Login form ── -->
-            <div class="right-panel">
-                <div class="glass-box">
-                    <h1>LOGIN</h1>
-
-                    {{-- ─ Filament form injection point ─ --}}
-                    <style>
-                        .fi-simple-main,
-                        .fi-simple-page {
-                            background: transparent !important;
-                            box-shadow: none !important;
-                            padding: 0 !important;
-                            max-width: 100% !important;
-                        }
-
-                        .fi-fo-component-ctn {
-                            gap: 1.2rem !important;
-                        }
-
-                        .fi-fo-field-wrp-label span {
-                            color: #1a1a2e !important;
-                            font-weight: 600 !important;
-                            font-size: 0.95rem !important;
-                        }
-
-                        .fi-fo-field-wrp-label sup {
-                            color: #dc2626 !important;
-                        }
-
-                        .fi-input-wrapper {
-                            background: rgba(252, 236, 221, 0.35) !important;
-                            border: 1.5px solid rgba(218, 106, 34, 0.38) !important;
-                            border-radius: 0.9rem !important;
-                            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px rgba(218, 106, 34, 0.07) !important;
-                            backdrop-filter: blur(10px);
-                            -webkit-backdrop-filter: blur(10px);
-                            transition: all 0.3s ease;
-                        }
-
-                        .fi-input-wrapper:focus-within {
-                            border-color: #da6a22 !important;
-                            background: rgba(252, 236, 221, 0.55) !important;
-                            box-shadow: 0 0 0 3px rgba(218, 106, 34, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
-                        }
-
-                        .fi-input-wrapper input {
-                            background: transparent !important;
-                            color: #111827 !important;
-                            font-size: 1rem !important;
-                        }
-
-                        .fi-checkbox-input {
-                            border: 1.5px solid rgba(218, 106, 34, 0.5) !important;
-                            background: rgba(252, 236, 221, 0.28) !important;
-                            border-radius: 0.4rem !important;
-                            accent-color: #da6a22 !important;
-                        }
-
-                        .fi-btn-primary {
-                            background: linear-gradient(135deg, #da6a22, #b85517) !important;
-                            color: #fff !important;
-                            border-radius: 0.75rem !important;
-                            padding: 0.9rem 1.5rem !important;
-                            font-weight: 600 !important;
-                            font-size: 1.1rem !important;
-                            border: none !important;
-                            box-shadow: 0 10px 28px rgba(218, 106, 34, 0.35) !important;
-                            width: 100% !important;
-                            margin-top: 1rem !important;
-                            transition: all 0.3s ease !important;
-                        }
-
-                        .fi-btn-primary:hover {
-                            transform: translateY(-2px) !important;
-                            box-shadow: 0 16px 36px rgba(218, 106, 34, 0.42) !important;
-                        }
-
-                        .fi-simple-header {
-                            display: none !important;
-                        }
-
-                        nav.fi-topbar,
-                        .fi-topbar,
-                        header.fi-header,
-                        .fi-topbar-nav {
-                            display: none !important;
-                        }
-
-                        body {
-                            padding-top: 0 !important;
-                            margin-top: 0 !important;
-                        }
-
-                        /* Hide footer on login page */
-                        .fi-footer-custom {
-                            display: none !important;
-                        }
-                    </style>
-
-                    <div class="w-full">
-                        <x-filament-panels::form wire:submit="authenticate">
-                            {{ $this->form }}
-                            <div class="mt-8">
-                                <x-filament-panels::form.actions :actions="$this->getCachedFormActions()"
-                                    :full-width="$this->hasFullWidthFormActions()" />
-                            </div>
-                        </x-filament-panels::form>
-                    </div>
-
-                </div>
-            </div>
-
+        {{-- LEFT --}}
+        <div class="left-panel">
+            <img class="logo" src="{{ asset('images/ann-sathi.png') }}">
+            <p class="tagline">Sathi Of Your Food Journey</p>
+            <p class="powered">Powered By - Techstrota</p>
         </div>
+
+        {{-- RIGHT --}}
+        <div class="right-panel">
+            <div class="glass-box">
+                <h1>LOGIN</h1>
+
+                <x-filament-panels::form wire:submit="authenticate">
+                    {{ $this->form }}
+
+                    <div style="margin-top: 1.5rem;">
+                        <x-filament-panels::form.actions :actions="$this->getCachedFormActions()"
+                            :full-width="$this->hasFullWidthFormActions()" />
+                    </div>
+                </x-filament-panels::form>
+
+            </div>
+        </div>
+
     </div>
 
     <script>
-        // Remove any element that creates the white bar at the top
-        function removeWhiteBar() {
-            const selectors = [
-                'nav.fi-topbar',
-                '.fi-topbar',
-                'header.fi-header',
-                '.fi-topbar-nav',
-                'body > header',
-                'body > nav',
-                '.fi-simple-layout > header',
-                '.fi-simple-layout > nav',
-            ];
-            selectors.forEach(sel => {
+        function hideTopbar() {
+            ['nav.fi-topbar', '.fi-topbar', 'header.fi-header'].forEach(sel => {
                 document.querySelectorAll(sel).forEach(el => el.remove());
             });
-
-            // Also find any element that is white/light colored and sits at very top of body
-            document.querySelectorAll('body > *').forEach(el => {
-                if (el.classList.contains('page-wrap')) return;
-                const rect = el.getBoundingClientRect();
-                const bg = window.getComputedStyle(el).backgroundColor;
-                if (rect.top <= 0 && rect.height > 0 && rect.height < 100) {
-                    el.style.display = 'none';
-                }
-            });
         }
-
-        // Run immediately and after Livewire/Alpine loads
-        document.addEventListener('DOMContentLoaded', removeWhiteBar);
-        setTimeout(removeWhiteBar, 100);
-        setTimeout(removeWhiteBar, 500);
-        document.addEventListener('livewire:load', removeWhiteBar);
+        document.addEventListener('DOMContentLoaded', hideTopbar);
+        document.addEventListener('livewire:navigated', hideTopbar);
     </script>
-</body>
 
-</html>
+</x-filament-panels::page.simple>

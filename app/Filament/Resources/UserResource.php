@@ -71,12 +71,30 @@ class UserResource extends Resource
         return false;
     }
 
+    // 🔥 FIX: canDelete mein bhi role validation lagayi gayi hai
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
-        return auth()->user()->isSuperAdmin()
-            || auth()->user()->isRestaurantAdmin()
-            || auth()->user()->isBranchAdmin()
-            || auth()->user()->isManager();
+        $currentUser = auth()->user();
+
+        if ($currentUser->isSuperAdmin()) {
+            return true;
+        }
+
+        $targetRole = strtolower(str_replace([' ', '-'], '_', $record->role?->name ?? ''));
+
+        if ($currentUser->isRestaurantAdmin()) {
+            return $targetRole !== 'super_admin';
+        }
+
+        if ($currentUser->isBranchAdmin()) {
+            return !in_array($targetRole, ['super_admin', 'restaurant_admin']);
+        }
+
+        if ($currentUser->isManager()) {
+            return !in_array($targetRole, ['super_admin', 'restaurant_admin', 'branch_admin']);
+        }
+
+        return false;
     }
 
     /* ---------------------------------------------------
@@ -399,12 +417,16 @@ class UserResource extends Resource
                     ->color('primary'),
             ])
             ->actions([
+                // 🔥 FIX: Check per row if edit is allowed
                 Tables\Actions\EditAction::make()
+                    ->visible(fn(\Illuminate\Database\Eloquent\Model $record) => static::canEdit($record))
                     ->color('warning')
                     ->button()
                     ->outlined(),
 
+                // 🔥 FIX: Check per row if delete is allowed
                 Tables\Actions\DeleteAction::make()
+                    ->visible(fn(\Illuminate\Database\Eloquent\Model $record) => static::canDelete($record))
                     ->color('danger')
                     ->button()
                     ->outlined(),
