@@ -286,10 +286,19 @@ class StaffStatsWidget extends BaseWidget
             $isFirst = false;
         }
 
-        if ($user->isSuperAdmin() || $user->isRestaurantAdmin()) {
+        // 🔥 FIX APPLIED HERE 🔥
+        $showBranchAdminCard = false;
+        if ($user->isSuperAdmin()) {
+            $showBranchAdminCard = true;
+        } elseif ($user->isRestaurantAdmin() && $user->restaurant?->has_branches) {
+            $showBranchAdminCard = true;
+        }
+
+        if ($showBranchAdminCard) {
             $stats[] = $buildCard('Branch Admins', $totalBranchAdmins, $iconBranchAdmin, 'branch_admin', $isFirst);
             $isFirst = false;
         }
+        // 🔥 FIX END 🔥
 
         $stats[] = $buildCard('Total Managers', $totalManagers, $iconManager, 'manager', $isFirst);
         $isFirst = false;
