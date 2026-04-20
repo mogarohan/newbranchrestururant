@@ -54,27 +54,40 @@ class UserResource extends Resource
             return true;
         }
 
+        // 1. Har user ko sirf khud ki profile Edit karne ka haq hai
+        if ($currentUser->id === $record->id) {
+            return true;
+        }
+
         $targetRole = strtolower(str_replace([' ', '-'], '_', $record->role?->name ?? ''));
 
+        // 2. Restaurant Admin Logic (Branch Admin, Manager, Chef, Waiter sabko EDIT kar sakta hai)
         if ($currentUser->isRestaurantAdmin()) {
-            return $targetRole !== 'super_admin';
+            return in_array($targetRole, ['branch_admin', 'manager', 'chef', 'waiter']);
         }
 
+        // 3. Branch Admin Logic
         if ($currentUser->isBranchAdmin()) {
-            return !in_array($targetRole, ['super_admin', 'restaurant_admin']);
+            return in_array($targetRole, ['manager', 'chef', 'waiter']);
         }
 
+        // 4. Manager Logic
         if ($currentUser->isManager()) {
-            return !in_array($targetRole, ['super_admin', 'restaurant_admin', 'branch_admin']);
+            return in_array($targetRole, ['chef', 'waiter']);
         }
 
         return false;
     }
 
-    // 🔥 FIX: canDelete mein bhi role validation lagayi gayi hai
+    // 🔥 FIX: Delete Logic Updated for Branch Staff
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool
     {
         $currentUser = auth()->user();
+
+        // 1. Koi bhi user khud ko DELETE nahi kar sakta (Safety First)
+        if ($currentUser->id === $record->id) {
+            return false;
+        }
 
         if ($currentUser->isSuperAdmin()) {
             return true;
@@ -82,16 +95,26 @@ class UserResource extends Resource
 
         $targetRole = strtolower(str_replace([' ', '-'], '_', $record->role?->name ?? ''));
 
+        // 2. Restaurant Admin Logic
         if ($currentUser->isRestaurantAdmin()) {
-            return $targetRole !== 'super_admin';
+            // 🔥 NAYA LOGIC: Agar ye record kisi BRANCH ka hai (branch_id null nahi hai)
+            // toh Restaurant Admin isko delete nahi kar sakta, sirf Edit kar sakta hai.
+            if (!empty($record->branch_id)) {
+                return false;
+            }
+
+            // Agar Main Restaurant ka staff hai (branch_id null hai), tabhi delete allowed hai
+            return in_array($targetRole, ['manager', 'chef', 'waiter']);
         }
 
+        // 3. Branch Admin Logic
         if ($currentUser->isBranchAdmin()) {
-            return !in_array($targetRole, ['super_admin', 'restaurant_admin']);
+            return in_array($targetRole, ['manager', 'chef', 'waiter']);
         }
 
+        // 4. Manager Logic
         if ($currentUser->isManager()) {
-            return !in_array($targetRole, ['super_admin', 'restaurant_admin', 'branch_admin']);
+            return in_array($targetRole, ['chef', 'waiter']);
         }
 
         return false;
@@ -417,14 +440,12 @@ class UserResource extends Resource
                     ->color('primary'),
             ])
             ->actions([
-                // 🔥 FIX: Check per row if edit is allowed
                 Tables\Actions\EditAction::make()
                     ->visible(fn(\Illuminate\Database\Eloquent\Model $record) => static::canEdit($record))
                     ->color('warning')
                     ->button()
                     ->outlined(),
 
-                // 🔥 FIX: Check per row if delete is allowed
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn(\Illuminate\Database\Eloquent\Model $record) => static::canDelete($record))
                     ->color('danger')
