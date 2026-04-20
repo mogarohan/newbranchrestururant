@@ -19,61 +19,16 @@
             --glass-border: rgba(218, 106, 34, 0.28);
         }
 
-        /* ── MOBILE FIRST (SCROLL ON) ── */
+        /* ── BODY STYLES ── */
         html,
         body {
-            height: auto !important;
-            overflow-x: hidden !important;
-            overflow-y: auto !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            overflow: hidden !important;
+            font-family: 'DM Sans', sans-serif !important;
             padding: 0 !important;
             margin: 0 !important;
-        }
-
-        /* ── DESKTOP ONLY SCROLL OFF ── */
-        @media (min-width: 1024px) {
-
-            html,
-            body {
-                height: 100% !important;
-                overflow: hidden !important;
-            }
-        }
-
-        /* ── Hide Filament wrappers ── */
-        .fi-simple-layout {
             background-color: var(--orange) !important;
-            height: 100vh !important;
-            padding: 0.4rem 1.25rem !important;
-            display: flex !important;
-            align-items: stretch !important;
-        }
-
-        @media (min-width: 1024px) {
-            .fi-simple-layout {
-                height: 100vh !important;
-                padding: 0.5rem 1rem !important;
-                overflow: hidden !important;
-            }
-        }
-
-        .fi-simple-main {
-            background: transparent !important;
-            box-shadow: none !important;
-            padding: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
-            border-radius: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
-        }
-
-        .fi-simple-page {
-            background: transparent !important;
-            padding: 0 !important;
-            width: 100% !important;
-            flex: 1 !important;
-            display: flex !important;
-            flex-direction: column !important;
         }
 
         .fi-simple-header,
@@ -81,38 +36,55 @@
         .fi-topbar,
         header.fi-header,
         .fi-topbar-nav,
-        body>header {
-            display: none !important;
-        }
-
+        body>header,
         .fi-footer-custom {
             display: none !important;
         }
 
-        /* ── Card ── */
+        /* ── CUSTOM PAGE WRAPPER ── */
+        .page-wrap {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            height: 100vh !important;
+            width: 100vw !important;
+            background-color: var(--orange) !important;
+            display: flex !important;
+            align-items: stretch !important;
+            padding: 1.25rem !important;
+            z-index: 99999 !important;
+            box-sizing: border-box !important;
+        }
+
+        @media (min-width: 1024px) {
+            .page-wrap {
+                padding: 2rem !important;
+            }
+        }
+
+        /* ── Card (Cream Box) ── */
         .card {
             position: relative;
+            /* Essential to keep background inside */
+            flex: 1 !important;
             width: 100%;
-            flex: 1;
+            height: 100%;
             border-radius: 2rem;
-            overflow: hidden;
             background-color: var(--cream);
             box-shadow: 0 32px 80px rgba(0, 0, 0, 0.22);
+            /* 🔥 FIX: Card ko hidden rakha taaki background andar hi rahe aur edges round rahein */
+            overflow: hidden !important;
             display: flex;
             flex-direction: column;
         }
 
-        @media (min-width: 1024px) {
-            .card {
-                flex-direction: row;
-                height: 100%;
-            }
-        }
-
-        /* ── BG texture ── */
+        /* 🔥 BG TEXTURE (Card ke andar lock kiya hai, absolute position se) ── */
         .card-bg {
-            position: absolute;
-            inset: 0;
+            position: absolute !important;
+            inset: 0 !important;
+            /* Top, left, right, bottom 0 = fill cream box */
             z-index: 0;
             pointer-events: none;
             background-image: url('{{ asset("images/bg.png") }}');
@@ -124,7 +96,7 @@
 
         /* ── Decorative circles ── */
         .deco-circle {
-            position: absolute;
+            position: absolute !important;
             border-radius: 50%;
             pointer-events: none;
             z-index: 0;
@@ -146,6 +118,28 @@
             background: radial-gradient(circle, rgba(32, 64, 128, 0.10) 0%, transparent 70%);
         }
 
+        /* 🔥 CONTENT WRAPPER (Sirf ye scroll hoga mobile par) */
+        .card-content {
+            position: relative;
+            z-index: 1;
+            /* Background ke upar */
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto !important;
+            /* Mobile scroll enabled */
+            overflow-x: hidden !important;
+        }
+
+        @media (min-width: 1024px) {
+            .card-content {
+                flex-direction: row;
+                overflow-y: hidden !important;
+                /* Desktop par scroll band */
+            }
+        }
+
         /* ── Left panel ── */
         .left-panel {
             position: relative;
@@ -158,12 +152,14 @@
             justify-content: center;
             text-align: center;
             gap: 1rem;
+            flex-shrink: 0;
         }
 
         @media (min-width: 1024px) {
             .left-panel {
                 width: 50%;
                 padding: 3.5rem;
+                flex-shrink: 1;
             }
         }
 
@@ -186,10 +182,12 @@
         }
 
         .tagline {
-            font-family: 'Lora', Georgia, serif;
+            font-family: 'Lora', 'Times New Roman', Georgia, serif;
             font-size: clamp(1.1rem, 2.5vw, 1.45rem);
             color: var(--navy);
+            font-style: normal;
             font-weight: 600;
+            letter-spacing: 0.03em;
         }
 
         .powered {
@@ -208,8 +206,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow-y: visible;
-            /* MOBILE scroll */
+            flex-shrink: 0;
         }
 
         @media (min-width: 1024px) {
@@ -217,8 +214,7 @@
                 width: 50%;
                 padding: 3.5rem;
                 justify-content: flex-start;
-                overflow-y: auto;
-                /* DESKTOP scroll inside */
+                flex-shrink: 1;
             }
         }
 
@@ -229,63 +225,137 @@
             border-radius: 1.75rem;
             border: 1.5px solid var(--glass-border);
             padding: 2.5rem 2rem;
-            backdrop-filter: blur(24px);
-            background: rgba(252, 236, 221, 0.6);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            background: linear-gradient(135deg, rgba(252, 236, 221, 0.52) 0%, rgba(252, 236, 221, 0.28) 60%, rgba(218, 106, 34, 0.08) 100%);
+            box-shadow: 0 24px 60px rgba(32, 64, 128, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(218, 106, 34, 0.12);
+        }
+
+        @media (min-width: 640px) {
+            .glass-box {
+                padding: 3rem 2.5rem;
+            }
         }
 
         .glass-box h1 {
-            font-family: 'Playfair Display';
-            font-size: 2.2rem;
+            font-family: 'Playfair Display', serif;
+            font-size: clamp(2rem, 4vw, 2.6rem);
+            font-weight: 700;
+            color: var(--navy);
+            letter-spacing: 0.04em;
             margin-bottom: 2rem;
             text-align: center;
         }
 
-        /* Button */
+        @media (min-width: 1024px) {
+            .glass-box h1 {
+                text-align: left;
+            }
+        }
+
+        /* --- FILAMENT FORM STYLING --- */
+        .fi-fo-component-ctn {
+            gap: 1.2rem !important;
+        }
+
+        .fi-fo-field-wrp-label span {
+            color: #1a1a2e !important;
+            font-weight: 600 !important;
+            font-size: 0.95rem !important;
+        }
+
+        .fi-fo-field-wrp-label sup {
+            color: #dc2626 !important;
+        }
+
+        .fi-input-wrapper {
+            background: rgba(252, 236, 221, 0.35) !important;
+            border: 1.5px solid rgba(218, 106, 34, 0.38) !important;
+            border-radius: 0.9rem !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 6px 16px rgba(218, 106, 34, 0.07) !important;
+            transition: all 0.3s ease;
+        }
+
+        .fi-input-wrapper:focus-within {
+            border-color: #da6a22 !important;
+            background: rgba(252, 236, 221, 0.55) !important;
+            box-shadow: 0 0 0 3px rgba(218, 106, 34, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.4) !important;
+        }
+
+        .fi-input-wrapper input {
+            background: transparent !important;
+            color: #111827 !important;
+            font-size: 1rem !important;
+            padding: 0.85rem 0 !important;
+        }
+
+        .fi-checkbox-input {
+            border: 1.5px solid rgba(218, 106, 34, 0.5) !important;
+            background: rgba(252, 236, 221, 0.28) !important;
+            border-radius: 0.35rem !important;
+            accent-color: var(--orange) !important;
+        }
+
         .fi-btn-primary {
-            width: 100%;
+            background: linear-gradient(135deg, var(--orange) 0%, #e8832e 50%, var(--orange-dark) 100%) !important;
+            color: #fff !important;
+            border-radius: 0.75rem !important;
+            padding: 0.9rem 1.5rem !important;
+            font-weight: 600 !important;
+            font-size: 1.1rem !important;
+            border: none !important;
+            box-shadow: 0 10px 28px rgba(218, 106, 34, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+            width: 100% !important;
+            margin-top: 1.5rem !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .fi-btn-primary:hover {
+            transform: translateY(-2px) !important;
+            box-shadow: 0 16px 36px rgba(218, 106, 34, 0.42) !important;
+        }
+
+        .fi-fo-field-wrp-error-message {
+            color: #dc2626 !important;
+            font-weight: 600 !important;
         }
     </style>
 
-    <div class="card">
+    <div class="page-wrap">
+        <div class="card">
 
-        <div class="card-bg"></div>
-        <div class="deco-circle deco-1"></div>
-        <div class="deco-circle deco-2"></div>
+            <div class="card-bg"></div>
+            <div class="deco-circle deco-1"></div>
+            <div class="deco-circle deco-2"></div>
 
-        {{-- LEFT --}}
-        <div class="left-panel">
-            <img class="logo" src="{{ asset('images/ann-sathi.png') }}">
-            <p class="tagline">Sathi Of Your Food Journey</p>
-            <p class="powered">Powered By - Techstrota</p>
-        </div>
+            <div class="card-content">
+                {{-- LEFT --}}
+                <div class="left-panel">
+                    <img class="logo" src="{{ asset('images/ann-sathi.png') }}">
+                    <p class="tagline">"Sathi Of Your Food Journey"</p>
+                    <p class="powered">Powered By - Techstrota</p>
+                </div>
 
-        {{-- RIGHT --}}
-        <div class="right-panel">
-            <div class="glass-box">
-                <h1>LOGIN</h1>
+                {{-- RIGHT --}}
+                <div class="right-panel">
+                    <div class="glass-box">
+                        <h1>LOGIN</h1>
 
-                <x-filament-panels::form wire:submit="authenticate">
-                    {{ $this->form }}
+                        <div class="w-full">
+                            <x-filament-panels::form wire:submit="authenticate">
+                                {{ $this->form }}
+                                <div>
+                                    <x-filament-panels::form.actions :actions="$this->getCachedFormActions()"
+                                        :full-width="$this->hasFullWidthFormActions()" />
+                                </div>
+                            </x-filament-panels::form>
+                        </div>
 
-                    <div style="margin-top: 1.5rem;">
-                        <x-filament-panels::form.actions :actions="$this->getCachedFormActions()"
-                            :full-width="$this->hasFullWidthFormActions()" />
                     </div>
-                </x-filament-panels::form>
-
+                </div>
             </div>
+
         </div>
-
     </div>
-
-    <script>
-        function hideTopbar() {
-            ['nav.fi-topbar', '.fi-topbar', 'header.fi-header'].forEach(sel => {
-                document.querySelectorAll(sel).forEach(el => el.remove());
-            });
-        }
-        document.addEventListener('DOMContentLoaded', hideTopbar);
-        document.addEventListener('livewire:navigated', hideTopbar);
-    </script>
 
 </x-filament-panels::page.simple>
