@@ -223,7 +223,7 @@ class ManageMenus extends ManageRecords
                                     return "{$itemName}.{$extension}";
                                 })
                                 ->imageEditor()
-                                ->required()
+                                //->required()
                                 ->maxSize(2048),
 
                             Forms\Components\Toggle::make('is_available')
