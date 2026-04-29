@@ -79,6 +79,18 @@ class RestaurantResource extends Resource
                 ->minValue(1)
                 ->required(),
 
+            // 👇 NEW: Address Field 👇
+            Forms\Components\Textarea::make('address')
+                ->label('Restaurant Address')
+                ->maxLength(65535)
+                ->columnSpanFull(),
+
+            // 👇 NEW: Phone Number Field 👇
+            Forms\Components\TextInput::make('phone_no')
+                ->label('Phone Number')
+                ->tel()
+                ->maxLength(255),
+
             // 👇 NEW: UPI ID Field for Main Restaurant 👇
             Forms\Components\TextInput::make('upi_id')
                 ->label('Master UPI ID')
@@ -287,6 +299,23 @@ class RestaurantResource extends Resource
                     ->searchable()
                     ->placeholder('Not Set')
                     ->color('gray'),
+                    // 👇 NEW: Phone Number Column 👇
+                Tables\Columns\TextColumn::make('phone_no')
+                    ->label('PHONE')
+                    ->searchable()
+                    ->copyable()
+                    ->toggleable(),
+
+                // 👇 NEW: Address Column 👇
+                Tables\Columns\TextColumn::make('address')
+                    ->label('ADDRESS')
+                    ->searchable()
+                    ->limit(30) // Limits the text so long addresses don't break the layout
+                    ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
+                        $state = $column->getState();
+                        return strlen($state) > 30 ? $state : null; // Shows full address on hover
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true), // Hidden by default to keep the table clean
 
                 Tables\Columns\IconColumn::make('has_branches')
                     ->label('MULTI-BRANCH')
