@@ -1,12 +1,10 @@
 <x-filament-panels::page>
     <style>
-        /* --- 🌟 MAKE FILAMENT WRAPPERS TRANSPARENT --- */
         html, body, .fi-layout, .fi-main, .fi-page {
             background-color: transparent !important;
             background: transparent !important;
         }
 
-        /* --- 🌟 BACKGROUND IMAGE WITH 0.15 OPACITY --- */
         .custom-page-bg {
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -19,7 +17,6 @@
             pointer-events: none;
         }
 
-        /* 🎨 ULTRA-PREMIUM POS UI (GLASSMORPHISM & BLACK BORDER) */
         .pos-container {
             width: 100%;
             font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -27,7 +24,6 @@
             z-index: 10;
         }
 
-        /* 📐 Main Layout Grid */
         .pos-layout {
             display: flex;
             flex-direction: column;
@@ -48,30 +44,21 @@
             }
         }
 
-        /* 🌙 THEME ADAPTIVE VARIABLES */
         .pos-scope {
-            /* Text Colors */
             --text-primary: #0f172a;
             --text-secondary: #334155;
             --text-muted: #64748b;
-
-            /* Status & Brand Colors */
             --brand-blue: #2a4795;
             --brand-blue-light: rgba(42, 71, 149, 0.15);
-
             --brand-orange: #f16b3f;
             --brand-orange-light: rgba(241, 107, 63, 0.15);
-
             --accent-green: #10b981;
             --accent-green-light: rgba(16, 185, 129, 0.15);
-
             --accent-pink: #f395a3;
             --accent-pink-light: rgba(243, 149, 163, 0.15);
             --accent-red: #ef4444;
-
-            /* Glassmorphism Configuration */
             --glass-bg: rgba(255, 255, 255, 0.45);
-            --glass-border: #000000; /* BLACK BORDER */
+            --glass-border: #000000;
             --glass-shadow: 0 8px 32px rgba(42, 71, 149, 0.08);
             --glass-blur: blur(16px) saturate(140%);
             --card-radius: 1.25rem;
@@ -87,9 +74,6 @@
             --brand-orange-light: rgba(241, 107, 63, 0.2);
         }
 
-        /* -------------------------------------------
-           📊 TOP STATS GRID
-        ----------------------------------------------*/
         .pos-stats {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -107,7 +91,7 @@
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
             -webkit-backdrop-filter: var(--glass-blur);
-            border: 1.5px solid var(--glass-border); /* BLACK BORDER */
+            border: 1.5px solid var(--glass-border);
             border-radius: var(--card-radius);
             padding: 1rem;
             box-shadow: var(--glass-shadow);
@@ -173,7 +157,6 @@
             font-family: 'Poppins', sans-serif;
         }
 
-        /* 🎨 THEME CLASSES FOR TOP CARDS */
         .theme-blue .stat-icon-wrapper {
             background-color: var(--brand-blue-light);
             color: var(--brand-blue);
@@ -188,10 +171,6 @@
         }
         .theme-orange .stat-value { color: var(--brand-orange); }
 
-
-        /* -------------------------------------------
-           🪑 TABLE GRID (GLASS & BLACK BORDER)
-        ----------------------------------------------*/
         .pos-table-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
@@ -202,7 +181,7 @@
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
             -webkit-backdrop-filter: var(--glass-blur);
-            border: 1.5px solid var(--glass-border) !important; /* BLACK BORDER */
+            border: 1.5px solid var(--glass-border) !important;
             border-radius: var(--card-radius);
             padding: 1.25rem;
             display: flex;
@@ -229,7 +208,6 @@
         }
         .dark .ts-table:hover { box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8); }
 
-        /* 🎨 TABLE STATUS DESIGNS (THICK TOP BORDER FOR STATUS) */
         .ts-table.available { border-top: 4px dashed var(--accent-green) !important; }
         .ts-table.occupied { border-top: 4px solid var(--brand-orange) !important; }
         .ts-table.reserved { border-top: 4px solid var(--accent-pink) !important; }
@@ -259,7 +237,6 @@
             letter-spacing: 0.05em;
         }
 
-        /* Badges */
         .ts-badge {
             font-size: 0.6rem;
             font-weight: 800;
@@ -270,25 +247,10 @@
             backdrop-filter: blur(4px);
         }
 
-        .badge-available {
-            background-color: var(--accent-green-light);
-            color: var(--accent-green);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
+        .badge-available { background-color: var(--accent-green-light); color: var(--accent-green); border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-occupied { background-color: var(--brand-orange-light); color: var(--brand-orange); border: 1px solid rgba(241, 107, 63, 0.3); }
+        .badge-reserved { background-color: var(--accent-pink-light); color: var(--accent-pink); border: 1px solid rgba(243, 149, 163, 0.5); }
 
-        .badge-occupied {
-            background-color: var(--brand-orange-light);
-            color: var(--brand-orange);
-            border: 1px solid rgba(241, 107, 63, 0.3);
-        }
-
-        .badge-reserved {
-            background-color: var(--accent-pink-light);
-            color: var(--accent-pink);
-            border: 1px solid rgba(243, 149, 163, 0.5);
-        }
-
-        /* Body Info */
         .ts-info-row {
             display: flex;
             align-items: center;
@@ -297,18 +259,9 @@
             position: relative; z-index: 2;
         }
 
-        .ts-info-icon {
-            color: var(--text-muted);
-            width: 16px;
-        }
+        .ts-info-icon { color: var(--text-muted); width: 16px; }
+        .ts-info-text { font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); }
 
-        .ts-info-text {
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--text-secondary);
-        }
-
-        /* Table Action Buttons */
         .ts-btn-reserve {
             margin-top: auto;
             width: 100%;
@@ -330,23 +283,9 @@
             backdrop-filter: blur(4px);
         }
         .dark .ts-btn-reserve.make { background-color: rgba(0,0,0,0.2); }
-
-        .ts-btn-reserve.make:hover {
-            background-color: var(--brand-blue);
-            color: white;
-            border-color: var(--brand-blue);
-        }
-
-        .ts-btn-reserve.cancel {
-            background-color: var(--accent-pink-light);
-            color: var(--accent-pink);
-            border: 1px solid var(--accent-pink);
-        }
-
-        .ts-btn-reserve.cancel:hover {
-            background-color: var(--accent-pink);
-            color: white;
-        }
+        .ts-btn-reserve.make:hover { background-color: var(--brand-blue); color: white; border-color: var(--brand-blue); }
+        .ts-btn-reserve.cancel { background-color: var(--accent-pink-light); color: var(--accent-pink); border: 1px solid var(--accent-pink); }
+        .ts-btn-reserve.cancel:hover { background-color: var(--accent-pink); color: white; }
         
         .ts-btn-clean {
             margin-top: 8px;
@@ -365,14 +304,8 @@
             position: relative; z-index: 2;
         }
 
-        .ts-btn-clean:hover {
-            background-color: var(--brand-orange);
-            color: white;
-        }
+        .ts-btn-clean:hover { background-color: var(--brand-orange); color: white; }
 
-        /* -------------------------------------------
-           🧾 RECEIPT SIDEBAR (GLASSMORPHISM)
-        ----------------------------------------------*/
         .pos-receipt {
             height: calc(100vh - 6.5rem);
             position: sticky;
@@ -382,7 +315,7 @@
             background: var(--glass-bg);
             backdrop-filter: var(--glass-blur);
             -webkit-backdrop-filter: var(--glass-blur);
-            border: 1.5px solid var(--glass-border); /* BLACK BORDER */
+            border: 1.5px solid var(--glass-border);
             border-radius: var(--card-radius);
             box-shadow: var(--glass-shadow);
             overflow: hidden;
@@ -409,13 +342,11 @@
         }
         .dark .pos-receipt-footer { border-color: rgba(255,255,255,0.2); background-color: rgba(0, 0, 0, 0.2); }
 
-        /* SCROLLBAR */
         .pos-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
         .pos-scroll::-webkit-scrollbar-track { background: transparent; }
         .pos-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 10px; }
         .dark .pos-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); }
         
-        /* CUSTOMER LIST CSS */
         .customer-pill {
             display: inline-flex;
             align-items: center;
@@ -453,20 +384,48 @@
             background: var(--glass-bg); 
             border-radius: 12px;
         }
+
+        /* 👇 NEW: Buttons for placing/editing orders 👇 */
+        .btn-add-order {
+            background: var(--brand-blue); 
+            color: #fff; 
+            border: 1.5px solid #000; 
+            padding: 4px 12px; 
+            border-radius: 20px; 
+            font-size: 0.65rem; 
+            font-weight: 900; 
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        .btn-add-order:hover {
+            background: var(--brand-blue-light);
+            color: var(--brand-blue);
+        }
+        .btn-edit-order {
+            background: transparent; 
+            border: 1px solid var(--text-muted); 
+            color: var(--text-muted); 
+            padding: 2px 8px; 
+            border-radius: 6px; 
+            font-size: 0.6rem; 
+            font-weight: 800; 
+            cursor: pointer; 
+            transition: all 0.2s;
+        }
+        .btn-edit-order:hover {
+            color: var(--text-primary); 
+            border-color: var(--text-primary);
+        }
     </style>
 
     <div class="custom-page-bg"></div>
 
     <div class="pos-scope pos-container">
-
         <div class="pos-layout">
 
-            {{-- ========================================== --}}
             {{-- LEFT COLUMN: MASTER VIEW --}}
-            {{-- ========================================== --}}
             <div class="flex flex-col w-full min-w-0">
 
-                {{-- 1. TOP STATS WIDGETS --}}
                 <div class="pos-stats">
                     <div class="stat-card-h theme-blue">
                         <div class="stat-icon-wrapper"><x-heroicon-s-squares-2x2 /></div>
@@ -498,7 +457,6 @@
                     </div>
                 </div>
 
-                {{-- 2. URGENT ACTION STRIP (KITCHEN TICKETS) --}}
                 @if($incomingOrders->count() > 0)
                     <div class="urgent-strip">
                         <h2 style="color: var(--accent-red); font-size: 0.9rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;">
@@ -549,7 +507,6 @@
                 @endif
                 <br />
 
-                {{-- 3. FLOOR PLAN GRID --}}
                 <div>
                     <div class="flex flex-col md:flex-row justify-center md:items-center mb-6 pb-2 gap-4">
                         <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--glass-bg); border: 1.5px solid #000000; backdrop-filter: var(--glass-blur);">
@@ -637,15 +594,11 @@
                 </div>
             </div>
 
-            {{-- ========================================== --}}
             {{-- RIGHT COLUMN: DIGITAL RECEIPT SIDEBAR --}}
-            {{-- ========================================== --}}
             <div class="w-full lg:w-auto">
                 @if($selectedTableData && $activeDinersList->count() > 0)
                     @php
                         $groupedOrders = $tableOrders->groupBy('status');
-
-                        // Calculate total bill for valid statuses
                         $validOrdersForBill = $tableOrders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
                         $runningTotal = $validOrdersForBill->sum('total_amount');
                     @endphp
@@ -669,8 +622,6 @@
                         </div>
 
                         <div class="pos-receipt-body pos-scroll">
-
-                            {{-- 👇 Customer Pill List 👇 --}}
                             <div style="background: rgba(255,255,255,0.3); border-radius: 8px; padding: 12px; margin-bottom: 1.5rem; border: 1px solid rgba(0,0,0,0.1);">
                                 <div style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;">
                                     Active Diners ({{ $activeDinersList->count() }}/{{ $selectedTableData->seating_capacity ?? 4 }})
@@ -685,10 +636,16 @@
                                 </div>
                             </div>
 
-                            <div style="text-align: center; margin-bottom: 1.5rem;">
+                            {{-- 👇 NEW: Add Order Button Here 👇 --}}
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                                 <span style="background: var(--text-primary); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">
                                     Active Orders
                                 </span>
+                                @if(!$pendingPayment)
+                                    <button wire:click="mountAction('placeOrderAction')" class="btn-add-order">
+                                        + PLACE ORDER
+                                    </button>
+                                @endif
                             </div>
 
                             <div class="flex flex-col gap-6">
@@ -702,63 +659,66 @@
                                         'rejected' => 'Cancelled / Rejected'
                                     ] as $statusKey => $label)
 
-                                            @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
-                                                <div>
-                                                    <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
-                                                        {{ $label }}
-                                                    </div>
+                                    @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
+                                        <div>
+                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
+                                                {{ $label }}
+                                            </div>
 
-                                                    <div class="flex flex-col gap-4">
-                                                        @foreach($groupedOrders[$statusKey] as $order)
-                                                            @php
-                                                                $isHostOrder = $order->qr_session_id === $hostSessionId;
-                                                                $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                            @endphp
+                                            <div class="flex flex-col gap-4">
+                                                @foreach($groupedOrders[$statusKey] as $order)
+                                                    @php
+                                                        $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                        $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                    @endphp
 
-                                                            {{-- Order Container --}}
-                                                            <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                    <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
 
-                                                                <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
-                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
-                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
-                                                                        {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
+                                                        <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
+                                                            <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
+                                                            <div class="flex gap-2 items-center">
+                                                                <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                    {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
+                                                                </span>
+                                                                {{-- 👇 NEW: Edit Button Here 👇 --}}
+                                                                @if(!$isCancelled && !$pendingPayment)
+                                                                    <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" class="btn-edit-order">
+                                                                        EDIT
+                                                                    </button>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+
+                                                        @if($order->notes && !$isCancelled)
+                                                            <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
+                                                                Note: {{ $order->notes }}
+                                                            </div>
+                                                        @endif
+
+                                                        @foreach($order->items as $item)
+                                                            <div class="flex justify-between items-start mt-1">
+                                                                <div class="pr-4">
+                                                                    <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                        <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
                                                                     </span>
                                                                 </div>
-
-                                                                @if($order->notes && !$isCancelled)
-                                                                    <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
-                                                                        Note: {{ $order->notes }}
-                                                                    </div>
-                                                                @endif
-
-                                                                @foreach($order->items as $item)
-                                                                    <div class="flex justify-between items-start mt-1">
-                                                                        <div class="pr-4">
-                                                                            <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                                <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
-                                                                            </span>
-                                                                        </div>
-                                                                        <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                            ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
-                                                                        </span>
-                                                                    </div>
-                                                                @endforeach
+                                                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                    ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                                </span>
                                                             </div>
                                                         @endforeach
                                                     </div>
-                                                </div>
-                                            @endif
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    @endif
                                 @endforeach
                             </div>
                         </div>
 
-                        {{-- =============================================== --}}
                         {{-- IN-DASHBOARD BILLING & PAYMENT CONTROL --}}
-                        {{-- =============================================== --}}
                         <div class="pos-receipt-footer">
-
                             @if($pendingPayment && $pendingPayment->status === 'paid')
-                                {{-- ALREADY PAID --}}
                                 <div style="background: var(--accent-green-light); border: 1px solid var(--accent-green); padding: 1rem; border-radius: 12px; text-align: center;">
                                     <x-heroicon-s-check-circle style="width: 32px; height: 32px; color: var(--accent-green); margin: 0 auto 0.5rem auto;" />
                                     <div style="color: var(--accent-green); font-weight: 900; font-size: 1.1rem; text-transform: uppercase;">Payment Settled</div>
@@ -766,7 +726,6 @@
                                     <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;">Customer can now download PDF.</div>
                                 </div>
                             @else
-                                {{-- CALCULATE LIVE PREVIEW TOTALS --}}
                                 @php
                                     $taxable = max(0, $runningTotal - (float) $discountAmount);
                                     $liveTax = $taxable * ((float) $taxPercentage / 100);
@@ -779,7 +738,6 @@
                                 </div>
 
                                 @if(!$pendingPayment)
-                                    {{-- STEP 1: GENERATE BILL --}}
                                     <div class="flex gap-3 mb-4">
                                         <div style="flex: 1;">
                                             <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Discount (₹)</label>
@@ -809,7 +767,6 @@
                                         Send Bill to Customer
                                     </button>
                                 @else
-                                    {{-- STEP 2: BILL PENDING / CONFIRM PAYMENT --}}
                                     <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
                                         <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
                                         <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
@@ -847,7 +804,7 @@
                 @else
                     @if($this->selectedTableId)
                         @php 
-                                                                    $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
+                            $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
                             $isRes = $tableInfo && ($tableInfo->status === 'reserved');
                         @endphp
 
@@ -861,6 +818,10 @@
                             <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5; margin-bottom: 2rem;">
                                 {{ $isRes ? 'This table is currently reserved for upcoming guests.' : 'This table is clean and ready for new guests.' }}
                             </p>
+                            {{-- Managers can place a new order even if the table is empty! --}}
+                            <button wire:click="mountAction('placeOrderAction')" class="btn-add-order" style="padding: 10px 20px; font-size: 0.85rem;">
+                                + PLACE NEW ORDER
+                            </button>
                         </div>
                     @else
                         <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
@@ -877,4 +838,7 @@
             </div>
         </div>
     </div>
+    
+    {{-- Required to render the mounted actions (modals) --}}
+    <x-filament-actions::modals />
 </x-filament-panels::page>

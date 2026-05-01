@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Events\OrderStatusUpdated;
+use App\Events\OrderCancelled;
 
 class PlaceOrderController extends Controller
 {
@@ -332,5 +333,46 @@ class PlaceOrderController extends Controller
         }
 
         return response()->json(['message' => 'Method selected.']);
+    }
+
+    public function cancel(Request $request, $orderId)
+    {
+        // 1. Authenticate the session
+        $session = \App\Models\QrSession::where('session_token', $request->bearerToken())
+            ->where('is_active', true)
+            ->firstOrFail();
+
+        // 2. Find the order, ensuring it belongs to this exact table/session
+        $order = \App\Models\Order::where('id', $orderId)
+            ->where('qr_session_id', $session->id)
+            ->firstOrFail();
+
+        // 3. STRICT BUSINESS LOGIC: Allow cancellation if it's pending, placed, or accepted
+        if (!in_array($order->status, ['pending', 'placed', 'accepted'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You can only cancel an order before the kitchen starts preparing it.'
+            ], 400);
+        }
+
+        // 4. Update the status
+        $oldStatus = $order->status;
+        $order->update(['status' => 'cancelled']);
+
+        // Log the status change so the manager knows the customer cancelled it
+        \App\Models\OrderStatusLog::create([
+            'order_id' => $order->id,
+            'from_status' => $oldStatus,
+            'to_status' => 'cancelled',
+            'changed_by_type' => 'customer',
+        ]);
+
+        // 5. Broadcast to the kitchen to stop cooking
+        event(new OrderCancelled($order));
+
+        // 👇 THE FIX: Broadcast this to instantly refresh the Manager Dashboard & other Customer phones!
+        \App\Events\OrderStatusUpdated::dispatch($order);
+
+        return response()->json(['status' => 'success', 'message' => 'Order cancelled successfully.']);
     }
 }

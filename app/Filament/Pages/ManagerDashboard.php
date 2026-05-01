@@ -14,8 +14,13 @@ use App\Events\OrderStatusUpdated;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Filament\Notifications\Notification;
-use Illuminate\Support\Facades\Cache; // 👈 NEW: For preventing notification spam
-use Illuminate\Support\Str; // 👈 Ensure this is imported at the top of your file
+use Illuminate\Support\Facades\Cache; 
+use Illuminate\Support\Str; 
+use Filament\Actions\Action; // 👈 NEW: For custom Page Actions
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Hidden;
 
 class ManagerDashboard extends Page
 {
@@ -30,7 +35,7 @@ class ManagerDashboard extends Page
     
     // Billing Properties
     public $discountAmount = 0;
-    public $taxPercentage = 0; // Default 0 as requested
+    public $taxPercentage = 0;
 
     public function getListeners(): array
     {
@@ -50,7 +55,6 @@ class ManagerDashboard extends Page
         $tableNum = $event['table_number'] ?? '?';
         $customer = $event['customer_name'] ?? 'A customer';
 
-        // 👇 FIX: Prevent notification spam! Only alert once every 30 seconds per table.
         $cacheKey = "bill_requested_alert_{$tableNum}";
         
         if (!Cache::has($cacheKey)) {
@@ -61,12 +65,10 @@ class ManagerDashboard extends Page
                 ->persistent() 
                 ->send();
                 
-            // Lock out further alerts for this table for 30 seconds
             Cache::put($cacheKey, true, now()->addSeconds(30));
         }
     }
 
-    // This triggers when the customer taps Cash or UPI on their phone
     public function notifyPaymentMethod($event)
     {
         $tableNum = $event['table_number'] ?? '?';
@@ -81,20 +83,14 @@ class ManagerDashboard extends Page
         $this->dispatch('$refresh');
     }
 
-    // 👇 NEW: Allows the manager to cancel a pending bill so the customer can order again
     public function cancelPendingBill()
     {
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
         
         if ($pendingPayment && $pendingPayment->status === 'pending') {
-            // Delete the pending payment record
             $pendingPayment->delete();
-            
-            // Alert the customer app that the bill was cancelled (pushes null payment data)
             event(new \App\Events\BillGenerated($viewData['hostSessionId'], null));
-            
-            // Reset local inputs
             $this->discountAmount = 0;
             $this->taxPercentage = 0;
 
@@ -104,6 +100,180 @@ class ManagerDashboard extends Page
                 ->warning()
                 ->send();
         }
+    }
+
+    // 👇 UPDATED: Place Order from Dashboard
+    public function placeOrderAction(): Action
+    {
+        return Action::make('placeOrderAction')
+            ->label('Place Order')
+            ->modalHeading('Place Order on Behalf of Customer')
+            ->modalWidth(MaxWidth::TwoExtraLarge)
+            ->form([
+                Repeater::make('items')
+                    ->schema([
+                        Select::make('menu_item_id')
+                            ->label('Menu Item')
+                            ->options(\App\Models\MenuItem::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                            ->searchable()
+                            ->required()
+                            ->live() // Required to trigger afterStateUpdated
+                            ->afterStateUpdated(fn ($state, callable $set) => $set('unit_price', \App\Models\MenuItem::find($state)?->price ?? 0)),
+                        TextInput::make('quantity')
+                            ->numeric()
+                            ->default(1)
+                            ->minValue(1)
+                            ->required(),
+                        Hidden::make('unit_price'),
+                        TextInput::make('notes')->nullable(),
+                    ])
+                    ->columns(2)
+                    ->defaultItems(1)
+                    ->addActionLabel('Add Another Item')
+            ])
+            ->action(function (array $data) {
+                $viewData = $this->getViewData();
+                $hostSessionId = $viewData['hostSessionId'];
+                
+                if (!$hostSessionId) {
+                    Notification::make()->title('No active session on this table.')->danger()->send();
+                    return;
+                }
+                
+                $totalAmount = 0;
+                foreach($data['items'] as $item) {
+                    $totalAmount += ($item['unit_price'] * $item['quantity']);
+                }
+
+                $order = Order::create([
+                    'restaurant_id' => auth()->user()->restaurant_id,
+                    'branch_id' => auth()->user()->branch_id,
+                    'restaurant_table_id' => $this->selectedTableId,
+                    'qr_session_id' => $hostSessionId,
+                    'customer_name' => 'Manager (Dashboard)',
+                    'total_amount' => $totalAmount,
+                    'status' => 'accepted', // Auto-accept since manager placed it
+                ]);
+
+                foreach($data['items'] as $item) {
+                    // 👇 FIX: Fetch the menu item to get the name
+                    $menuItem = \App\Models\MenuItem::find($item['menu_item_id']);
+                    
+                    $order->items()->create([
+                        'menu_item_id' => $item['menu_item_id'],
+                        'item_name' => $menuItem ? $menuItem->name : 'Custom Item', // 👈 Added item_name
+                        'quantity' => $item['quantity'],
+                        'unit_price' => $item['unit_price'],
+                        'total_price' => $item['unit_price'] * $item['quantity'],
+                        'notes' => $item['notes'] ?? null,
+                    ]);
+                }
+
+                KitchenQueue::firstOrCreate(
+                    ['order_id' => $order->id],
+                    ['current_status' => 'placed', 'priority' => 0]
+                );
+
+                OrderStatusUpdated::dispatch($order);
+                Notification::make()->title('Order placed successfully.')->success()->send();
+            });
+    }
+
+    // 👇 UPDATED: Edit Existing Order from Dashboard
+    public function editOrderAction(): Action
+    {
+        return Action::make('editOrderAction')
+            ->label('Edit Order')
+            ->modalHeading(fn (array $arguments) => 'Edit Order #' . ($arguments['orderId'] ?? ''))
+            ->modalWidth(MaxWidth::TwoExtraLarge)
+            ->form([
+                Repeater::make('items')
+                    ->schema([
+                        Hidden::make('id'),
+                        Select::make('menu_item_id')
+                            ->label('Menu Item')
+                            ->options(\App\Models\MenuItem::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                            ->searchable()
+                            ->required()
+                            ->live()
+                            ->afterStateUpdated(fn ($state, callable $set) => $set('unit_price', \App\Models\MenuItem::find($state)?->price ?? 0)),
+                        TextInput::make('quantity')
+                            ->numeric()
+                            ->minValue(1)
+                            ->required(),
+                        Hidden::make('unit_price'),
+                        TextInput::make('notes')->nullable(),
+                    ])
+                    ->columns(2)
+                    ->addActionLabel('Add Item')
+            ])
+            ->fillForm(function (array $arguments) {
+                // Fetch the existing order items to populate the form
+                $order = Order::with('items')->find($arguments['orderId']);
+                if(!$order) return [];
+                
+                return [
+                    'items' => $order->items->map(function($item) {
+                        return [
+                            'id' => $item->id,
+                            'menu_item_id' => $item->menu_item_id,
+                            'quantity' => $item->quantity,
+                            'unit_price' => $item->unit_price,
+                            'notes' => $item->notes,
+                        ];
+                    })->toArray()
+                ];
+            })
+            ->action(function (array $data, array $arguments) {
+                $order = Order::find($arguments['orderId']);
+                if(!$order) return;
+
+                $totalAmount = 0;
+                $existingItemIds = [];
+
+                foreach($data['items'] as $itemData) {
+                    $totalPrice = $itemData['unit_price'] * $itemData['quantity'];
+                    $totalAmount += $totalPrice;
+                    
+                    // 👇 FIX: Fetch the menu item to get the name
+                    $menuItem = \App\Models\MenuItem::find($itemData['menu_item_id']);
+
+                    if (!empty($itemData['id'])) {
+                        // Update existing item
+                        $orderItem = $order->items()->find($itemData['id']);
+                        if ($orderItem) {
+                            $orderItem->update([
+                                'menu_item_id' => $itemData['menu_item_id'],
+                                'item_name' => $menuItem ? $menuItem->name : 'Custom Item', // 👈 Added item_name
+                                'quantity' => $itemData['quantity'],
+                                'unit_price' => $itemData['unit_price'],
+                                'total_price' => $totalPrice,
+                                'notes' => $itemData['notes'] ?? null,
+                            ]);
+                            $existingItemIds[] = $orderItem->id;
+                        }
+                    } else {
+                        // Create a newly added item
+                        $newItem = $order->items()->create([
+                            'menu_item_id' => $itemData['menu_item_id'],
+                            'item_name' => $menuItem ? $menuItem->name : 'Custom Item', // 👈 Added item_name
+                            'quantity' => $itemData['quantity'],
+                            'unit_price' => $itemData['unit_price'],
+                            'total_price' => $totalPrice,
+                            'notes' => $itemData['notes'] ?? null,
+                        ]);
+                        $existingItemIds[] = $newItem->id;
+                    }
+                }
+
+                // Delete any items that were removed in the Repeater
+                $order->items()->whereNotIn('id', $existingItemIds)->delete();
+                $order->update(['total_amount' => $totalAmount]);
+
+                // Sync the update in real-time
+                OrderStatusUpdated::dispatch($order);
+                Notification::make()->title('Order updated successfully.')->success()->send();
+            });
     }
 
     public function getMaxContentWidth(): MaxWidth|string|null
@@ -124,7 +294,6 @@ class ManagerDashboard extends Page
             $this->selectedTableId = null;
         } else {
             $this->selectedTableId = $tableId;
-            // Reset billing inputs when opening a new table
             $this->discountAmount = 0;
             $this->taxPercentage = 0;
         }
@@ -229,7 +398,6 @@ class ManagerDashboard extends Page
         OrderStatusUpdated::dispatch($order);
     }
 
-   // 👇 Generates the bill and sends it to the customer's phone
     public function sendBillToCustomer()
     {
         $viewData = $this->getViewData();
@@ -243,11 +411,8 @@ class ManagerDashboard extends Page
         $grandTotal = $taxable + $taxAmt;
 
         $latestOrderId = $orders->pluck('id')->last();
-
-        // 👇 1. Generate a secure, traceable Transaction Reference
         $transactionRef = 'ORD' . $latestOrderId . '_' . Str::random(10);
 
-        // Create a PENDING payment record
         $payment = Payment::updateOrCreate(
             ['order_id' => $latestOrderId],
             [
@@ -259,7 +424,7 @@ class ManagerDashboard extends Page
                 'amount' => $grandTotal,
                 'status' => 'pending', 
                 'payment_method' => 'pending', 
-                'transaction_reference' => $transactionRef, // 👇 2. Save it to the database
+                'transaction_reference' => $transactionRef,
             ]
         );
 
@@ -267,10 +432,8 @@ class ManagerDashboard extends Page
             ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id 
             : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
 
-        // 👇 3. Define the Merchant Category Code (5812 = Eating Places/Restaurants)
         $merchantCode = '5812';
 
-        // 4. Attach the data to the payload
         $paymentPayload = array_merge($payment->toArray(), [
             'upi_id' => $upiId,
             'merchant_category_code' => $merchantCode,
@@ -285,7 +448,6 @@ class ManagerDashboard extends Page
             ->send();
     }
 
-    // 👇 Manager confirms the payment is received
     public function confirmPayment()
     {
         $viewData = $this->getViewData();
@@ -361,7 +523,6 @@ class ManagerDashboard extends Page
                     ->orderBy('created_at', 'desc')
                     ->get();
                     
-                // Find if there's a pending bill for these orders
                 $pendingPayment = Payment::whereIn('order_id', $tableOrders->pluck('id'))
                     ->whereIn('status', ['pending', 'paid'])
                     ->latest()
