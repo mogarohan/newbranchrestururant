@@ -28,7 +28,7 @@ class QrCodeService
 
         Storage::disk('public')->makeDirectory($folder);
 
-        $url = "https://customer.techstrota.com/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
+        $url = "https://customer.annsathi.com/?r={$restaurant->id}&t={$table->id}&token={$table->qr_token}";
 
         // 👇 Generates ONLY the raw, basic QR Code. No wrappers, no text.
         $qrSvg = QrCode::format('svg')

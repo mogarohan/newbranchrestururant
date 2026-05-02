@@ -53,7 +53,6 @@ class PublicMenuController extends Controller
             ->where('branch_id', $table->branch_id)
             ->pluck('is_active', 'category_id');
 
-        // 👇 FIX: Load BOTH Main Categories AND Branch Categories
         $categories = $restaurant->categories()
             ->where(function($q) use ($table) {
                 $q->whereNull('branch_id'); 
@@ -107,10 +106,31 @@ class PublicMenuController extends Controller
             })
             ->filter(fn($cat) => count($cat['items']) > 0)
             ->values();
-// 👇 Fetch the correct UPI ID for this table's location
-        $branchUpi = $table->branch_id ? \App\Models\Branch::find($table->branch_id)->upi_id : null;
-        $restaurantUpi = $restaurant->upi_id;
-        $finalUpiId = $branchUpi ?: $restaurantUpi;
+
+        // Fetch the correct UPI ID and Address for this table's location
+        $branch = $table->branch_id ? \App\Models\Branch::find($table->branch_id) : null;
+        
+        $finalUpiId = $branch && $branch->upi_id ? $branch->upi_id : $restaurant->upi_id;
+        
+        // EXTRACT ADDRESS: Check if branch has an address, otherwise fallback to main restaurant address
+        $finalAddress = $branch && $branch->address ? $branch->address : $restaurant->address;
+
+        // 👇 BASE64 LOGO CONVERSION LOGIC 👇
+        $logoPayload = null;
+        if ($restaurant->logo_path) {
+            // Find the physical file on the server
+            $fullPath = storage_path('app/public/' . $restaurant->logo_path);
+            
+            if (file_exists($fullPath)) {
+                // Convert to Base64 String
+                $mime = mime_content_type($fullPath);
+                $b64 = base64_encode(file_get_contents($fullPath));
+                $logoPayload = 'data:' . $mime . ';base64,' . $b64;
+            } else {
+                // Fallback to standard URL if file isn't found locally
+                $logoPayload = asset('storage/' . $restaurant->logo_path); 
+            }
+        }
 
         return response()->json([
             'session' => [
@@ -124,11 +144,11 @@ class PublicMenuController extends Controller
             'restaurant' => [
                 'id' => $restaurant->id,
                 'name' => $restaurant->name,
-                // 👇 FIX: Permanently attach the UPI ID to the app's global data
+                'address' => $finalAddress,
+                'currency_symbol' => $restaurant->currency_symbol ?? '₹',
                 'upi_id' => $finalUpiId, 
-                'logo' => $restaurant->logo_path
-                    ? asset('storage/' . $restaurant->logo_path)
-                    : null,
+                // 👇 SEND THE BASE64 STRING TO THE APP
+                'logo' => $logoPayload,
             ],
             'table' => [
                 'id' => $table->id,
