@@ -385,7 +385,7 @@
             border-radius: 12px;
         }
 
-        /* 👇 NEW: Buttons for placing/editing orders 👇 */
+        /* Buttons for placing/editing orders */
         .btn-add-order {
             background: var(--brand-blue); 
             color: #fff; 
@@ -492,6 +492,7 @@
                                         @endforeach
                                     </div>
 
+                                    {{-- EXACT PREVIOUS BUTTONS --}}
                                     <div class="flex gap-2 mt-auto">
                                         <button wire:click="updateStatus({{ $order->id }}, 'accepted')" style="background: linear-gradient(135deg, var(--brand-orange), var(--brand-orange-light)); color: Black ; border: 1px solid #000000; padding: 0.6rem; border-radius: 6px; font-weight: 800; font-size: 0.8rem; flex: 1; transition: opacity 0.2s;">
                                             Accept & Cook
@@ -505,92 +506,89 @@
                         </div>
                     </div>
                 @endif
-                <br />
 
-                <div>
-                    <div class="flex flex-col md:flex-row justify-center md:items-center mb-6 pb-2 gap-4">
-                        <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--glass-bg); border: 1.5px solid #000000; backdrop-filter: var(--glass-blur);">
-                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-green);"></div> Available
-                            </span>
-                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--brand-orange);"></div> Occupied
-                            </span>
-                            <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
-                                <div class="w-3 h-3 rounded-full" style="background: var(--accent-pink);"></div> Reserved
-                            </span>
-                        </div>
+                <div class="flex flex-col md:flex-row justify-center md:items-center mb-6 pb-2 gap-4">
+                    <div class="flex gap-4 px-4 py-2 rounded-full" style="background: var(--glass-bg); border: 1.5px solid #000000; backdrop-filter: var(--glass-blur);">
+                        <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                            <div class="w-3 h-3 rounded-full" style="background: var(--accent-green);"></div> Available
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                            <div class="w-3 h-3 rounded-full" style="background: var(--brand-orange);"></div> Occupied
+                        </span>
+                        <span style="display: flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800; color: var(--text-primary);">
+                            <div class="w-3 h-3 rounded-full" style="background: var(--accent-pink);"></div> Reserved
+                        </span>
                     </div>
-                    <br />
-                    
-                    <div class="pos-table-grid">
-                        @foreach($tables as $table)
-                            @php
-                                $isOccupied = $table->active_sessions_count > 0;
-                                $isReserved = !$isOccupied && (($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false));
-                                $isSelected = $selectedTableId === $table->id;
+                </div>
 
-                                $tableStateClass = 'available';
-                                $statusText = 'AVAILABLE';
-                                $badgeClass = 'badge-available';
+                {{-- 👇 EXACT PREVIOUS TABLE GRID 👇 --}}
+                <div class="pos-table-grid pb-8">
+                    @foreach($tables as $table)
+                        @php
+                            $isOccupied = $table->active_sessions_count > 0;
+                            $isReserved = !$isOccupied && (($table->status ?? '') === 'reserved' || ($table->is_reserved ?? false));
+                            $isSelected = $selectedTableId === $table->id;
 
-                                if ($isOccupied) {
-                                    $tableStateClass = 'occupied';
-                                    $statusText = 'OCCUPIED';
-                                    $badgeClass = 'badge-occupied';
-                                } elseif ($isReserved) {
-                                    $tableStateClass = 'reserved';
-                                    $statusText = 'RESERVED';
-                                    $badgeClass = 'badge-reserved';
-                                }
+                            $tableStateClass = 'available';
+                            $statusText = 'AVAILABLE';
+                            $badgeClass = 'badge-available';
 
-                                $formattedTableNum = is_numeric($table->table_number) ? sprintf('%02d', $table->table_number) : $table->table_number;
-                            @endphp
+                            if ($isOccupied) {
+                                $tableStateClass = 'occupied';
+                                $statusText = 'OCCUPIED';
+                                $badgeClass = 'badge-occupied';
+                            } elseif ($isReserved) {
+                                $tableStateClass = 'reserved';
+                                $statusText = 'RESERVED';
+                                $badgeClass = 'badge-reserved';
+                            }
 
-                            <div wire:click="openTable({{ $table->id }})" class="ts-table {{ $tableStateClass }} {{ $isSelected ? 'selected' : '' }}">
+                            $formattedTableNum = is_numeric($table->table_number) ? sprintf('%02d', $table->table_number) : $table->table_number;
+                        @endphp
 
-                                <div class="ts-header">
-                                    <div>
-                                        <div class="ts-title">T-{{ $formattedTableNum }}</div>
-                                        <div class="ts-subtitle">OCCUPANCY: {{ $table->active_sessions_count }} / {{ $table->seating_capacity ?? 4 }}</div>
-                                    </div>
-                                    <div class="ts-badge {{ $badgeClass }}">{{ $statusText }}</div>
+                        <div wire:click="openTable({{ $table->id }})" class="ts-table {{ $tableStateClass }} {{ $isSelected ? 'selected' : '' }}">
+
+                            <div class="ts-header">
+                                <div>
+                                    <div class="ts-title">T-{{ $formattedTableNum }}</div>
+                                    <div class="ts-subtitle">OCCUPANCY: {{ $table->active_sessions_count }} / {{ $table->seating_capacity ?? 4 }}</div>
                                 </div>
-
-                                <div class="flex-grow flex flex-col justify-center">
-                                    @if($isOccupied)
-                                        <div class="ts-info-row">
-                                            <x-heroicon-s-clock class="ts-info-icon" />
-                                            <span class="ts-info-text">{{ $table->total_orders_count ?? 0 }} Order(s) Placed</span>
-                                        </div>
-                                        <div class="ts-info-row">
-                                            <x-heroicon-s-currency-rupee class="ts-info-icon" />
-                                            <span class="ts-info-text">₹{{ number_format($table->total_bill, 2) }}</span>
-                                        </div>
-
-                                        <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
-                                            Clean Table
-                                        </button>
-
-                                    @elseif($isReserved)
-                                        <div class="ts-info-row justify-center mt-2 mb-3">
-                                            <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink);" />
-                                        </div>
-                                        <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve cancel">
-                                            Cancel Reserve
-                                        </button>
-                                    @else
-                                        <div class="ts-info-row justify-center mt-2 mb-3">
-                                            <x-heroicon-s-check-circle class="w-10 h-10" style="color: rgba(0,0,0,0.3);" />
-                                        </div>
-                                        <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve make">
-                                            Reserve Table
-                                        </button>
-                                    @endif
-                                </div>
+                                <div class="ts-badge {{ $badgeClass }}">{{ $statusText }}</div>
                             </div>
-                        @endforeach
-                    </div>
+
+                            <div class="flex-grow flex flex-col justify-center">
+                                @if($isOccupied)
+                                    <div class="ts-info-row">
+                                        <x-heroicon-s-clock class="ts-info-icon" />
+                                        <span class="ts-info-text">{{ $table->total_orders_count ?? 0 }} Order(s) Placed</span>
+                                    </div>
+                                    <div class="ts-info-row">
+                                        <x-heroicon-s-currency-rupee class="ts-info-icon" />
+                                        <span class="ts-info-text">₹{{ number_format($table->total_bill, 2) }}</span>
+                                    </div>
+
+                                    <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
+                                        Clean Table
+                                    </button>
+
+                                @elseif($isReserved)
+                                    <div class="ts-info-row justify-center mt-2 mb-3">
+                                        <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink);" />
+                                    </div>
+                                    <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve cancel">
+                                        Cancel Reserve
+                                    </button>
+                                @else
+                                    <div class="ts-info-row justify-center mt-2 mb-3">
+                                        <x-heroicon-s-check-circle class="w-10 h-10" style="color: rgba(0,0,0,0.3);" />
+                                    </div>
+                                    <button wire:click.stop="toggleReservation({{ $table->id }})" class="ts-btn-reserve make">
+                                        Reserve Table
+                                    </button>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
                 </div>
             </div>
 
@@ -636,7 +634,6 @@
                                 </div>
                             </div>
 
-                            {{-- 👇 NEW: Add Order Button Here 👇 --}}
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                                 <span style="background: var(--text-primary); color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.1em; text-transform: uppercase;">
                                     Active Orders
@@ -659,59 +656,58 @@
                                         'rejected' => 'Cancelled / Rejected'
                                     ] as $statusKey => $label)
 
-                                    @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
-                                        <div>
-                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
-                                                {{ $label }}
-                                            </div>
+                                            @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
+                                                <div>
+                                                    <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
+                                                        {{ $label }}
+                                                    </div>
 
-                                            <div class="flex flex-col gap-4">
-                                                @foreach($groupedOrders[$statusKey] as $order)
-                                                    @php
-                                                        $isHostOrder = $order->qr_session_id === $hostSessionId;
-                                                        $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                    @endphp
+                                                    <div class="flex flex-col gap-4">
+                                                        @foreach($groupedOrders[$statusKey] as $order)
+                                                            @php
+                                                                $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                                $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                            @endphp
 
-                                                    <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                            <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
 
-                                                        <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
-                                                            <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
-                                                            <div class="flex gap-2 items-center">
-                                                                <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
-                                                                    {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
-                                                                </span>
-                                                                {{-- 👇 NEW: Edit Button Here 👇 --}}
-                                                                @if(!$isCancelled && !$pendingPayment)
-                                                                    <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" class="btn-edit-order">
-                                                                        EDIT
-                                                                    </button>
-                                                                @endif
-                                                            </div>
-                                                        </div>
-
-                                                        @if($order->notes && !$isCancelled)
-                                                            <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
-                                                                Note: {{ $order->notes }}
-                                                            </div>
-                                                        @endif
-
-                                                        @foreach($order->items as $item)
-                                                            <div class="flex justify-between items-start mt-1">
-                                                                <div class="pr-4">
-                                                                    <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                        <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
-                                                                    </span>
+                                                                <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
+                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
+                                                                    <div class="flex gap-2 items-center">
+                                                                        <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                            {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
+                                                                        </span>
+                                                                        @if(!$isCancelled && !$pendingPayment)
+                                                                            <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" class="btn-edit-order">
+                                                                                EDIT
+                                                                            </button>
+                                                                        @endif
+                                                                    </div>
                                                                 </div>
-                                                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                    ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
-                                                                </span>
+
+                                                                @if($order->notes && !$isCancelled)
+                                                                    <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
+                                                                        Note: {{ $order->notes }}
+                                                                    </div>
+                                                                @endif
+
+                                                                @foreach($order->items as $item)
+                                                                    <div class="flex justify-between items-start mt-1">
+                                                                        <div class="pr-4">
+                                                                            <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                                <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
+                                                                            </span>
+                                                                        </div>
+                                                                        <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                            ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
+                                                                        </span>
+                                                                    </div>
+                                                                @endforeach
                                                             </div>
                                                         @endforeach
                                                     </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    @endif
+                                                </div>
+                                            @endif
                                 @endforeach
                             </div>
                         </div>
@@ -729,7 +725,7 @@
                                 @php
                                     $taxable = max(0, $runningTotal - (float) $discountAmount);
                                     $liveTax = $taxable * ((float) $taxPercentage / 100);
-                                    $liveTotal = $taxable + $liveTax;
+                                    $liveTotal = $taxable + $liveTax + (float) $extraCharges;
                                 @endphp
 
                                 <div class="flex justify-between items-end mb-4">
@@ -747,14 +743,24 @@
                                             <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Tax (%)</label>
                                             <input type="number" wire:model.live="taxPercentage" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1.5px solid #000000; background: rgba(255,255,255,0.5); color: var(--text-primary); font-weight: bold;" placeholder="0">
                                         </div>
+                                        {{-- Extra Charges Input field --}}
+                                        <div style="flex: 1;">
+                                            <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Extra (₹)</label>
+                                            <input type="number" wire:model.live="extraCharges" style="width: 100%; padding: 0.5rem; border-radius: 8px; border: 1.5px solid #000000; background: rgba(255,255,255,0.5); color: var(--text-primary); font-weight: bold;" placeholder="0">
+                                        </div>
                                     </div>
 
                                     <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
                                         <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
                                         <div style="text-align: right;">
                                             <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($liveTotal, 2) }}</span>
-                                            @if($liveTax > 0)
-                                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: bold;">Includes ₹{{ number_format($liveTax, 2) }} Tax</div>
+                                            @if($liveTax > 0 || $extraCharges > 0)
+                                                <div style="font-size: 0.7rem; color: var(--text-muted); font-weight: bold;">
+                                                    Includes 
+                                                    @if($liveTax > 0) ₹{{ number_format($liveTax, 2) }} Tax @endif
+                                                    @if($liveTax > 0 && $extraCharges > 0) &amp; @endif
+                                                    @if($extraCharges > 0) ₹{{ number_format((float) $extraCharges, 2) }} Extra @endif
+                                                </div>
                                             @endif
                                         </div>
                                     </div>
@@ -767,10 +773,15 @@
                                         Send Bill to Customer
                                     </button>
                                 @else
-                                    <div class="flex justify-between items-end mb-6 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
+                                    <div class="flex justify-between items-end mb-2 pt-4" style="border-top: 1.5px dashed rgba(0,0,0,0.2);">
                                         <span style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900;">Grand Total</span>
                                         <span style="color: var(--accent-green); font-size: 2rem; font-weight: 900; line-height: 1;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
                                     </div>
+                                    @if($pendingPayment->extra_charges > 0)
+                                        <div style="text-align: right; margin-bottom: 1rem; font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">
+                                            Includes Extra Charges: ₹{{ number_format($pendingPayment->extra_charges, 2) }}
+                                        </div>
+                                    @endif
 
                                     <div style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; text-align: center;">
                                         <span style="display: block; font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px;">Customer Selected Method</span>
@@ -781,22 +792,18 @@
                                         @endif
                                     </div>
 
-                                    <button wire:click="cancelPendingBill"
-                                        onclick="confirm('Are you sure you want to cancel this bill? The customer will be able to order again.') || event.stopImmediatePropagation()"
-                                        style="width: 100%; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: transparent; color: var(--accent-red); padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid var(--accent-red); cursor: pointer; transition: all 0.2s;"
-                                        onmouseover="this.style.backgroundColor='var(--accent-red)'; this.style.color='white';"
-                                        onmouseout="this.style.backgroundColor='transparent'; this.style.color='var(--accent-red)';">
-                                        <x-heroicon-o-arrow-path style="width: 18px; height: 18px;" />
-                                        Cancel Bill & Reopen Orders
-                                    </button>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button wire:click="cancelPendingBill"
+                                            onclick="confirm('Are you sure you want to cancel this bill? The customer will be able to order again.') || event.stopImmediatePropagation()"
+                                            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.25rem; background-color: #fee2e2; color: #dc2626; padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #fca5a5; cursor: pointer; transition: all 0.2s;">
+                                            Cancel
+                                        </button>
 
-                                    <button wire:click="confirmPayment"
-                                        style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; background: var(--accent-green); color: white; padding: 1rem; border-radius: 12px; font-weight: 900; font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; border: 1.5px solid #000000; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;"
-                                        onmouseover="this.style.transform='translateY(-2px)';"
-                                        onmouseout="this.style.transform='none';">
-                                        <x-heroicon-s-check-circle style="width: 24px; height: 24px;" />
-                                        Confirm Payment Received
-                                    </button>
+                                        <button wire:click="confirmPayment"
+                                            style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.25rem; background-color: #10b981; color: #ffffff; padding: 0.75rem; border-radius: 12px; font-weight: 900; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
+                                            Paid
+                                        </button>
+                                    </div>
                                 @endif
                             @endif
                         </div>
@@ -804,8 +811,8 @@
                 @else
                     @if($this->selectedTableId)
                         @php 
-                            $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
-                            $isRes = $tableInfo && ($tableInfo->status === 'reserved');
+                                                                    $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
+                            $isRes = $tableInfo && (($tableInfo->status ?? '') === 'reserved' || ($tableInfo->is_reserved ?? false));
                         @endphp
 
                         <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
@@ -818,7 +825,6 @@
                             <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5; margin-bottom: 2rem;">
                                 {{ $isRes ? 'This table is currently reserved for upcoming guests.' : 'This table is clean and ready for new guests.' }}
                             </p>
-                            {{-- Managers can place a new order even if the table is empty! --}}
                             <button wire:click="mountAction('placeOrderAction')" class="btn-add-order" style="padding: 10px 20px; font-size: 0.85rem;">
                                 + PLACE NEW ORDER
                             </button>

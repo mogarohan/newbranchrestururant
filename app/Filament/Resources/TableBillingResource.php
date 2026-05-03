@@ -148,7 +148,6 @@ class TableBillingResource extends Resource
                         Tables\Columns\TextColumn::make('due_amount')
                             ->label('Balance Due')
                             ->state(function (RestaurantTable $record) {
-                                // 👇 FIX: Only calculate due amount from orders that are NOT completed or cancelled
                                 return $record->sessions->flatMap->orders
                                     ->whereNotIn('status', ['completed', 'cancelled'])
                                     ->sum('total_amount');
@@ -182,15 +181,15 @@ class TableBillingResource extends Resource
                     ->modalWidth('6xl')
                     ->modalSubmitActionLabel('Confirm Payment')
                     ->fillForm(function (RestaurantTable $record): array {
-                        // 👇 FIX: Only pre-fill subtotal for unpaid orders
                         $total = $record->sessions->flatMap->orders
                             ->whereNotIn('status', ['completed', 'cancelled'])
                             ->sum('total_amount');
-                        
+
                         return [
                             'subtotal' => $total,
                             'discount_amount' => 0,
                             'tax_percentage' => 5, // Default 5% Tax
+                            'extra_charges' => 0, // Default Extra Charges
                             'payment_method' => 'cash',
                         ];
                     })
@@ -204,15 +203,16 @@ class TableBillingResource extends Resource
                                     Forms\Components\Placeholder::make('receipt')
                                         ->hiddenLabel()
                                         ->content(function (RestaurantTable $record, Forms\Get $get) {
-                                            
+
                                             // 1. GRAB LIVE VALUES
                                             $sub = (float) $get('subtotal');
                                             $disc = (float) $get('discount_amount');
                                             $taxP = (float) $get('tax_percentage');
+                                            $extra = (float) $get('extra_charges');
 
                                             $taxable = max(0, $sub - $disc);
                                             $taxAmt = $taxable * ($taxP / 100);
-                                            $grandTotal = $taxable + $taxAmt;
+                                            $grandTotal = $taxable + $taxAmt + $extra;
 
                                             // 2. BUILD THE RECEIPT HTML
                                             $html = '<div class="max-h-[550px] overflow-y-auto p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-xl font-mono shadow-sm">';
@@ -291,7 +291,7 @@ class TableBillingResource extends Resource
                                                 return new HtmlString("<div class='text-center p-6 text-gray-500 dark:text-gray-400 font-bold'>No unpaid orders found to bill.</div>");
                                             }
 
-                                            // 3. LIVE SUBTOTAL / TAX / DISCOUNT SECTION
+                                            // 3. LIVE SUBTOTAL / TAX / EXTRA / DISCOUNT SECTION
                                             $html .= "
                                                 <div class='border-t-2 border-gray-900 dark:border-gray-100 mt-6 pt-4'>
                                                     <div class='flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-4'>
@@ -303,7 +303,7 @@ class TableBillingResource extends Resource
                                                         <span>Subtotal:</span>
                                                         <span class='font-bold'>₹" . number_format($sub, 2) . "</span>
                                                     </div>";
-                                            
+
                                             if ($disc > 0) {
                                                 $html .= "
                                                     <div class='flex justify-between text-sm text-green-600 dark:text-green-400 mb-1'>
@@ -317,6 +317,14 @@ class TableBillingResource extends Resource
                                                     <div class='flex justify-between text-sm text-red-500 dark:text-red-400 mb-3'>
                                                         <span>Tax ({$taxP}%):</span>
                                                         <span class='font-bold'>+ ₹" . number_format($taxAmt, 2) . "</span>
+                                                    </div>";
+                                            }
+
+                                            if ($extra > 0) {
+                                                $html .= "
+                                                    <div class='flex justify-between text-sm text-gray-800 dark:text-gray-200 mb-3'>
+                                                        <span>Extra Charges:</span>
+                                                        <span class='font-bold'>+ ₹" . number_format($extra, 2) . "</span>
                                                     </div>";
                                             }
 
@@ -342,7 +350,7 @@ class TableBillingResource extends Resource
                                         ->readOnly()
                                         ->extraInputAttributes(['class' => 'font-bold text-gray-900 dark:text-white']),
 
-                                    Forms\Components\Grid::make(2)->schema([
+                                    Forms\Components\Grid::make(3)->schema([
                                         Forms\Components\TextInput::make('discount_amount')
                                             ->label('Discount (₹)')
                                             ->numeric()
@@ -354,6 +362,12 @@ class TableBillingResource extends Resource
                                             ->numeric()
                                             ->default(5)
                                             ->live(onBlur: true),
+
+                                        Forms\Components\TextInput::make('extra_charges')
+                                            ->label('Extra Chg (₹)')
+                                            ->numeric()
+                                            ->default(0)
+                                            ->live(onBlur: true),
                                     ]),
 
                                     // 👇 REAL-TIME CALCULATED GRAND TOTAL
@@ -363,15 +377,16 @@ class TableBillingResource extends Resource
                                             $sub = (float) $get('subtotal');
                                             $disc = (float) $get('discount_amount');
                                             $taxP = (float) $get('tax_percentage');
+                                            $extra = (float) $get('extra_charges');
 
                                             $taxable = max(0, $sub - $disc);
                                             $taxAmt = $taxable * ($taxP / 100);
-                                            $total = $taxable + $taxAmt;
+                                            $total = $taxable + $taxAmt + $extra;
 
                                             return new HtmlString("
                                                 <div class='text-3xl font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 p-4 rounded-xl border border-emerald-500/30 text-center shadow-sm'>
                                                     ₹" . number_format($total, 2) . "
-                                                    <div class='text-xs font-normal text-gray-500 mt-1'>Includes ₹" . number_format($taxAmt, 2) . " Tax</div>
+                                                    <div class='text-xs font-normal text-gray-500 mt-1'>Includes ₹" . number_format($taxAmt, 2) . " Tax & ₹" . number_format($extra, 2) . " Extra</div>
                                                 </div>
                                             ");
                                         }),
@@ -379,13 +394,13 @@ class TableBillingResource extends Resource
                                     Forms\Components\ToggleButtons::make('payment_method')
                                         ->label('Select Payment Method')
                                         ->options([
-                                            'cash' => 'Cash', 
-                                            'upi' => 'UPI QR', 
+                                            'cash' => 'Cash',
+                                            'upi' => 'UPI QR',
                                             'card' => 'Card'
                                         ])
                                         ->inline()
                                         ->required()
-                                        ->live() 
+                                        ->live()
                                         ->default('cash'),
 
                                     Forms\Components\Placeholder::make('upi_qr')
@@ -395,10 +410,11 @@ class TableBillingResource extends Resource
                                             $sub = (float) $get('subtotal');
                                             $disc = (float) $get('discount_amount');
                                             $taxP = (float) $get('tax_percentage');
+                                            $extra = (float) $get('extra_charges');
 
                                             $taxable = max(0, $sub - $disc);
                                             $taxAmt = $taxable * ($taxP / 100);
-                                            $grandTotal = number_format($taxable + $taxAmt, 2, '.', '');
+                                            $grandTotal = number_format($taxable + $taxAmt + $extra, 2, '.', '');
 
                                             // 1. Fetch correct UPI ID
                                             $upiId = null;
@@ -424,7 +440,7 @@ class TableBillingResource extends Resource
                                             // 3. Generate internal SVG QR Code
                                             $merchantName = urlencode($record->restaurant->name ?? 'Restaurant');
                                             $upiString = "upi://pay?pa={$upiId}&pn={$merchantName}&am={$grandTotal}&cu=INR";
-                                            
+
                                             $qrSvg = QrCode::format('svg')->size(180)->margin(1)->generate($upiString);
                                             $qrSvg = preg_replace('/<\?xml.*?\?>/', '', $qrSvg);
 
@@ -445,13 +461,12 @@ class TableBillingResource extends Resource
                                         ->label('Transaction ID / UTR')
                                         ->visible(fn(Forms\Get $get) => $get('payment_method') !== 'cash'),
                                 ]),
-                        ]),
+                        ]), // 👇 FIX: Changed from `]);` to `]),` to correctly close the schema array element.
                     ])
                     ->action(function (RestaurantTable $record, array $data) {
                         $activeSessions = $record->sessions()->where('is_active', true)->get();
                         $sessionIds = $activeSessions->pluck('id')->toArray();
 
-                        // 👇 FIX: ONLY bill unpaid orders!
                         $validOrders = Order::whereIn('qr_session_id', $sessionIds)
                             ->whereNotIn('status', ['completed', 'cancelled'])
                             ->get();
@@ -463,10 +478,11 @@ class TableBillingResource extends Resource
                         $sub = (float) $data['subtotal'];
                         $disc = (float) $data['discount_amount'];
                         $taxP = (float) $data['tax_percentage'];
+                        $extra = (float) ($data['extra_charges'] ?? 0);
 
                         $taxable = max(0, $sub - $disc);
                         $taxAmt = $taxable * ($taxP / 100);
-                        $grandTotal = $taxable + $taxAmt;
+                        $grandTotal = $taxable + $taxAmt + $extra;
 
                         if ($latestOrderId && $grandTotal > 0) {
                             Payment::create([
@@ -476,7 +492,8 @@ class TableBillingResource extends Resource
                                 'subtotal' => $sub,
                                 'discount_amount' => $disc,
                                 'tax_amount' => $taxAmt,
-                                'amount' => $grandTotal, 
+                                'extra_charges' => $extra,
+                                'amount' => $grandTotal,
                                 'payment_method' => $data['payment_method'],
                                 'status' => 'paid',
                                 'transaction_reference' => $data['transaction_reference'] ?? null,
@@ -485,21 +502,20 @@ class TableBillingResource extends Resource
                         }
 
                         if (!empty($orderIds)) {
-                            // Mark orders as strictly paid
                             Order::whereIn('id', $orderIds)->update(['status' => 'completed']);
                             $updatedOrders = Order::whereIn('id', $orderIds)->get();
                             foreach ($updatedOrders as $ord) {
                                 \App\Events\OrderStatusUpdated::dispatch($ord);
                             }
                         }
-                        
+
                         \Filament\Notifications\Notification::make()
                             ->title('Payment Confirmed Successfully!')
                             ->body('The customer can now download their bill.')
                             ->success()
                             ->send();
                     })
-                    ->after(fn (\Livewire\Component $livewire) => $livewire->dispatch('$refresh')),
+                    ->after(fn(\Livewire\Component $livewire) => $livewire->dispatch('$refresh')),
             ]);
     }
 
