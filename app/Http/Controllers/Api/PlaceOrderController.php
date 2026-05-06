@@ -23,7 +23,6 @@ class PlaceOrderController extends Controller
 {
     public function store(Request $request)
     {
-        // 1. Check Idempotency Key first to prevent double-charging/double-ordering
         $idempotencyKeyStr = $request->header('X-Idempotency-Key');
         
         if ($idempotencyKeyStr) {
@@ -33,7 +32,6 @@ class PlaceOrderController extends Controller
 
             if ($existingKey) {
                 if ($existingKey->status === 'completed') {
-                    // Return the original success response without recreating the order
                     return response()->json([
                         'message' => 'Order already placed successfully (Idempotent replay).',
                         'order_id' => $existingKey->reference_id,
@@ -45,10 +43,8 @@ class PlaceOrderController extends Controller
                     return response()->json(['message' => 'Order is currently processing. Please wait.'], 409);
                 }
 
-                // FIX 1: If the status is 'failed', UPDATE it to processing instead of crashing on create()
                 $existingKey->update(['status' => 'processing']);
             } else {
-                // FIX 2: Catch Race Conditions (Double-taps) gracefully
                 try {
                     IdempotencyKey::create([
                         'key' => $idempotencyKeyStr,
@@ -56,11 +52,10 @@ class PlaceOrderController extends Controller
                         'status' => 'processing'
                     ]);
                 } catch (\Illuminate\Database\QueryException $e) {
-                    // 1062 is the MySQL code for Duplicate Entry
                     if ($e->errorInfo[1] == 1062) {
                         return response()->json(['message' => 'Order is currently processing. Please wait.'], 409);
                     }
-                    throw $e; // Rethrow if it's some other database error
+                    throw $e;
                 }
             }
         }
@@ -143,6 +138,7 @@ class PlaceOrderController extends Controller
                     'qr_session_id' => $session->id,
                     'customer_name' => $session->customer_name,
                     'status' => 'placed',
+                    'payment_status' => 'pending', // 👈 Initialize as pending for both models
                     'tax_amount' => 0,
                     'total_amount' => $totalAmount,
                     'notes' => $validated['notes'] ?? null,
@@ -169,12 +165,12 @@ class PlaceOrderController extends Controller
                     'metadata' => [
                         'total_amount' => $totalAmount,
                         'item_count' => count($preparedItems),
-                        'table_number' => $table->table_number ?? $table->number
+                        'table_number' => $table->table_number ?? $table->number,
+                        'is_pay_first' => $restaurant->is_pay_first // Track workflow type
                     ]
                 ]);
             });
 
-            // Mark Idempotency Key as Completed
             if ($idempotencyKeyStr) {
                 IdempotencyKey::where('key', $idempotencyKeyStr)->update([
                     'status' => 'completed',
@@ -183,20 +179,18 @@ class PlaceOrderController extends Controller
             }
 
             if ($order) {
-                // 👇 THE ULTIMATE FIX: Strip out all relations (items, activity logs, etc) to ensure the payload is < 1KB
                 $order->unsetRelations();
-                
                 \App\Events\OrderStatusUpdated::dispatch($order);
             }
 
             return response()->json([
                 'message' => 'Order placed successfully.',
                 'total_amount' => $totalAmount,
-                'order_id' => $order->id
+                'order_id' => $order->id,
+                'is_pay_first' => $restaurant->is_pay_first // 👈 Tell frontend if they need to pay immediately
             ], 201);
 
         } catch (\Exception $e) {
-            // Mark Idempotency Key as Failed so they can retry
             if ($idempotencyKeyStr) {
                 IdempotencyKey::where('key', $idempotencyKeyStr)->update(['status' => 'failed']);
             }
@@ -212,7 +206,6 @@ class PlaceOrderController extends Controller
             return response()->json(['message' => 'Session not found'], 404);
         }
 
-        // 👇 FIX: Group by host_session_id BUT filter strictly by active sessions
         $groupIds = QrSession::where(function($q) use ($session) {
                 if ($session->is_primary) {
                     $q->where('host_session_id', $session->id)->orWhere('id', $session->id);
@@ -220,11 +213,10 @@ class PlaceOrderController extends Controller
                     $q->where('host_session_id', $session->host_session_id)->orWhere('id', $session->host_session_id);
                 }
             })
-            // Ensure we don't pull orders from completely expired/dead sessions from yesterday
             ->where('created_at', '>=', now()->subHours(12)) 
             ->pluck('id');
 
-        $orders = Order::with(['items']) // Load lightweight items
+        $orders = Order::with(['items'])
             ->whereIn('qr_session_id', $groupIds)
             ->orderBy('created_at', 'desc')
             ->get();
@@ -233,10 +225,10 @@ class PlaceOrderController extends Controller
             return [
                 'id' => $order->id,
                 'status' => $order->status,
+                'payment_status' => $order->payment_status,
                 'total_amount' => $order->total_amount,
                 'customer_name' => $order->customer_name,
                 'created_at' => $order->created_at,
-                // Map items so React Native doesn't break
                 'items' => $order->items->map(function($item) {
                     return [
                         'id' => $item->id,
@@ -252,33 +244,40 @@ class PlaceOrderController extends Controller
             ];
         });
 
-        // inside getSessionOrders()... find the $payment query and replace it with:
         $orderIds = $orders->pluck('id');
         $payment = Payment::whereIn('order_id', $orderIds)
-            ->whereIn('status', ['pending', 'paid']) // 👈 FIX: Load pending bills too
+            ->whereIn('status', ['pending', 'paid'])
             ->latest()
             ->first();
             
-        // Also fetch UPI ID so the app can generate the link
         $upiId = $session->restaurantTable->branch->upi_id ?? $session->restaurant->upi_id ?? null;
 
+        // 👇 Dynamic Billing Summary Calculation 👇
+        $activeOrders = $orders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
+        $orderSubtotal = $activeOrders->sum('total_amount');
+        $amountPaid = $activeOrders->where('payment_status', 'paid')->sum('total_amount');
+
+        if ($payment) {
+            // Manager generated a bill, trust the Payment Model!
+            $invoiceGrandTotal = $payment->subtotal + $payment->tax_amount + $payment->extra_charges - $payment->discount_amount;
+            $amountDue = $payment->amount; // This was accurately stored by ManagerDashboard
+        } else {
+            // No official bill generated yet
+            $invoiceGrandTotal = $orderSubtotal;
+            $amountDue = max(0, $invoiceGrandTotal - $amountPaid);
+        }
+
         return response()->json([
             'orders' => $formattedOrders,
+            'billing_summary' => [
+                'grand_total' => $invoiceGrandTotal,
+                'amount_paid' => $amountPaid,
+                'amount_due' => $amountDue
+            ],
             'payment' => $payment ? array_merge($payment->toArray(), ['upi_id' => $upiId]) : null
         ]);
-
-
-        return response()->json([
-            'orders' => $formattedOrders,
-            'payment' => $payment ? [
-                'subtotal' => $payment->subtotal,
-                'discount_amount' => $payment->discount_amount,
-                'tax_amount' => $payment->tax_amount,
-                'amount' => $payment->amount,
-                'status' => $payment->status,
-            ] : null
-        ]);
     }
+
     public function requestBill(Request $request)
     {
         $token = $request->bearerToken() ?: $request->input('session_token');
@@ -292,7 +291,6 @@ class PlaceOrderController extends Controller
         $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
 
         try {
-            // Trigger the manager notification
             event(new \App\Events\BillRequested(
                 $session->restaurant_id,
                 $session->restaurant_table_id,
@@ -305,6 +303,7 @@ class PlaceOrderController extends Controller
 
         return response()->json(['message' => 'Bill requested successfully.']);
     }
+
     public function selectPaymentMethod(Request $request)
     {
         $token = $request->bearerToken() ?: $request->input('session_token');
@@ -312,9 +311,8 @@ class PlaceOrderController extends Controller
 
         if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
 
-        $method = $request->input('method'); // 'cash' or 'upi'
+        $method = $request->input('method');
 
-        // Find the pending payment
         $groupIds = QrSession::where('host_session_id', $session->is_primary ? $session->id : $session->host_session_id)
             ->orWhere('id', $session->is_primary ? $session->id : $session->host_session_id)
             ->pluck('id');
@@ -325,10 +323,7 @@ class PlaceOrderController extends Controller
 
         if ($payment) {
             $payment->update(['payment_method' => $method]);
-            
             $tableNum = $session->restaurantTable->table_number ?? $session->restaurantTable->number ?? '?';
-            
-            // Alert the manager
             event(new \App\Events\PaymentMethodSelected($session->restaurant_id, $tableNum, $method));
         }
 
@@ -337,17 +332,14 @@ class PlaceOrderController extends Controller
 
     public function cancel(Request $request, $orderId)
     {
-        // 1. Authenticate the session
         $session = \App\Models\QrSession::where('session_token', $request->bearerToken())
             ->where('is_active', true)
             ->firstOrFail();
 
-        // 2. Find the order, ensuring it belongs to this exact table/session
         $order = \App\Models\Order::where('id', $orderId)
             ->where('qr_session_id', $session->id)
             ->firstOrFail();
 
-        // 3. STRICT BUSINESS LOGIC: Allow cancellation if it's pending, placed, or accepted
         if (!in_array($order->status, ['pending', 'placed', 'accepted'])) {
             return response()->json([
                 'status' => 'error',
@@ -355,11 +347,9 @@ class PlaceOrderController extends Controller
             ], 400);
         }
 
-        // 4. Update the status
         $oldStatus = $order->status;
         $order->update(['status' => 'cancelled']);
 
-        // Log the status change so the manager knows the customer cancelled it
         \App\Models\OrderStatusLog::create([
             'order_id' => $order->id,
             'from_status' => $oldStatus,
@@ -367,10 +357,7 @@ class PlaceOrderController extends Controller
             'changed_by_type' => 'customer',
         ]);
 
-        // 5. Broadcast to the kitchen to stop cooking
         event(new OrderCancelled($order));
-
-        // 👇 THE FIX: Broadcast this to instantly refresh the Manager Dashboard & other Customer phones!
         \App\Events\OrderStatusUpdated::dispatch($order);
 
         return response()->json(['status' => 'success', 'message' => 'Order cancelled successfully.']);

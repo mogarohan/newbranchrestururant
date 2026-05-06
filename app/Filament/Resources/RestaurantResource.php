@@ -90,6 +90,20 @@ class RestaurantResource extends Resource
                 ->label('Phone Number')
                 ->tel()
                 ->maxLength(255),
+            Forms\Components\Toggle::make('is_pay_first')
+                ->label('Pay First Model')
+                ->helperText('Enable if customers must pay before ordering'),
+                    
+            Forms\Components\TextInput::make('gst_no')
+                ->label('GST Number')
+                ->placeholder('Enter GSTIN')
+                ->maxLength(20),
+                    
+            Forms\Components\TextInput::make('table_limits')
+                ->label('Table Capacity Limit')
+                ->numeric()
+                ->default(0)
+                ->helperText('Maximum number of tables allowed for this restaurant'),
 
             // 👇 NEW: UPI ID Field for Main Restaurant 👇
             Forms\Components\TextInput::make('upi_id')
@@ -305,6 +319,19 @@ class RestaurantResource extends Resource
                     ->searchable()
                     ->copyable()
                     ->toggleable(),
+                Tables\Columns\IconColumn::make('is_pay_first')
+                    ->label('Pay First')
+                    ->boolean()
+                    ->sortable(),
+                
+                Tables\Columns\TextColumn::make('gst_no')
+                    ->label('GST No')
+                    ->toggleable(),
+                
+                Tables\Columns\TextColumn::make('table_limits')
+                    ->label('Table Limit')
+                    ->numeric()
+                    ->sortable(),
 
                 // 👇 NEW: Address Column 👇
                 Tables\Columns\TextColumn::make('address')

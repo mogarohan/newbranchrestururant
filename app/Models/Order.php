@@ -13,6 +13,7 @@ class Order extends Model
         'restaurant_table_id',
         'qr_session_id',
         'status',
+        'payment_status',
         'customer_name',
         'notes',
         //'subtotal',

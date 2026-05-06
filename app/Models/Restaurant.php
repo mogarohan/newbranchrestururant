@@ -24,6 +24,9 @@ class Restaurant extends Model
         'upi_id', // 👈 ADD THIS
         'address',
         'phone_no',
+        'is_pay_first',
+        'gst_no',
+        'table_limits',
     ];
 
     /**

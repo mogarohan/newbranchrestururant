@@ -7,13 +7,11 @@ use App\Models\Order;
 use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use App\Models\Payment;
+use App\Models\QrSession;
 use Filament\Pages\Page;
 use App\Models\ActivityLog;
 use Filament\Support\Enums\MaxWidth;
 use App\Events\OrderStatusUpdated;
-use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\HtmlString;
-use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Filament\Actions\Action;
@@ -21,6 +19,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Hidden;
+use Filament\Notifications\Notification;
 
 class ManagerDashboard extends Page
 {
@@ -28,7 +27,6 @@ class ManagerDashboard extends Page
     protected static string $view = 'filament.pages.manager-dashboard';
     protected static ?string $navigationLabel = 'Manager Dashboard';
     protected static ?string $title = 'Manager Dashboard Control';
-
     protected static ?int $navigationSort = 1;
 
     public $selectedTableId = null;
@@ -36,7 +34,7 @@ class ManagerDashboard extends Page
     // Billing Properties
     public $discountAmount = 0;
     public $taxPercentage = 0;
-    public $extraCharges = 0; // 👇 NEW: Property for extra charges
+    public $extraCharges = 0;
 
     public function getListeners(): array
     {
@@ -91,22 +89,22 @@ class ManagerDashboard extends Page
 
         if ($pendingPayment && $pendingPayment->status === 'pending') {
             $pendingPayment->delete();
+            
+            // Broadcast null to tell the app the bill was cancelled
             event(new \App\Events\BillGenerated($viewData['hostSessionId'], null));
 
-            // Reset all billing fields
             $this->discountAmount = 0;
             $this->taxPercentage = 0;
-            $this->extraCharges = 0; // 👇 NEW: Reset extra charges
+            $this->extraCharges = 0;
 
             Notification::make()
                 ->title('Bill Cancelled')
-                ->body('The bill has been voided. The customer can now place new orders.')
+                ->body('The generated bill has been cancelled. You can add extra charges and regenerate it.')
                 ->warning()
                 ->send();
         }
     }
 
-    // Place Order from Dashboard
     public function placeOrderAction(): Action
     {
         return Action::make('placeOrderAction')
@@ -157,6 +155,7 @@ class ManagerDashboard extends Page
                     'customer_name' => 'Manager (Dashboard)',
                     'total_amount' => $totalAmount,
                     'status' => 'accepted',
+                    'payment_status' => 'paid',
                 ]);
 
                 foreach ($data['items'] as $item) {
@@ -182,7 +181,6 @@ class ManagerDashboard extends Page
             });
     }
 
-    // Edit Existing Order from Dashboard
     public function editOrderAction(): Action
     {
         return Action::make('editOrderAction')
@@ -212,8 +210,7 @@ class ManagerDashboard extends Page
             ])
             ->fillForm(function (array $arguments) {
                 $order = Order::with('items')->find($arguments['orderId']);
-                if (!$order)
-                    return [];
+                if (!$order) return [];
 
                 return [
                     'items' => $order->items->map(function ($item) {
@@ -229,8 +226,7 @@ class ManagerDashboard extends Page
             })
             ->action(function (array $data, array $arguments) {
                 $order = Order::find($arguments['orderId']);
-                if (!$order)
-                    return;
+                if (!$order) return;
 
                 $totalAmount = 0;
                 $existingItemIds = [];
@@ -293,11 +289,9 @@ class ManagerDashboard extends Page
             $this->selectedTableId = null;
         } else {
             $this->selectedTableId = $tableId;
-
-            // Reset fields when opening a new table
             $this->discountAmount = 0;
             $this->taxPercentage = 0;
-            $this->extraCharges = 0; // 👇 NEW: Reset extra charges
+            $this->extraCharges = 0; 
         }
     }
 
@@ -306,7 +300,12 @@ class ManagerDashboard extends Page
         $user = auth()->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
 
-        if ($table->qrSessions()->where('is_active', true)->count() > 0) {
+        // 👇 FIX: Bulletproof explicit query to prevent relationship global scope bugs
+        $activeCount = QrSession::where('restaurant_table_id', $table->id)
+            ->where('is_active', true)
+            ->count();
+
+        if ($activeCount > 0) {
             Notification::make()->title('Table is occupied')->danger()->send();
             return;
         }
@@ -338,7 +337,11 @@ class ManagerDashboard extends Page
         $user = auth()->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
 
-        $activeSessions = $table->qrSessions()->where('is_active', true)->get();
+        // 👇 FIX: The root cause of the bug. Explicitly querying by table_id blocks global relationship errors.
+        $activeSessions = QrSession::where('restaurant_table_id', $table->id)
+            ->where('is_active', true)
+            ->get();
+
         $closedSessionsCount = $activeSessions->count();
 
         foreach ($activeSessions as $session) {
@@ -388,16 +391,56 @@ class ManagerDashboard extends Page
             'changed_by' => $user->id,
         ]);
 
-        ActivityLog::create([
-            'actor_type' => 'manager',
-            'actor_id' => $user->id,
-            'action' => 'updated_order_status',
-            'entity_type' => Order::class,
-            'entity_id' => $order->id,
-            'metadata' => ['from_status' => $oldStatus, 'to_status' => $status]
+        OrderStatusUpdated::dispatch($order);
+    }
+
+    public function acceptPayFirstOrder($orderId)
+    {
+        $user = auth()->user();
+        $order = Order::where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
+        $oldStatus = $order->status;
+        
+        $order->update([
+            'status' => 'accepted',
+            'payment_status' => 'paid'
+        ]);
+
+        KitchenQueue::firstOrCreate(
+            ['order_id' => $order->id],
+            ['current_status' => 'placed', 'priority' => 0]
+        );
+
+        OrderStatusLog::create([
+            'order_id' => $order->id,
+            'from_status' => $oldStatus,
+            'to_status' => 'accepted',
+            'changed_by' => $user->id,
         ]);
 
         OrderStatusUpdated::dispatch($order);
+        Notification::make()->title('Payment Confirmed & Sent to Kitchen')->success()->send();
+    }
+
+    public function rejectPayFirstOrder($orderId)
+    {
+        $user = auth()->user();
+        $order = Order::where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
+        $oldStatus = $order->status;
+        
+        $order->update([
+            'status' => 'rejected',
+            'payment_status' => 'failed'
+        ]);
+
+        OrderStatusLog::create([
+            'order_id' => $order->id,
+            'from_status' => $oldStatus,
+            'to_status' => 'rejected',
+            'changed_by' => $user->id,
+        ]);
+
+        OrderStatusUpdated::dispatch($order);
+        Notification::make()->title('Order Rejected (No Payment)')->danger()->send();
     }
 
     public function sendBillToCustomer()
@@ -405,15 +448,21 @@ class ManagerDashboard extends Page
         $viewData = $this->getViewData();
         $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
 
-        if ($orders->isEmpty())
-            return;
+        if ($orders->isEmpty()) return;
 
+        // CALCULATE FINAL BILL 
         $subtotal = $orders->sum('total_amount');
+        $amountAlreadyPaid = $orders->where('payment_status', 'paid')->sum('total_amount');
+        
         $taxable = max(0, $subtotal - (float) $this->discountAmount);
         $taxAmt = $taxable * ((float) $this->taxPercentage / 100);
-        $extra = (float) $this->extraCharges; // 👇 NEW: Fetch extra charges
+        $extra = (float) $this->extraCharges;
 
-        $grandTotal = $taxable + $taxAmt + $extra; // 👇 NEW: Add extra charges
+        $invoiceGrandTotal = $taxable + $taxAmt + $extra;
+        $amountDue = max(0, $invoiceGrandTotal - $amountAlreadyPaid); 
+
+        // If the balance is zero, auto-mark as paid
+        $billStatus = $amountDue > 0 ? 'pending' : 'paid';
 
         $latestOrderId = $orders->pluck('id')->last();
         $transactionRef = 'ORD' . $latestOrderId . '_' . Str::random(10);
@@ -426,11 +475,12 @@ class ManagerDashboard extends Page
                 'subtotal' => $subtotal,
                 'discount_amount' => $this->discountAmount,
                 'tax_amount' => $taxAmt,
-                'extra_charges' => $extra, // 👇 NEW: Save to DB
-                'amount' => $grandTotal,
-                'status' => 'pending',
-                'payment_method' => 'pending',
+                'extra_charges' => $extra,
+                'amount' => $amountDue, // Save the actual due amount
+                'status' => $billStatus,
+                'payment_method' => $billStatus === 'paid' ? 'online' : 'pending',
                 'transaction_reference' => $transactionRef,
+                'paid_at' => $billStatus === 'paid' ? now() : null,
             ]
         );
 
@@ -448,7 +498,7 @@ class ManagerDashboard extends Page
         event(new \App\Events\BillGenerated($viewData['hostSessionId'], $paymentPayload));
 
         Notification::make()
-            ->title('Bill Sent!')
+            ->title('Final Bill Generated!')
             ->body('The generated bill is now displaying on the customer\'s screen.')
             ->success()
             ->send();
@@ -459,8 +509,7 @@ class ManagerDashboard extends Page
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
 
-        if (!$pendingPayment)
-            return;
+        if (!$pendingPayment) return;
 
         $pendingPayment->update([
             'status' => 'paid',
@@ -468,16 +517,19 @@ class ManagerDashboard extends Page
             'payment_method' => $pendingPayment->payment_method === 'pending' ? 'cash' : $pendingPayment->payment_method
         ]);
 
-        $orderIds = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])->pluck('id');
+        $upiId = auth()->user()->branch_id
+            ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id
+            : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
 
-        Order::whereIn('id', $orderIds)->update(['status' => 'completed']);
+        $paymentPayload = array_merge($pendingPayment->toArray(), [
+            'upi_id' => $upiId,
+            'merchant_category_code' => '5812',
+        ]);
 
-        foreach (Order::whereIn('id', $orderIds)->get() as $ord) {
-            OrderStatusUpdated::dispatch($ord);
-        }
+        event(new \App\Events\BillGenerated($viewData['hostSessionId'], $paymentPayload));
 
         Notification::make()
-            ->title('Payment Confirmed')
+            ->title('Final Payment Confirmed')
             ->body('Customer can now download their PDF receipt.')
             ->success()
             ->send();
@@ -502,7 +554,13 @@ class ManagerDashboard extends Page
             ->withSum([
                 'orders as total_bill' => fn($q) => $q->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])
             ], 'total_amount')
-            ->get();
+            ->get()
+            ->sortByDesc(function ($t) {
+                if ($t->active_sessions_count > 0) return 2;
+                if (($t->status ?? '') === 'reserved' || ($t->is_reserved ?? false)) return 1;
+                return 0;
+            })
+            ->values();
 
         $totalTables = $tables->count();
         $activeTables = $tables->where('active_sessions_count', '>', 0)->count();
@@ -543,7 +601,7 @@ class ManagerDashboard extends Page
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->whereNull('branch_id')
             ->where('status', 'placed')
-            ->with(['items.menuItem.category', 'restaurantTable'])
+            ->with(['items.menuItem.category', 'restaurantTable', 'restaurant']) 
             ->orderBy('created_at', 'asc')->get();
 
         return compact(

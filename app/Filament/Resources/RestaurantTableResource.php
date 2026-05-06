@@ -75,13 +75,10 @@ class RestaurantTableResource extends Resource
         return $table
             ->heading(new HtmlString('
                 <style>
-                    /* --- 🌟 MAKE WRAPPERS TRANSPARENT TO SHOW BG ── */
                     html, body, .fi-layout, .fi-main, .fi-page {
                         background-color: transparent !important;
                         background: transparent !important;
                     }
-
-                    /* --- 🌟 BACKGROUND IMAGE (bg.png at 15% Opacity) ── */
                     body::before {
                         content: "";
                         position: fixed;
@@ -94,8 +91,6 @@ class RestaurantTableResource extends Resource
                         z-index: -999 !important;
                         pointer-events: none;
                     }
-
-                    /* --- 🎨 PREMIUM GLASS TABLE BOX WITH BLACK BORDER ── */
                     .fi-ta-ctn {
                         background: rgba(255, 255, 255, 0.55) !important;
                         backdrop-filter: blur(18px) saturate(150%) !important;
@@ -106,8 +101,6 @@ class RestaurantTableResource extends Resource
                         overflow: hidden !important;
                     }
                     .dark .fi-ta-ctn { background: rgba(15, 15, 20, 0.75) !important; border-color: #000 !important; }
-
-                    /* --- CARD STYLING ── */
                     .fi-ta-record {
                         background: rgba(255, 255, 255, 0.40) !important;
                         border: 1.5px solid #000000 !important;
@@ -116,23 +109,18 @@ class RestaurantTableResource extends Resource
                         cursor: pointer !important;
                         margin: 0.5rem !important;
                     }
-
                     .fi-ta-record:hover {
                         transform: translateY(-4px) !important;
                         border-color: #f16b3f !important;
                         box-shadow: 0 10px 24px rgba(241, 107, 63, 0.18) !important;
                         background: rgba(255, 255, 255, 0.60) !important;
                     }
-
-                    /* Header Toolbar Styling */
                     .fi-ta-header-toolbar {
                         background: rgba(252, 236, 221, 0.45) !important;
                         border-bottom: 1.5px solid #000000 !important;
                         padding: 1rem !important;
                     }
                     .fi-ta-header-cell-label { color: #2a4795 !important; font-weight: 900 !important; text-transform: uppercase !important; }
-                    
-                    /* Action Buttons Styling */
                     .fi-ta-record .fi-ta-actions button:nth-of-type(1) {
                         background-color: #2a4795 !important; color: #ffffff !important; border: 1.5px solid #000 !important; border-radius: 8px !important;
                     }
@@ -201,19 +189,68 @@ class RestaurantTableResource extends Resource
                 ]),
             ])
             ->headerActions([
+                // 👇 NEW: Table Limit Validations added here 👇
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
                     ->color('primary')
+                    ->disabled(function () {
+                        $restaurant = auth()->user()->restaurant;
+                        // If limit is 0, we assume unlimited. If > 0, we enforce it.
+                        if (!$restaurant || $restaurant->table_limits <= 0) return false;
+                        
+                        $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
+                        return $currentCount >= $restaurant->table_limits;
+                    })
+                    ->tooltip(function () {
+                        $restaurant = auth()->user()->restaurant;
+                        if (!$restaurant || $restaurant->table_limits <= 0) return null;
+                        
+                        $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
+                        if ($currentCount >= $restaurant->table_limits) {
+                            return "Table limit ({$restaurant->table_limits}) reached. Please contact Super Admin to increase limits.";
+                        }
+                        return null;
+                    })
                     ->form(function () {
+                        $restaurant = auth()->user()->restaurant;
+                        $limit = $restaurant ? $restaurant->table_limits : 0;
+                        $currentCount = $restaurant ? \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count() : 0;
+                        $remaining = max(0, $limit - $currentCount);
+
+                        $tablesInput = \Filament\Forms\Components\TextInput::make('total_tables')
+                            ->numeric()
+                            ->minValue(1)
+                            ->required();
+
+                        // Apply dynamic Max Value if limits are enabled
+                        if ($limit > 0) {
+                            $tablesInput->maxValue($remaining)
+                                ->helperText("You can generate up to {$remaining} more table(s) based on your limit of {$limit}. Contact Super Admin to increase.");
+                        }
+
                         return [
-                            \Filament\Forms\Components\TextInput::make('total_tables')->numeric()->minValue(1)->required(),
+                            $tablesInput,
                             \Filament\Forms\Components\TextInput::make('seating_capacity')->label('Seating Capacity Per Table')->numeric()->default(1),
                         ];
                     })
                     ->action(function (array $data) {
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
+                        
+                        // Backend Failsafe: Prevent modifying limits via inspection/dev tools
+                        if ($restaurant && $restaurant->table_limits > 0) {
+                            $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
+                            if (($currentCount + $data['total_tables']) > $restaurant->table_limits) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title('Limit Exceeded')
+                                    ->body("You only have space for " . max(0, $restaurant->table_limits - $currentCount) . " more tables. Please contact Super Admin to increase your limit.")
+                                    ->danger()
+                                    ->send();
+                                return;
+                            }
+                        }
+
                         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
 
                         $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
@@ -223,18 +260,24 @@ class RestaurantTableResource extends Resource
                             $startQuery->whereNull('branch_id');
                         }
 
-                        $currentCount = $startQuery->count();
+                        $currentCountNaming = $startQuery->count();
                         $qrService = app(\App\Services\Restaurant\QrCodeService::class);
 
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
                             $table = \App\Models\RestaurantTable::create([
                                 'restaurant_id' => $restaurant->id,
                                 'branch_id' => $branchId,
-                                'table_number' => 'T-0' . ($currentCount + $i),
+                                'table_number' => 'T-0' . ($currentCountNaming + $i),
                                 'seating_capacity' => $data['seating_capacity'],
                             ]);
                             $qrService->generate($table);
                         }
+                        
+                        \Filament\Notifications\Notification::make()
+                            ->title('Tables Generated')
+                            ->body("{$data['total_tables']} tables have been generated successfully.")
+                            ->success()
+                            ->send();
                     }),
 
                 Tables\Actions\Action::make('download_pdf_qr')
@@ -244,7 +287,6 @@ class RestaurantTableResource extends Resource
                     ->outlined()
                     ->modalWidth('5xl')
                     ->modalHeading('Design & Download PDF QRs')
-                    // 👇 This makes the Header and Footer fixed, and the Body scrollable 👇
                     ->stickyModalHeader()
                     ->stickyModalFooter()
                     ->modalSubmitActionLabel('Generate & Download PDF')
@@ -252,7 +294,6 @@ class RestaurantTableResource extends Resource
                         return [
                             \Filament\Forms\Components\Grid::make(12)
                                 ->schema([
-                                    // LEFT SIDE: CONTROLS (Scrollable normally)
                                     \Filament\Forms\Components\Group::make()
                                         ->columnSpan(['default' => 12, 'lg' => 7])
                                         ->schema([
@@ -291,10 +332,9 @@ class RestaurantTableResource extends Resource
                                                 ])->columns(2),
                                         ]),
 
-                                    // RIGHT SIDE: LIVE PREVIEW (Sticky so it stays visible when scrolling controls)
                                     \Filament\Forms\Components\Group::make()
                                         ->columnSpan(['default' => 12, 'lg' => 5])
-                                        ->extraAttributes(['class' => 'lg:sticky lg:top-4']) // 👇 Bonus: Keeps preview visible while scrolling settings!
+                                        ->extraAttributes(['class' => 'lg:sticky lg:top-4'])
                                         ->schema([
                                             \Filament\Forms\Components\Placeholder::make('pdf_preview')
                                                 ->label('Live Design Preview')
@@ -336,7 +376,6 @@ class RestaurantTableResource extends Resource
                                                         $bgStyle = "background-color: {$bgColor};";
                                                     }
 
-                                                    // Fetch Restaurant Details
                                                     $restName = strtoupper($restaurant->name ?? 'RESTAURANT');
                                                     $address = $restaurant->address ?? '123 Main Street, City, State';
                                                     $logoUrl = ($restaurant && $restaurant->logo_path) ? Storage::disk('public')->url($restaurant->logo_path) : null;

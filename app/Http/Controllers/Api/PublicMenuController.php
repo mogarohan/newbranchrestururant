@@ -149,6 +149,7 @@ class PublicMenuController extends Controller
                 'upi_id' => $finalUpiId, 
                 // 👇 SEND THE BASE64 STRING TO THE APP
                 'logo' => $logoPayload,
+                'is_pay_first' => (bool) $restaurant->is_pay_first,
             ],
             'table' => [
                 'id' => $table->id,
