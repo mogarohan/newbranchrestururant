@@ -161,3 +161,5 @@ Route::post('/orders/{orderId}/cancel', [\App\Http\Controllers\Api\PlaceOrderCon
 
 // Public Menu Access
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');
+
+Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'validateSession']);

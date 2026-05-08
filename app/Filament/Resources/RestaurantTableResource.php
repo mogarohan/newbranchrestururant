@@ -175,28 +175,53 @@ class RestaurantTableResource extends Resource
                     ->button()
                     ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
 
+                // 👇 UPDATED: Single Delete Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                 Tables\Actions\DeleteAction::make()
                     ->iconButton()
                     ->icon('heroicon-o-trash')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
+                    ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager']))
+                    ->before(function ($record) {
+                        // 1. Delete physical QR from server
+                        if ($record->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($record->qr_path)) {
+                            \Illuminate\Support\Facades\Storage::disk('public')->delete($record->qr_path);
+                        }
+                        
+                        // 2. Invalidate old QR code scans
+                        $record->update([
+                            'qr_token' => null,
+                            'qr_path' => null,
+                            'is_active' => false,
+                        ]);
+                    }),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    // 👇 UPDATED: Bulk Delete Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                     Tables\Actions\DeleteBulkAction::make()
-                        ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
+                        ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager']))
+                        ->before(function (\Illuminate\Database\Eloquent\Collection $records) {
+                            foreach ($records as $record) {
+                                if ($record->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($record->qr_path)) {
+                                    \Illuminate\Support\Facades\Storage::disk('public')->delete($record->qr_path);
+                                }
+                                $record->update([
+                                    'qr_token' => null,
+                                    'qr_path' => null,
+                                    'is_active' => false,
+                                ]);
+                            }
+                        }),
                 ]),
             ])
             ->headerActions([
-                // 👇 NEW: Table Limit Validations added here 👇
                 Tables\Actions\Action::make('generateTables')
                     ->label('Generate Tables')
                     ->icon('heroicon-o-qr-code')
                     ->color('primary')
                     ->disabled(function () {
                         $restaurant = auth()->user()->restaurant;
-                        // If limit is 0, we assume unlimited. If > 0, we enforce it.
                         if (!$restaurant || $restaurant->table_limits <= 0) return false;
                         
                         $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
@@ -215,6 +240,7 @@ class RestaurantTableResource extends Resource
                     ->form(function () {
                         $restaurant = auth()->user()->restaurant;
                         $limit = $restaurant ? $restaurant->table_limits : 0;
+                        // Count only non-trashed active models to determine current usage
                         $currentCount = $restaurant ? \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count() : 0;
                         $remaining = max(0, $limit - $currentCount);
 
@@ -223,7 +249,6 @@ class RestaurantTableResource extends Resource
                             ->minValue(1)
                             ->required();
 
-                        // Apply dynamic Max Value if limits are enabled
                         if ($limit > 0) {
                             $tablesInput->maxValue($remaining)
                                 ->helperText("You can generate up to {$remaining} more table(s) based on your limit of {$limit}. Contact Super Admin to increase.");
@@ -238,7 +263,6 @@ class RestaurantTableResource extends Resource
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
                         
-                        // Backend Failsafe: Prevent modifying limits via inspection/dev tools
                         if ($restaurant && $restaurant->table_limits > 0) {
                             $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
                             if (($currentCount + $data['total_tables']) > $restaurant->table_limits) {
@@ -253,21 +277,40 @@ class RestaurantTableResource extends Resource
 
                         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
 
-                        $startQuery = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        // 👇 FIX: Start query WITH soft-deleted items to prevent naming collisions
+                        $lastTableQuery = \App\Models\RestaurantTable::withTrashed()
+                            ->where('restaurant_id', $restaurant->id);
+                            
                         if ($branchId) {
-                            $startQuery->where('branch_id', $branchId);
+                            $lastTableQuery->where('branch_id', $branchId);
                         } else {
-                            $startQuery->whereNull('branch_id');
+                            $lastTableQuery->whereNull('branch_id');
                         }
 
-                        $currentCountNaming = $startQuery->count();
+                        // Grab the last created table to figure out the highest number currently used
+                        $lastTableRecord = $lastTableQuery->orderByDesc('id')->first();
+
+                        $lastNumber = 0;
+                        // Extract the numeric part from the table name (e.g., "T-05" -> 5)
+                        if ($lastTableRecord && preg_match('/(\d+)$/', $lastTableRecord->table_number, $matches)) {
+                            $lastNumber = (int) $matches[1];
+                        } else {
+                            // Fallback just in case
+                            $lastNumber = $lastTableQuery->count();
+                        }
+
                         $qrService = app(\App\Services\Restaurant\QrCodeService::class);
 
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
+                            $nextNumber = $lastNumber + $i;
+                            
+                            // Formats the number cleanly (e.g., 1 becomes T-01, 10 becomes T-10)
+                            $formattedTableNumber = 'T-' . sprintf('%02d', $nextNumber);
+
                             $table = \App\Models\RestaurantTable::create([
                                 'restaurant_id' => $restaurant->id,
                                 'branch_id' => $branchId,
-                                'table_number' => 'T-0' . ($currentCountNaming + $i),
+                                'table_number' => $formattedTableNumber,
                                 'seating_capacity' => $data['seating_capacity'],
                             ]);
                             $qrService->generate($table);
@@ -580,6 +623,7 @@ class RestaurantTableResource extends Resource
                         }
                     }),
 
+                // 👇 UPDATED: Delete All Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                 Tables\Actions\Action::make('delete_all_qr')
                     ->label('Delete All QRs')
                     ->icon('heroicon-o-trash')
@@ -587,7 +631,7 @@ class RestaurantTableResource extends Resource
                     ->outlined()
                     ->requiresConfirmation()
                     ->modalHeading('Delete All Tables & QRs')
-                    ->modalDescription('Are you sure you want to delete all tables and their QR codes? This action cannot be undone.')
+                    ->modalDescription('Are you sure you want to delete all tables and their QR codes? They will be softly deleted and old QR prints will be invalidated.')
                     ->modalSubmitActionLabel('Yes, delete them all')
                     ->action(function () {
                         $user = auth()->user();
@@ -603,12 +647,21 @@ class RestaurantTableResource extends Resource
 
                         $tables = $query->get();
                         foreach ($tables as $table) {
+                            // 1. Delete physical QR from server
                             if ($table->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($table->qr_path)) {
                                 \Illuminate\Support\Facades\Storage::disk('public')->delete($table->qr_path);
                             }
+                            
+                            // 2. Invalidate token before soft deleting
+                            $table->update([
+                                'qr_token' => null,
+                                'qr_path' => null,
+                                'is_active' => false,
+                            ]);
+                            
+                            // 3. Perform Soft Delete
+                            $table->delete();
                         }
-
-                        $query->delete();
 
                         \Filament\Notifications\Notification::make()
                             ->title('All tables and QR codes deleted successfully.')

@@ -1,3 +1,4 @@
+
 <x-filament-panels::page>
     <style>
         html, body, .fi-layout, .fi-main, .fi-page { background-color: transparent !important; background: transparent !important; }
@@ -228,12 +229,16 @@
                             <div class="flex-grow flex flex-col justify-center">
                                 @if($isOccupied)
                                     <div class="ts-info-row">
-                                        <x-heroicon-s-clock class="ts-info-icon" />
-                                        <span class="ts-info-text">{{ $table->total_orders_count ?? 0 }} Order(s) Placed</span>
+                                        <x-heroicon-s-shopping-bag class="ts-info-icon" />
+                                        <span class="ts-info-text">{{ $table->live_orders_count ?? 0 }} Order(s)</span>
                                     </div>
                                     <div class="ts-info-row">
                                         <x-heroicon-s-currency-rupee class="ts-info-icon" />
-                                        <span class="ts-info-text">₹{{ number_format($table->total_bill, 2) }}</span>
+                                        <span class="ts-info-text">Total: ₹{{ number_format($table->live_subtotal ?? 0, 2) }}</span>
+                                    </div>
+                                    <div class="ts-info-row">
+                                        <x-heroicon-s-exclamation-circle class="ts-info-icon" style="color: var(--accent-red);" />
+                                        <span class="ts-info-text" style="color: var(--accent-red);">Due: ₹{{ number_format($table->live_due ?? 0, 2) }}</span>
                                     </div>
 
                                     <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
@@ -395,12 +400,22 @@
                         </div>
 
                         <div class="pos-receipt-footer">
-                            @if($pendingPayment && $pendingPayment->status === 'paid')
+                           @if($pendingPayment && $pendingPayment->status === 'paid')
                                 <div style="background: var(--accent-green-light); border: 1px solid var(--accent-green); padding: 1rem; border-radius: 12px; text-align: center;">
                                     <x-heroicon-s-check-circle style="width: 32px; height: 32px; color: var(--accent-green); margin: 0 auto 0.5rem auto;" />
-                                    <div style="color: var(--accent-green); font-weight: 900; font-size: 1.1rem; text-transform: uppercase;">Final Bill Settled (No Dues)</div>
-                                    <div style="color: var(--text-primary); font-weight: bold; margin-top: 4px;">Grand Total: ₹{{ number_format($pendingPayment->amount, 2) }}</div>
-                                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 4px;">Customer can now download PDF.</div>
+                                    <div style="color: var(--accent-green); font-weight: 900; font-size: 1.1rem; text-transform: uppercase;">Final Bill Settled</div>
+                                    
+                                    <div style="display: flex; justify-content: space-between; margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--accent-green);">
+                                        <span style="color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;">Amount Paid:</span>
+                                        <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 800;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
+                                    </div>
+                                    
+                                    <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                                        <span style="color: var(--text-secondary); font-size: 1rem; font-weight: 800;">Amount Due:</span>
+                                        <span style="color: var(--accent-green); font-size: 1.2rem; font-weight: 900;">₹0.00</span>
+                                    </div>
+                                    
+                                    <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 12px;">Customer can now download PDF.</div>
                                 </div>
                             @else
                                 <div class="flex justify-between items-end mb-4">
@@ -457,6 +472,12 @@
                                     </div>
 
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        <button wire:click="printPendingBill"
+                                            style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem; background-color: #3b82f6; color: #ffffff; padding: 0.85rem; border-radius: 12px; font-weight: 900; font-size: 0.9rem; text-transform: uppercase; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.2s;">
+                                            <x-heroicon-s-printer style="width: 18px; height: 18px;" />
+                                            Print Physical Bill
+                                        </button>
+
                                         <button wire:click="confirmPayment"
                                             style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem; background-color: #10b981; color: #ffffff; padding: 0.85rem; border-radius: 12px; font-weight: 900; font-size: 0.9rem; text-transform: uppercase; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); transition: all 0.2s;">
                                             <x-heroicon-s-check-circle style="width: 18px; height: 18px;" />

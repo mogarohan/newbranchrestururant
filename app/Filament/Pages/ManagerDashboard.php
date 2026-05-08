@@ -20,6 +20,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Hidden;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\DB; 
 
 class ManagerDashboard extends Page
 {
@@ -103,6 +104,96 @@ class ManagerDashboard extends Page
                 ->warning()
                 ->send();
         }
+    }
+
+    public function printPendingBill()
+    {
+        $viewData = $this->getViewData();
+        $pendingPayment = $viewData['pendingPayment'];
+        $hostSessionId = $viewData['hostSessionId'];
+
+        if (!$pendingPayment || !$hostSessionId) {
+            Notification::make()->title('No active bill found.')->danger()->send();
+            return;
+        }
+
+        $session = QrSession::find($hostSessionId);
+        $restaurant = auth()->user()->restaurant;
+        $table = RestaurantTable::find($session->restaurant_table_id);
+
+        $orders = Order::with('items')->where('qr_session_id', $hostSessionId)
+            ->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])
+            ->get();
+
+        $itemsHtml = '';
+        foreach ($orders as $order) {
+            foreach ($order->items as $item) {
+                $itemsHtml .= "<tr>
+                    <td style='padding: 4px 0; border-bottom: 1px dashed #ccc;'>{$item->quantity}x {$item->item_name}</td>
+                    <td style='padding: 4px 0; border-bottom: 1px dashed #ccc; text-align: right;'>{$item->total_price}</td>
+                </tr>";
+            }
+        }
+
+        // We use native HTML/CSS designed specifically for 80mm POS Thermal Printers
+        $html = "
+        <html>
+        <head>
+            <style>
+                @page { margin: 0; size: 80mm auto; }
+                body { margin: 10px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 12px; color: #000; }
+                table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            </style>
+        </head>
+        <body>
+            <div style='text-align: center;'>
+                <h2 style='margin: 0; font-size: 18px; font-weight: bold;'>{$restaurant->name}</h2>
+                <p style='margin: 4px 0;'>Table: {$table->table_number} | {$session->customer_name}</p>
+                <p style='margin: 2px 0; font-size: 10px; color: #555;'>" . now()->format('d M Y h:i A') . "</p>
+                <p style='margin: 8px 0; font-weight: bold; font-size: 14px;'>*** ESTIMATE BILL ***</p>
+            </div>
+            
+            <hr style='border-top: 1px dashed #000; border-bottom: none; margin: 10px 0;' />
+            
+            <table>
+                {$itemsHtml}
+            </table>
+            
+            <hr style='border-top: 1px dashed #000; border-bottom: none; margin: 10px 0;' />
+            
+            <table>
+                <tr><td style='text-align: left; padding: 2px 0;'>Subtotal</td><td style='text-align: right;'>{$pendingPayment->subtotal}</td></tr>
+                <tr><td style='text-align: left; padding: 2px 0;'>Tax</td><td style='text-align: right;'>{$pendingPayment->tax_amount}</td></tr>
+                <tr><td style='text-align: left; padding: 2px 0;'>Extra Charges</td><td style='text-align: right;'>{$pendingPayment->extra_charges}</td></tr>
+                <tr><td style='text-align: left; padding: 2px 0;'>Discount</td><td style='text-align: right;'>-{$pendingPayment->discount_amount}</td></tr>
+                <tr>
+                    <td style='text-align: left; font-weight: bold; font-size: 16px; padding-top: 10px;'>TOTAL DUE</td>
+                    <td style='text-align: right; font-weight: bold; font-size: 16px; padding-top: 10px;'>{$pendingPayment->amount}</td>
+                </tr>
+            </table>
+            
+            <hr style='border-top: 1px dashed #000; border-bottom: none; margin: 15px 0 10px 0;' />
+            
+            <div style='text-align: center; margin-top: 10px; font-size: 11px;'>
+                <p style='margin: 2px 0;'>Please proceed to payment.</p>
+                <p style='margin: 2px 0; font-weight: bold;'>Thank you for dining with us!</p>
+            </div>
+        </body>
+        </html>
+        ";
+
+        // 👇 Inject Native Javascript to open the browser's Print Menu instantly 👇
+        $escapedHtml = json_encode($html);
+        $this->js("
+            const printWindow = window.open('', '_blank', 'width=400,height=600');
+            printWindow.document.write({$escapedHtml});
+            printWindow.document.close();
+            setTimeout(() => {
+                printWindow.focus();
+                printWindow.print();
+                printWindow.onafterprint = () => printWindow.close();
+            }, 250);
+        ");
     }
 
     public function placeOrderAction(): Action
@@ -280,7 +371,7 @@ class ManagerDashboard extends Page
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin']);
+            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin','restauranrt_admin']);
     }
 
     public function openTable($tableId)
@@ -300,7 +391,6 @@ class ManagerDashboard extends Page
         $user = auth()->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
 
-        // 👇 FIX: Bulletproof explicit query to prevent relationship global scope bugs
         $activeCount = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_active', true)
             ->count();
@@ -337,7 +427,6 @@ class ManagerDashboard extends Page
         $user = auth()->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
 
-        // 👇 FIX: The root cause of the bug. Explicitly querying by table_id blocks global relationship errors.
         $activeSessions = QrSession::where('restaurant_table_id', $table->id)
             ->where('is_active', true)
             ->get();
@@ -446,11 +535,22 @@ class ManagerDashboard extends Page
     public function sendBillToCustomer()
     {
         $viewData = $this->getViewData();
+        $hostSessionId = $viewData['hostSessionId'];
+        
+        if (!$hostSessionId) return;
+
+        if (\App\Models\Invoice::where('qr_session_id', $hostSessionId)->exists()) {
+            Notification::make()->title('Invoice already generated for this session.')->warning()->send();
+            return;
+        }
+        
+        $session = QrSession::find($hostSessionId);
+        if (!$session) return;
+
         $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
 
         if ($orders->isEmpty()) return;
 
-        // CALCULATE FINAL BILL 
         $subtotal = $orders->sum('total_amount');
         $amountAlreadyPaid = $orders->where('payment_status', 'paid')->sum('total_amount');
         
@@ -459,80 +559,148 @@ class ManagerDashboard extends Page
         $extra = (float) $this->extraCharges;
 
         $invoiceGrandTotal = $taxable + $taxAmt + $extra;
-        $amountDue = max(0, $invoiceGrandTotal - $amountAlreadyPaid); 
+        
+        $amountDue = round($invoiceGrandTotal - $amountAlreadyPaid, 2);
+        $amountDue = max(0, $amountDue); 
 
-        // If the balance is zero, auto-mark as paid
         $billStatus = $amountDue > 0 ? 'pending' : 'paid';
 
         $latestOrderId = $orders->pluck('id')->last();
         $transactionRef = 'ORD' . $latestOrderId . '_' . Str::random(10);
 
-        $payment = Payment::updateOrCreate(
-            ['order_id' => $latestOrderId],
-            [
-                'restaurant_id' => auth()->user()->restaurant_id,
-                'branch_id' => auth()->user()->branch_id,
-                'subtotal' => $subtotal,
-                'discount_amount' => $this->discountAmount,
-                'tax_amount' => $taxAmt,
-                'extra_charges' => $extra,
-                'amount' => $amountDue, // Save the actual due amount
-                'status' => $billStatus,
-                'payment_method' => $billStatus === 'paid' ? 'online' : 'pending',
-                'transaction_reference' => $transactionRef,
-                'paid_at' => $billStatus === 'paid' ? now() : null,
-            ]
-        );
+        try {
+            DB::transaction(function () use ($latestOrderId, $subtotal, $taxAmt, $extra, $amountDue, $billStatus, $transactionRef, $session) {
+                
+                $payment = Payment::updateOrCreate(
+                    ['order_id' => $latestOrderId],
+                    [
+                        'restaurant_id' => auth()->user()->restaurant_id,
+                        'branch_id' => auth()->user()->branch_id,
+                        'subtotal' => $subtotal,
+                        'discount_amount' => $this->discountAmount,
+                        'tax_amount' => $taxAmt,
+                        'extra_charges' => $extra,
+                        'amount' => $amountDue, 
+                        'status' => $billStatus,
+                        'payment_method' => $billStatus === 'paid' ? 'online' : 'pending',
+                        'transaction_reference' => $transactionRef,
+                        'paid_at' => $billStatus === 'paid' ? now() : null,
+                    ]
+                );
 
-        $upiId = auth()->user()->branch_id
-            ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id
-            : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
+                $upiId = auth()->user()->branch_id
+                    ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id
+                    : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
 
-        $merchantCode = '5812';
+                $paymentPayload = array_merge($payment->toArray(), [
+                    'upi_id' => $upiId,
+                    'merchant_category_code' => '5812',
+                ]);
 
-        $paymentPayload = array_merge($payment->toArray(), [
-            'upi_id' => $upiId,
-            'merchant_category_code' => $merchantCode,
-        ]);
+                if ($billStatus === 'paid') {
+                    $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $payment);
+                    $session->update(['status' => 'completed']);
+                    
+                    $paymentPayload['invoice_number'] = $invoice->invoice_number;
+                }
 
-        event(new \App\Events\BillGenerated($viewData['hostSessionId'], $paymentPayload));
+                event(new \App\Events\BillGenerated($session->id, $paymentPayload));
+            });
 
-        Notification::make()
-            ->title('Final Bill Generated!')
-            ->body('The generated bill is now displaying on the customer\'s screen.')
-            ->success()
-            ->send();
+            if ($billStatus === 'paid') {
+                Notification::make()
+                    ->title('Bill Auto-Settled & Invoice Generated')
+                    ->body('Because the amount due was ₹0, the official invoice was automatically generated.')
+                    ->success()
+                    ->send();
+                
+                $this->selectedTableId = null;
+                $this->discountAmount = 0;
+                $this->taxPercentage = 0;
+                $this->extraCharges = 0;
+            } else {
+                Notification::make()
+                    ->title('Final Bill Sent!')
+                    ->body('The bill is now displaying on the customer\'s screen for payment. You can also print the physical bill now.')
+                    ->success()
+                    ->send();
+            }
+
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('Error generating bill')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 
     public function confirmPayment()
     {
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
+        $hostSessionId = $viewData['hostSessionId'];
 
-        if (!$pendingPayment) return;
+        if (!$pendingPayment || !$hostSessionId) return;
 
-        $pendingPayment->update([
-            'status' => 'paid',
-            'paid_at' => now(),
-            'payment_method' => $pendingPayment->payment_method === 'pending' ? 'cash' : $pendingPayment->payment_method
-        ]);
+        if (\App\Models\Invoice::where('qr_session_id', $hostSessionId)->exists()) {
+            Notification::make()->title('Invoice already generated for this session.')->warning()->send();
+            
+            $this->selectedTableId = null;
+            return;
+        }
 
-        $upiId = auth()->user()->branch_id
-            ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id
-            : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
+        $session = QrSession::find($hostSessionId);
+        
+        if (!$session) {
+            Notification::make()->title('Session not found.')->danger()->send();
+            return;
+        }
 
-        $paymentPayload = array_merge($pendingPayment->toArray(), [
-            'upi_id' => $upiId,
-            'merchant_category_code' => '5812',
-        ]);
+        try {
+            DB::transaction(function () use ($pendingPayment, $session, &$paymentPayload) {
+                
+                $pendingPayment->update([
+                    'status' => 'paid',
+                    'paid_at' => now(),
+                    'payment_method' => $pendingPayment->payment_method === 'pending' ? 'cash' : $pendingPayment->payment_method
+                ]);
 
-        event(new \App\Events\BillGenerated($viewData['hostSessionId'], $paymentPayload));
+                $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $pendingPayment);
+                
+                $session->update(['status' => 'completed']);
 
-        Notification::make()
-            ->title('Final Payment Confirmed')
-            ->body('Customer can now download their PDF receipt.')
-            ->success()
-            ->send();
+                $upiId = auth()->user()->branch_id
+                    ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id
+                    : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
+
+                $paymentPayload = array_merge($pendingPayment->toArray(), [
+                    'upi_id' => $upiId,
+                    'merchant_category_code' => '5812',
+                    'invoice_number' => $invoice->invoice_number,
+                ]);
+            });
+
+            event(new \App\Events\BillGenerated($hostSessionId, $paymentPayload));
+
+            Notification::make()
+                ->title('Payment Confirmed & Invoice Generated')
+                ->body('The official tax invoice has been generated successfully.')
+                ->success()
+                ->send();
+                
+            $this->selectedTableId = null;
+            $this->discountAmount = 0;
+            $this->taxPercentage = 0;
+            $this->extraCharges = 0;
+
+        } catch (\Exception $e) {
+            Notification::make()
+                ->title('Invoice Generation Failed')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
     }
 
     protected function getViewData(): array
@@ -548,13 +716,29 @@ class ManagerDashboard extends Page
             $tablesQuery->whereNull('branch_id');
 
         $tables = $tablesQuery
+            ->with(['qrSessions' => fn($q) => $q->where('is_active', true)]) // Fetch active sessions to calculate totals
             ->withCount([
                 'qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true),
             ])
-            ->withSum([
-                'orders as total_bill' => fn($q) => $q->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])
-            ], 'total_amount')
             ->get()
+            ->map(function ($table) {
+                // Calculate live totals only for ACTIVE sessions on this table
+                $activeSessionIds = $table->qrSessions->pluck('id')->toArray();
+                
+                $orders = Order::whereIn('qr_session_id', $activeSessionIds)
+                    ->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])
+                    ->get();
+                
+                $subtotal = $orders->sum('total_amount');
+                $amountPaid = $orders->where('payment_status', 'paid')->sum('total_amount');
+                
+                // Attach the calculated metrics back to the table object
+                $table->live_subtotal = $subtotal;
+                $table->live_due = max(0, $subtotal - $amountPaid);
+                $table->live_orders_count = $orders->count();
+                
+                return $table;
+            })
             ->sortByDesc(function ($t) {
                 if ($t->active_sessions_count > 0) return 2;
                 if (($t->status ?? '') === 'reserved' || ($t->is_reserved ?? false)) return 1;

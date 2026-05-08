@@ -7,9 +7,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RestaurantTable extends Model
 {
+    use SoftDeletes; // Enables soft deletes
+
     protected $fillable = [
         'restaurant_id',
         'table_number',

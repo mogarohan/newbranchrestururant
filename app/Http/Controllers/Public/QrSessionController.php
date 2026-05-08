@@ -13,9 +13,13 @@ class QrSessionController extends Controller
 {
     public function validateQr(Restaurant $restaurant, RestaurantTable $table, $token)
     {
+        // Eloquent automatically returns 404 if the table is soft-deleted
+        //$table = RestaurantTable::findOrFail($tableId);
+
         abort_unless($table->restaurant_id === $restaurant->id, 404);
-        abort_unless($table->qr_token === $token, 403);
-        abort_unless($table->is_active, 403);
+        abort_unless($table->qr_token === $token, 403, 'Invalid QR Token');
+        abort_unless($table->is_active, 403, 'This table is currently inactive or unavailable.');
+
 
         // 1. Find the primary host
         $host = QrSession::where('restaurant_table_id', $table->id)
@@ -205,5 +209,39 @@ class QrSessionController extends Controller
         }
 
         return response()->json(['message' => 'Session ended']);
+    }
+
+    public function validateSession(\Illuminate\Http\Request $request)
+    {
+        // Safely extract token from Bearer header or JSON body
+        $token = $request->bearerToken();
+        
+        if (!$token && $request->hasHeader('Authorization')) {
+            $token = str_replace('Bearer ', '', $request->header('Authorization'));
+        }
+
+        if (!$token) {
+            $token = $request->query('session_token');
+        }
+
+        if (!$token) {
+            return response()->json(['message' => 'TOKEN_MISSING'], 401);
+        }
+
+        $session = \App\Models\QrSession::where('session_token', $token)->first();
+
+        if (!$session) {
+            return response()->json(['message' => 'SESSION_NOT_FOUND'], 404);
+        }
+
+        if (!$session->is_active || $session->status === 'closed') {
+            return response()->json(['message' => 'SESSION_CLOSED'], 403);
+        }
+
+        return response()->json([
+            'valid' => true,
+            'session_id' => $session->id,
+            'join_status' => $session->join_status,
+        ]);
     }
 }
