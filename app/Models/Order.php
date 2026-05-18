@@ -12,6 +12,7 @@ class Order extends Model
         'restaurant_id',
         'restaurant_table_id',
         'qr_session_id',
+        'room_session_id', // 👈 ADD THIS
         'status',
         'payment_status',
         'customer_name',
@@ -59,5 +60,9 @@ class Order extends Model
         // Make sure the foreign key ('restaurant_table_id') matches your database column. 
         // If your column is named just 'table_id', change it below.
         return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');
+    }
+    public function roomSession()
+    {
+        return $this->belongsTo(\App\Models\RoomSession::class);
     }
 }

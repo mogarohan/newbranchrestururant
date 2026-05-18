@@ -129,6 +129,25 @@ class RestaurantResource extends Resource
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
 
+            Forms\Components\Section::make('Hospitality Modules')
+                ->description('Enable and manage hospitality modules like hotel rooms.')
+                ->schema([
+                    Forms\Components\Toggle::make('is_rooms_facility')
+                        ->label('Enable Rooms Facility')
+                        ->helperText('Allow this restaurant to use the Hotel/Rooms dashboard and QR system.')
+                        ->live() // Makes the form reactive so we can show/hide the limit input
+                        ->default(false),
+
+                    Forms\Components\TextInput::make('rooms_limit')
+                        ->label('Maximum Rooms Allowed')
+                        ->numeric()
+                        ->default(0)
+                        ->minValue(0)
+                        ->helperText('The maximum number of rooms this restaurant can create under their plan.')
+                        ->visible(fn (\Filament\Forms\Get $get) => $get('is_rooms_facility') === true), // Only show if facility is enabled
+                ])
+                ->columns(2),
+
             /* 👇 NAYI RESTAURANT BANATE WAQT RESTAURANT ADMIN CREATE KARNE KE LIYE FIELDS 👇 */
             Forms\Components\Section::make('Create Restaurant Admin')
                 ->description('These credentials will be used by the restaurant admin to log in.')
@@ -357,6 +376,17 @@ class RestaurantResource extends Resource
                 Tables\Columns\TextColumn::make('user_limits')
                     ->label('USER LIMIT')
                     ->sortable(),
+                
+                Tables\Columns\IconColumn::make('is_rooms_facility')
+                    ->label('Rooms Feature')
+                    ->boolean()
+                    ->sortable(),
+
+                Tables\Columns\TextColumn::make('rooms_limit')
+                    ->label('Room Limit')
+                    ->numeric()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('STATUS')

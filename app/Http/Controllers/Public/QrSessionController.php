@@ -126,33 +126,65 @@ class QrSessionController extends Controller
         ]);
     }
     
-   public function callWaiter(Request $request)
+  public function callWaiter(Request $request)
     {
-        // 👇 FIX: Try header first, fallback to JSON body
         $token = $request->bearerToken() ?: $request->input('session_token');
+        $isRoom = $request->input('type') === 'room';
         
-        $session = \App\Models\QrSession::where('session_token', $token)->first();
-
-        if (!$session) {
-            return response()->json(['message' => 'Invalid session token provided.'], 404);
+        if ($isRoom) {
+            $session = \App\Models\RoomSession::where('session_token', $token)->first();
+            $entity = \App\Models\Room::find($session->room_id);
+            $number = $entity ? $entity->room_number : '?';
+        } else {
+            $session = \App\Models\QrSession::where('session_token', $token)->first();
+            $entity = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+            $number = $entity ? ($entity->number ?? $entity->table_number) : '?';
         }
 
-        $table = \App\Models\RestaurantTable::find($session->restaurant_table_id);
-        $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
+        if (!$session) return response()->json(['message' => 'Invalid session token provided.'], 404);
 
         try {
             event(new \App\Events\WaiterCalled(
                 $session->restaurant_id,
-                $session->restaurant_table_id,
-                $tableNumber,
-                $session->customer_name
+                $entity->id,
+                $number,
+                $isRoom ? $session->guest_name : $session->customer_name
             ));
-        } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('Call Waiter Broadcast Failed: ' . $e->getMessage());
-        }
+        } catch (\Exception $e) {}
 
         return response()->json(['message' => 'Waiter has been notified']);
     }
+
+    public function requestBill(Request $request)
+    {
+        $token = $request->bearerToken() ?: $request->input('session_token');
+        $isRoom = $request->input('type') === 'room';
+
+        if ($isRoom) {
+            $session = \App\Models\RoomSession::where('session_token', $token)->first();
+            $entity = \App\Models\Room::find($session->room_id);
+            $number = $entity ? $entity->room_number : '?';
+        } else {
+            $session = \App\Models\QrSession::where('session_token', $token)->first();
+            $entity = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+            $number = $entity ? ($entity->number ?? $entity->table_number) : '?';
+        }
+
+        if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
+
+        try {
+            event(new \App\Events\BillRequested(
+                $session->restaurant_id,
+                $entity->id,
+                $number,
+                $isRoom ? $session->guest_name : $session->customer_name
+            ));
+        } catch (\Exception $e) {}
+
+        return response()->json(['message' => 'Bill requested successfully.']);
+    }
+    
+    // ... keep the rest of the file
 
     public function respondToJoin(Request $request, $sessionId)
     {

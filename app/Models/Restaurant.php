@@ -27,6 +27,8 @@ class Restaurant extends Model
         'is_pay_first',
         'gst_no',
         'table_limits',
+        'is_rooms_facility',
+        'rooms_limit',
     ];
 
     /**

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\User;
-use App\Models\ActivityLog; // 👈 NEW
+use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
 use App\Models\RestaurantTable;
@@ -52,7 +52,6 @@ class WaiterAppController extends Controller
         ]);
     }
 
-    // 🔥 NEW: Profile fetch method for real-time updates
     public function getProfile(Request $request)
     {
         $user = $request->user();
@@ -85,7 +84,6 @@ class WaiterAppController extends Controller
             $order->update(['status' => 'served']);
             \App\Models\KitchenQueue::where('order_id', $order->id)->delete();
 
-            // Waiter ka count badhao
             $user->increment('total_served');
 
             OrderStatusLog::create([
@@ -94,7 +92,7 @@ class WaiterAppController extends Controller
                 'to_status' => 'served',
                 'changed_by' => $user->id,
             ]);
-            // 👇 NEW: Record Activity Log for Waiter
+            
             ActivityLog::create([
                 'actor_type' => 'staff',
                 'actor_id' => $user->id,
@@ -103,6 +101,7 @@ class WaiterAppController extends Controller
                 'entity_id' => $order->id,
                 'metadata' => [
                     'table_id' => $order->restaurant_table_id,
+                    'room_session_id' => $order->room_session_id,
                 ]
             ]);
         });
@@ -118,7 +117,9 @@ class WaiterAppController extends Controller
     public function getReadyOrders(Request $request)
     {
         $user = $request->user();
-        $query = Order::with(['items.menuItem', 'table', 'session'])
+        
+        // Eager load roomSession.room to get the room number
+        $query = Order::with(['items.menuItem', 'table', 'session', 'roomSession.room'])
             ->where('restaurant_id', $user->restaurant_id);
 
         if ($user->branch_id) {
@@ -131,12 +132,22 @@ class WaiterAppController extends Controller
             ->orderBy('updated_at', 'asc')
             ->get()
             ->map(function ($order) {
+                // Calculate display string on the backend
+                if ($order->room_session_id) {
+                    $displayNumber = 'Room ' . ($order->roomSession->room->room_number ?? 'Unknown');
+                } elseif ($order->restaurant_table_id) {
+                    $displayNumber = 'Table ' . ($order->table ? ($order->table->number ?? $order->table->table_number) : 'Unknown');
+                } else {
+                    $displayNumber = 'Takeaway';
+                }
+
                 return [
                     'id' => $order->id,
                     'status' => $order->status,
                     'updated_at' => $order->updated_at,
                     'items' => $order->items,
-                    'table_number' => $order->table ? ($order->table->number ?? $order->table->table_number) : 'Takeaway',
+                    'room_session_id' => $order->room_session_id,
+                    'table_number' => $displayNumber, 
                     'customer_name' => $order->customer_name ?? 'Guest',
                     'total_items' => $order->items->sum('quantity'),
                     'notes' => $order->notes,
@@ -170,7 +181,9 @@ class WaiterAppController extends Controller
         $request->validate(['status' => 'required|string|in:available,occupied,cleaning']);
         $user = $request->user();
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($id);
+        $oldStatus = $table->status;
         $table->update(['status' => $request->status]);
+        
         ActivityLog::create([
             'actor_type' => 'staff',
             'actor_id' => $user->id,
@@ -182,6 +195,7 @@ class WaiterAppController extends Controller
                 'to_status' => $request->status,
             ]
         ]);
+        
         event(new \App\Events\TableStatusUpdated($table->id, $table->status, $table->restaurant_id));
         return response()->json(['message' => 'Table status updated', 'table' => $table]);
     }

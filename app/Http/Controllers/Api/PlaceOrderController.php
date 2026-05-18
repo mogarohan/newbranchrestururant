@@ -7,8 +7,10 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderStatusLog;
 use App\Models\QrSession;
+use App\Models\RoomSession;
 use App\Models\Restaurant;
 use App\Models\RestaurantTable;
+use App\Models\Room;
 use App\Models\MenuItem;
 use App\Models\Payment;
 use App\Models\IdempotencyKey;
@@ -24,6 +26,7 @@ class PlaceOrderController extends Controller
     public function store(Request $request)
     {
         $idempotencyKeyStr = $request->header('X-Idempotency-Key');
+        $isRoom = $request->input('type') === 'room';
         
         if ($idempotencyKeyStr) {
             $existingKey = IdempotencyKey::where('key', $idempotencyKeyStr)
@@ -63,7 +66,7 @@ class PlaceOrderController extends Controller
         try {
             $validated = $request->validate([
                 'restaurant_id' => 'required|exists:restaurants,id',
-                'table_id' => 'required|exists:restaurant_tables,id',
+                'table_id' => 'required', // Acts as room_id for rooms
                 'session_token' => 'required|string',
                 'notes' => 'nullable|string|max:1000',
                 'items' => 'required|array|min:1',
@@ -73,22 +76,30 @@ class PlaceOrderController extends Controller
             ]);
 
             $restaurant = Restaurant::findOrFail($validated['restaurant_id']);
-            $table = RestaurantTable::findOrFail($validated['table_id']);
 
-            if ($table->restaurant_id !== $restaurant->id) {
-                throw ValidationException::withMessages(['table_id' => ['Table does not belong to this restaurant.']]);
+            if ($isRoom) {
+                $entity = Room::findOrFail($validated['table_id']);
+                $session = RoomSession::where('session_token', $validated['session_token'])
+                    ->where('room_id', $entity->id)
+                    ->where('status', 'active')
+                    ->first();
+            } else {
+                $entity = RestaurantTable::findOrFail($validated['table_id']);
+                $session = QrSession::where('session_token', $validated['session_token'])
+                    ->where('restaurant_table_id', $entity->id)
+                    ->where('is_active', true)
+                    ->first();
             }
 
-            $session = QrSession::where('session_token', $validated['session_token'])
-                ->where('restaurant_table_id', $table->id)
-                ->where('is_active', true)
-                ->first();
+            if ($entity->restaurant_id !== $restaurant->id) {
+                throw ValidationException::withMessages(['table_id' => ['Entity does not belong to this restaurant.']]);
+            }
 
-            if (!$session || $session->expires_at < now()) {
+            if (!$session || ($isRoom ? $session->check_out_at < now() : $session->expires_at < now())) {
                 throw ValidationException::withMessages(['session_token' => ['Session expired or invalid.']]);
             }
 
-            if (!$session->is_primary && $session->join_status !== 'approved') {
+            if (!$isRoom && !$session->is_primary && $session->join_status !== 'approved') {
                 throw ValidationException::withMessages(['session_token' => ['Waiting for primary approval.']]);
             }
 
@@ -104,7 +115,7 @@ class PlaceOrderController extends Controller
 
                 $branchStatus = DB::table('branch_menu_item_status')
                     ->where('menu_item_id', $menuItem->id)
-                    ->where('branch_id', $table->branch_id)
+                    ->where('branch_id', $entity->branch_id)
                     ->first();
 
                 $isAvailable = $branchStatus ? (bool) $branchStatus->is_available : (bool) $menuItem->is_available;
@@ -129,20 +140,27 @@ class PlaceOrderController extends Controller
             $totalAmount = $subtotal;
             $order = null;
 
-            DB::transaction(function () use ($restaurant, $table, $session, $validated, $preparedItems, $totalAmount, &$order) {
+            DB::transaction(function () use ($restaurant, $entity, $session, $validated, $preparedItems, $totalAmount, $isRoom, &$order) {
 
-                $order = Order::create([
+                $orderData = [
                     'restaurant_id' => $restaurant->id,
-                    'branch_id' => $table->branch_id,
-                    'restaurant_table_id' => $table->id,
-                    'qr_session_id' => $session->id,
-                    'customer_name' => $session->customer_name,
+                    'branch_id' => $entity->branch_id,
+                    'customer_name' => $isRoom ? $session->guest_name : $session->customer_name,
                     'status' => 'placed',
-                    'payment_status' => 'pending', // 👈 Initialize as pending for both models
+                    'payment_status' => 'pending', 
                     'tax_amount' => 0,
                     'total_amount' => $totalAmount,
                     'notes' => $validated['notes'] ?? null,
-                ]);
+                ];
+
+                if ($isRoom) {
+                    $orderData['room_session_id'] = $session->id;
+                } else {
+                    $orderData['restaurant_table_id'] = $entity->id;
+                    $orderData['qr_session_id'] = $session->id;
+                }
+
+                $order = Order::create($orderData);
 
                 foreach ($preparedItems as $itemData) {
                     $order->items()->create($itemData);
@@ -165,8 +183,8 @@ class PlaceOrderController extends Controller
                     'metadata' => [
                         'total_amount' => $totalAmount,
                         'item_count' => count($preparedItems),
-                        'table_number' => $table->table_number ?? $table->number,
-                        'is_pay_first' => $restaurant->is_pay_first // Track workflow type
+                        'table_number' => $isRoom ? $entity->room_number : ($entity->table_number ?? $entity->number),
+                        'is_pay_first' => $restaurant->is_pay_first
                     ]
                 ]);
             });
@@ -187,7 +205,7 @@ class PlaceOrderController extends Controller
                 'message' => 'Order placed successfully.',
                 'total_amount' => $totalAmount,
                 'order_id' => $order->id,
-                'is_pay_first' => $restaurant->is_pay_first // 👈 Tell frontend if they need to pay immediately
+                'is_pay_first' => $restaurant->is_pay_first 
             ], 201);
 
         } catch (\Exception $e) {
@@ -198,28 +216,37 @@ class PlaceOrderController extends Controller
         }
     }
 
-    public function getSessionOrders($token)
+    public function getSessionOrders(Request $request, $token)
     {
-        $session = QrSession::where('session_token', $token)->first();
+        $isRoom = $request->query('type') === 'room';
 
-        if (!$session) {
-            return response()->json(['message' => 'Session not found'], 404);
+        if ($isRoom) {
+            $session = RoomSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Session not found'], 404);
+
+            $orders = Order::with(['items'])
+                ->where('room_session_id', $session->id)
+                ->orderBy('created_at', 'desc')
+                ->get();
+        } else {
+            $session = QrSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Session not found'], 404);
+
+            $groupIds = QrSession::where(function($q) use ($session) {
+                    if ($session->is_primary) {
+                        $q->where('host_session_id', $session->id)->orWhere('id', $session->id);
+                    } else {
+                        $q->where('host_session_id', $session->host_session_id)->orWhere('id', $session->host_session_id);
+                    }
+                })
+                ->where('created_at', '>=', now()->subHours(12)) 
+                ->pluck('id');
+
+            $orders = Order::with(['items'])
+                ->whereIn('qr_session_id', $groupIds)
+                ->orderBy('created_at', 'desc')
+                ->get();
         }
-
-        $groupIds = QrSession::where(function($q) use ($session) {
-                if ($session->is_primary) {
-                    $q->where('host_session_id', $session->id)->orWhere('id', $session->id);
-                } else {
-                    $q->where('host_session_id', $session->host_session_id)->orWhere('id', $session->host_session_id);
-                }
-            })
-            ->where('created_at', '>=', now()->subHours(12)) 
-            ->pluck('id');
-
-        $orders = Order::with(['items'])
-            ->whereIn('qr_session_id', $groupIds)
-            ->orderBy('created_at', 'desc')
-            ->get();
 
         $formattedOrders = $orders->map(function ($order) {
             return [
@@ -250,19 +277,18 @@ class PlaceOrderController extends Controller
             ->latest()
             ->first();
             
-        $upiId = $session->restaurantTable->branch->upi_id ?? $session->restaurant->upi_id ?? null;
+        $upiId = $isRoom 
+            ? ($session->room->branch->upi_id ?? $session->room->restaurant->upi_id ?? null)
+            : ($session->restaurantTable->branch->upi_id ?? $session->restaurant->upi_id ?? null);
 
-        // 👇 Dynamic Billing Summary Calculation 👇
         $activeOrders = $orders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
         $orderSubtotal = $activeOrders->sum('total_amount');
         $amountPaid = $activeOrders->where('payment_status', 'paid')->sum('total_amount');
 
         if ($payment) {
-            // Manager generated a bill, trust the Payment Model!
             $invoiceGrandTotal = $payment->subtotal + $payment->tax_amount + $payment->extra_charges - $payment->discount_amount;
-            $amountDue = $payment->amount; // This was accurately stored by ManagerDashboard
+            $amountDue = $payment->amount; 
         } else {
-            // No official bill generated yet
             $invoiceGrandTotal = $orderSubtotal;
             $amountDue = max(0, $invoiceGrandTotal - $amountPaid);
         }
@@ -278,24 +304,31 @@ class PlaceOrderController extends Controller
         ]);
     }
 
+    // 👇 FULLY RESTORED AND UPDATED METHODS BELOW 👇
+
     public function requestBill(Request $request)
     {
         $token = $request->bearerToken() ?: $request->input('session_token');
-        $session = QrSession::where('session_token', $token)->first();
+        $isRoom = $request->input('type') === 'room';
 
-        if (!$session) {
-            return response()->json(['message' => 'Invalid session.'], 404);
+        if ($isRoom) {
+            $session = RoomSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
+            $table = Room::find($session->room_id);
+            $tableNumber = $table ? $table->room_number : '?';
+        } else {
+            $session = QrSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
+            $table = RestaurantTable::find($session->restaurant_table_id);
+            $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
         }
-
-        $table = RestaurantTable::find($session->restaurant_table_id);
-        $tableNumber = $table ? ($table->number ?? $table->table_number) : '?';
 
         try {
             event(new \App\Events\BillRequested(
                 $session->restaurant_id,
-                $session->restaurant_table_id,
+                $isRoom ? $session->room_id : $session->restaurant_table_id,
                 $tableNumber,
-                $session->customer_name
+                $isRoom ? $session->guest_name : $session->customer_name
             ));
         } catch (\Exception $e) {
             \Illuminate\Support\Facades\Log::error('Bill Request Broadcast Failed: ' . $e->getMessage());
@@ -307,23 +340,31 @@ class PlaceOrderController extends Controller
     public function selectPaymentMethod(Request $request)
     {
         $token = $request->bearerToken() ?: $request->input('session_token');
-        $session = QrSession::where('session_token', $token)->first();
-
-        if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
-
+        $isRoom = $request->input('type') === 'room';
         $method = $request->input('method');
 
-        $groupIds = QrSession::where('host_session_id', $session->is_primary ? $session->id : $session->host_session_id)
-            ->orWhere('id', $session->is_primary ? $session->id : $session->host_session_id)
-            ->pluck('id');
+        if ($isRoom) {
+            $session = RoomSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
             
-        $orderIds = Order::whereIn('qr_session_id', $groupIds)->pluck('id');
+            $orderIds = Order::where('room_session_id', $session->id)->pluck('id');
+            $tableNum = $session->room->room_number ?? '?';
+        } else {
+            $session = QrSession::where('session_token', $token)->first();
+            if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
+
+            $groupIds = QrSession::where('host_session_id', $session->is_primary ? $session->id : $session->host_session_id)
+                ->orWhere('id', $session->is_primary ? $session->id : $session->host_session_id)
+                ->pluck('id');
+                
+            $orderIds = Order::whereIn('qr_session_id', $groupIds)->pluck('id');
+            $tableNum = $session->restaurantTable->table_number ?? $session->restaurantTable->number ?? '?';
+        }
         
         $payment = Payment::whereIn('order_id', $orderIds)->where('status', 'pending')->first();
 
         if ($payment) {
             $payment->update(['payment_method' => $method]);
-            $tableNum = $session->restaurantTable->table_number ?? $session->restaurantTable->number ?? '?';
             event(new \App\Events\PaymentMethodSelected($session->restaurant_id, $tableNum, $method));
         }
 
@@ -332,13 +373,26 @@ class PlaceOrderController extends Controller
 
     public function cancel(Request $request, $orderId)
     {
-        $session = \App\Models\QrSession::where('session_token', $request->bearerToken())
-            ->where('is_active', true)
-            ->firstOrFail();
+        $isRoom = $request->input('type') === 'room';
+        $token = $request->bearerToken();
 
-        $order = \App\Models\Order::where('id', $orderId)
-            ->where('qr_session_id', $session->id)
-            ->firstOrFail();
+        if ($isRoom) {
+            $session = RoomSession::where('session_token', $token)
+                ->where('status', 'active')
+                ->firstOrFail();
+
+            $order = Order::where('id', $orderId)
+                ->where('room_session_id', $session->id)
+                ->firstOrFail();
+        } else {
+            $session = QrSession::where('session_token', $token)
+                ->where('is_active', true)
+                ->firstOrFail();
+
+            $order = Order::where('id', $orderId)
+                ->where('qr_session_id', $session->id)
+                ->firstOrFail();
+        }
 
         if (!in_array($order->status, ['pending', 'placed', 'accepted'])) {
             return response()->json([
@@ -350,7 +404,7 @@ class PlaceOrderController extends Controller
         $oldStatus = $order->status;
         $order->update(['status' => 'cancelled']);
 
-        \App\Models\OrderStatusLog::create([
+        OrderStatusLog::create([
             'order_id' => $order->id,
             'from_status' => $oldStatus,
             'to_status' => 'cancelled',

@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\WaiterAppController;
 use App\Models\QrSession;
 use Laravel\Sanctum\PersonalAccessToken;
 use Pusher\Pusher;
+use App\Http\Controllers\Api\RoomQrController;
+use App\Models\RoomSession; // 👈 CRITICAL: MUST IMPORT THIS
 
 /*
 |--------------------------------------------------------------------------
@@ -43,23 +45,34 @@ Route::post('/pusher/auth', function (Request $request) {
 
     $authorized = false;
     $user = null;
-    $session = null;
 
-    // 1. Customer QR Session Validation
-    // (If token does not contain a pipe '|', it's a UUID QR Token, not a Sanctum Token)
+    // 1. Customer Session Validation (Tables & Rooms)
     if (!str_contains((string) $token, '|')) {
-        $session = QrSession::where('session_token', $token)->first();
         
-        if ($session && str_starts_with($channelName, 'session.')) {
+        // A. Check Standard Table Session
+        $qrSession = QrSession::where('session_token', $token)->first();
+        if ($qrSession && str_starts_with($channelName, 'session.')) {
             $requestedId = str_replace('session.', '', $channelName);
-            
-            // 👇 FIX: Allow connection if the channel matches Session ID, Host ID, or Table ID
             if (
-                $requestedId == $session->id || 
-                $requestedId == $session->restaurant_table_id || 
-                ($session->host_session_id && $requestedId == $session->host_session_id)
+                $requestedId == $qrSession->id || 
+                $requestedId == $qrSession->restaurant_table_id || 
+                ($qrSession->host_session_id && $requestedId == $qrSession->host_session_id)
             ) {
                 $authorized = true;
+            }
+        }
+
+        // B. Check Hotel Room Session 👇 NEW LOGIC ADDED HERE 👇
+        if (!$authorized) {
+            $roomSession = RoomSession::where('session_token', $token)->first();
+            if ($roomSession && str_starts_with($channelName, 'session.')) {
+                $requestedId = str_replace('session.', '', $channelName);
+                if (
+                    $requestedId == $roomSession->id || 
+                    $requestedId == $roomSession->room_id
+                ) {
+                    $authorized = true;
+                }
             }
         }
     }
@@ -74,6 +87,7 @@ Route::post('/pusher/auth', function (Request $request) {
     }
 
     if (!$authorized) {
+        Log::warning('Pusher Auth Rejected for token: ' . substr($token, 0, 8) . '...');
         return response()->json(['message' => 'Unauthorized'], 403);
     }
 
@@ -163,3 +177,5 @@ Route::post('/orders/{orderId}/cancel', [\App\Http\Controllers\Api\PlaceOrderCon
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');
 
 Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'validateSession']);
+
+Route::get('/room/validate/{restaurantId}/{roomId}/{token}', [RoomQrController::class, 'validateScan']);

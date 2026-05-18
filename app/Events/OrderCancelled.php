@@ -22,10 +22,18 @@ class OrderCancelled implements ShouldBroadcastNow
 
     public function broadcastOn()
     {
-        return [
-            new PrivateChannel('session.' . $this->order->qr_session_id),
+        $channels = [
             new PrivateChannel('restaurant.' . $this->order->restaurant_id . '.kitchen')
         ];
+
+        // 👇 FIX: Route to correct channel based on order type
+        if ($this->order->room_session_id) {
+            $channels[] = new PrivateChannel('session.' . $this->order->room_session_id);
+        } elseif ($this->order->qr_session_id) {
+            $channels[] = new PrivateChannel('session.' . $this->order->qr_session_id);
+        }
+
+        return $channels;
     }
 
     public function broadcastWith(): array

@@ -785,6 +785,7 @@ class ManagerDashboard extends Page
             ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
             ->whereNull('branch_id')
             ->where('status', 'placed')
+            ->whereNull('room_session_id')
             ->with(['items.menuItem.category', 'restaurantTable', 'restaurant']) 
             ->orderBy('created_at', 'asc')->get();
 
