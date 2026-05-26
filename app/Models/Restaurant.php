@@ -21,7 +21,7 @@ class Restaurant extends Model
         'created_by',
         'has_branches',
         'max_branches',
-        'upi_id', // 👈 ADD THIS
+        'upi_id',
         'address',
         'phone_no',
         'is_pay_first',
@@ -29,6 +29,7 @@ class Restaurant extends Model
         'table_limits',
         'is_rooms_facility',
         'rooms_limit',
+        'has_inventory', // 👈 FIXED: Added to unblock database mass-assignment writes
     ];
 
     /**

@@ -1,4 +1,3 @@
-
 <x-filament-panels::page>
     <style>
         html, body, .fi-layout, .fi-main, .fi-page { background-color: transparent !important; background: transparent !important; }
@@ -80,7 +79,7 @@
     <div class="pos-scope pos-container">
         <div class="pos-layout">
 
-            {{-- LEFT COLUMN: MASTER VIEW --}}
+            {{-- LEFT COLUMN: MASTER CARD VIEWGRID --}}
             <div class="flex flex-col w-full min-w-0">
 
                 <div class="pos-stats">
@@ -147,10 +146,10 @@
                                                 </div>
                                             </div>
                                         @endforeach
-                                        
+
                                         @if($order->notes)
                                             <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; margin-top: 4px;">
-                                                📝 {{ $order->notes }}
+                                                Notes: {{ $order->notes }}
                                             </div>
                                         @endif
                                     </div>
@@ -171,6 +170,31 @@
                                                 Reject
                                             </button>
                                         @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Parcel Notification Section --}}
+                @if(isset($parcelOrders) && $parcelOrders->count() > 0)
+                    <div class="mb-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg shadow-sm">
+                        <h3 class="text-blue-800 font-bold flex items-center gap-2">
+                            <x-heroicon-o-truck class="w-5 h-5"/> 
+                            Active Parcel Orders ({{ $parcelOrders->count() }})
+                        </h3>
+                        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            @foreach($parcelOrders as $order)
+                                <div class="bg-white p-3 rounded border shadow-sm">
+                                    <div class="flex justify-between">
+                                        <span class="font-bold text-sm">Customer: {{ $order->customer_name }}</span>
+                                        <span class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">{{ strtoupper($order->status) }}</span>
+                                    </div>
+                                    <div class="text-xs text-gray-600 mt-2">
+                                        @foreach($order->items as $item)
+                                            <div>{{ $item->quantity }}x {{ $item->item_name }}</div>
+                                        @endforeach
                                     </div>
                                 </div>
                             @endforeach
@@ -217,7 +241,6 @@
                         @endphp
 
                         <div wire:click="openTable({{ $table->id }})" class="ts-table {{ $tableStateClass }} {{ $isSelected ? 'selected' : '' }}">
-
                             <div class="ts-header">
                                 <div>
                                     <div class="ts-title">T-{{ $formattedTableNum }}</div>
@@ -240,11 +263,9 @@
                                         <x-heroicon-s-exclamation-circle class="ts-info-icon" style="color: var(--accent-red);" />
                                         <span class="ts-info-text" style="color: var(--accent-red);">Due: ₹{{ number_format($table->live_due ?? 0, 2) }}</span>
                                     </div>
-
                                     <button wire:click.stop="cleanTable({{ $table->id }})" class="ts-btn-clean" onclick="confirm('Are you sure you want to end all sessions and clean this table?') || event.stopImmediatePropagation()">
                                         Clean Table
                                     </button>
-
                                 @elseif($isReserved)
                                     <div class="ts-info-row justify-center mt-2 mb-3">
                                         <x-heroicon-s-calendar class="w-10 h-10" style="color: var(--accent-pink);" />
@@ -266,19 +287,19 @@
                 </div>
             </div>
 
-            {{-- RIGHT COLUMN: DIGITAL RECEIPT SIDEBAR --}}
+            {{-- RIGHT COLUMN: DIGITAL RECEIPT SIDEBAR DISPLAY ENGINE --}}
             <div class="w-full lg:w-auto">
                 @if($selectedTableData && $activeDinersList->count() > 0)
                     @php
                         $groupedOrders = $tableOrders->groupBy('status');
-                        $validOrdersForBill = $tableOrders->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
-                        
-                        $subtotal = $validOrdersForBill->sum('total_amount');
-                        $amountAlreadyPaid = $validOrdersForBill->where('payment_status', 'paid')->sum('total_amount');
-                        
+                        $validOrdersForBill = $tableOrders->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
+
+                        $subtotal = $validOrdersForBill->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                        $amountAlreadyPaid = $validOrdersForBill->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+
                         $taxable = max(0, $subtotal - (float) $discountAmount);
                         $liveTax = $taxable * ((float) $taxPercentage / 100);
-                        
+
                         $liveTotal = max(0, ($taxable + $liveTax + (float) $extraCharges) - $amountAlreadyPaid);
                     @endphp
 
@@ -288,13 +309,11 @@
                                 <div>
                                     <span style="color: var(--text-muted); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.05em;">CURRENTLY VIEWING</span>
                                     <h3 style="color: var(--brand-blue); font-size: 1.75rem; font-weight: 900; line-height: 1; margin-top: 4px; margin-bottom: 0.5rem;">
-                                        Table {{ $selectedTableData->table_number }}
+                                        Table T-{{ sprintf('%02d', $selectedTableData->table_number) }}
                                     </h3>
                                 </div>
                                 <button wire:click="$set('selectedTableId', null)"
-                                    style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); transition: color 0.2s;"
-                                    onmouseover="this.style.color='var(--accent-red)'"
-                                    onmouseout="this.style.color='var(--text-muted)'">
+                                    style="background: transparent; border: none; cursor: pointer; color: var(--text-muted);">
                                     <x-heroicon-s-x-circle style="width: 28px; height: 28px;" />
                                 </button>
                             </div>
@@ -326,95 +345,105 @@
                                 @endif
                             </div>
 
+                            {{-- 👇 🌟 UNCONDITIONAL ACCURATE NESTED ITERATION LAYER FOR ALL ACTIVE MULTI ORDERS 🌟 👇 --}}
                             <div class="flex flex-col gap-6">
                                 @foreach([
-                                        'placed' => 'New / Pending',
-                                        'accepted' => 'Order Accepted',
-                                        'preparing' => 'Cooking',
+                                        'placed' => 'New / Pending Orders',
+                                        'accepted' => 'Accepted Dishes',
+                                        'partial_accepted' => 'Accepted Dishes',
+                                        'preparing' => 'Cooking Pipeline',
                                         'ready' => 'Ready to Serve',
-                                        'served' => 'Served',
-                                        'cancelled' => 'Cancelled / Rejected',
-                                        'rejected' => 'Cancelled / Rejected'
+                                        'served' => 'Served Items',
+                                        'cancelled' => 'Cancelled Ticket Log',
+                                        'rejected' => 'Cancelled Ticket Log'
                                     ] as $statusKey => $label)
 
-                                    @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
-                                        <div>
-                                            <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : (in_array($statusKey, ['cancelled', 'rejected']) ? 'var(--text-muted)' : 'var(--text-primary)'))) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
-                                                {{ $label }}
-                                            </div>
+                                        @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
+                                            <div style="margin-bottom: 0.5rem;">
+                                                <div style="font-size: 0.75rem; font-weight: 900; text-transform: uppercase; color: {{ in_array($statusKey, ['placed', 'accepted', 'partial_accepted']) ? 'var(--accent-red)' : ($statusKey === 'preparing' ? 'var(--brand-orange)' : ($statusKey === 'ready' ? 'var(--brand-blue)' : 'var(--text-muted)')) }}; margin-bottom: 0.75rem; border-bottom: 1.5px solid rgba(0,0,0,0.1); padding-bottom: 4px;">
+                                                    {{ $label }} ({{ $groupedOrders[$statusKey]->count() }})
+                                                </div>
 
-                                            <div class="flex flex-col gap-4">
-                                                @foreach($groupedOrders[$statusKey] as $order)
-                                                    @php
-                                                        $isHostOrder = $order->qr_session_id === $hostSessionId;
-                                                        $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                        $isPaid = $order->payment_status === 'paid';
-                                                    @endphp
+                                                <div class="flex flex-col gap-3">
+                                                    {{-- Loop dynamically renders EVERY available order object grouped inside this array row status key barrier --}}
+                                                    @foreach($groupedOrders[$statusKey] as $order)
+                                                        @php
+                                                            $isHostOrder = $order->qr_session_id === $hostSessionId;
+                                                            $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                            $isPaid = $order->payment_status === 'paid';
+                                                        @endphp
 
-                                                    <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.4); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
-
-                                                        <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
-                                                            <div class="flex items-center gap-2">
-                                                                <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">ORDER #{{ $order->id }}</span>
-                                                                @if($isPaid)
-                                                                    <span style="font-size: 0.6rem; font-weight: 800; color: var(--accent-green); background: var(--accent-green-light); padding: 2px 6px; border-radius: 4px;">PAID</span>
-                                                                @endif
+                                                        <div class="flex flex-col gap-2 p-3 rounded-lg" style="background: rgba(255,255,255,0.5); border: 1px solid rgba(0,0,0,0.1); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                            <div class="flex justify-between items-center mb-1 pb-2 border-b border-dashed" style="border-color: rgba(0,0,0,0.1);">
+                                                                <div class="flex items-center gap-2">
+                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
+                                                                        Order No: #{{ $order->id }}
+                                                                    </span>
+                                                                    @if($isPaid)
+                                                                        <span style="font-size: 0.6rem; font-weight: 800; color: var(--accent-green); background: var(--accent-green-light); padding: 2px 6px; border-radius: 4px;">PAID</span>
+                                                                    @endif
+                                                                </div>
+                                                                <div class="flex gap-2 items-center">
+                                                                    <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
+                                                                        {{ $isHostOrder ? '👑' : '👤' }} {{ $order->customer_name }}
+                                                                    </span>
+                                                                    @if(!$isCancelled && !$pendingPayment && !$isPaid)
+                                                                        <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" class="btn-edit-order">
+                                                                            EDIT
+                                                                        </button>
+                                                                    @endif
+                                                                </div>
                                                             </div>
-                                                            <div class="flex gap-2 items-center">
-                                                                <span style="font-size: 0.7rem; font-weight: 800; color: {{ $isHostOrder ? 'var(--brand-orange)' : 'var(--brand-blue)' }};">
-                                                                    {{ $isHostOrder ? '👑 HOST' : '👤 GUEST' }}: {{ $order->customer_name }}
-                                                                </span>
-                                                                @if(!$isCancelled && !$pendingPayment && !$isPaid)
-                                                                    <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" class="btn-edit-order">
-                                                                        EDIT
-                                                                    </button>
-                                                                @endif
+
+                                                            @if($order->notes && !$isCancelled)
+                                                                <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: #fffbeb; padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--brand-orange); margin-bottom: 4px;">
+                                                                    📝 {{ $order->notes }}
+                                                                </div>
+                                                            @endif
+
+                                                            <div class="flex flex-col gap-1">
+                                                                @foreach($order->items as $item)
+                                                                    @php
+                                                                        $displayQty = $item->confirmed_qty ?? $item->quantity;
+                                                                        $isOos = $displayQty === 0;
+                                                                    @endphp
+                                                                    <div class="flex justify-between items-center">
+                                                                        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary); {{ ($isCancelled || $isOos) ? 'text-decoration: line-through; color: var(--text-muted);' : '' }}">
+                                                                            @if($isOos)
+                                                                                <span style="color: var(--accent-red); font-weight: 800; font-size: 0.7rem; margin-right: 4px;">[SOLD OUT]</span>
+                                                                            @else
+                                                                                <span style="color: var(--brand-blue); font-weight: 800; margin-right: 4px;">{{ $displayQty }}x</span>
+                                                                            @endif
+                                                                            {{ $item->item_name }}
+                                                                        </span>
+                                                                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); {{ ($isCancelled || $isOos) ? 'text-decoration: line-through; color: var(--text-muted);' : '' }}">
+                                                                            ₹{{ number_format($item->unit_price * ($isOos ? $item->quantity : $displayQty), 0) }}
+                                                                        </span>
+                                                                    </div>
+                                                                @endforeach
                                                             </div>
                                                         </div>
-
-                                                        @if($order->notes && !$isCancelled)
-                                                            <div style="color: var(--accent-red); font-size: 0.75rem; font-style: italic; font-weight: 700; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 4px; border-left: 2px solid var(--accent-red);">
-                                                                Note: {{ $order->notes }}
-                                                            </div>
-                                                        @endif
-
-                                                        @foreach($order->items as $item)
-                                                            <div class="flex justify-between items-start mt-1">
-                                                                <div class="pr-4">
-                                                                    <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 700; display: block; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                        <span style="color: var(--brand-blue); margin-right: 4px;">{{ $item->quantity }}x</span>{{ $item->menuItem->name ?? $item->item_name }}
-                                                                    </span>
-                                                                </div>
-                                                                <span style="color: var(--text-primary); font-size: 0.95rem; font-weight: 800; white-space: nowrap; {{ $isCancelled ? 'text-decoration: line-through;' : '' }}">
-                                                                    ₹{{ number_format($item->unit_price * $item->quantity, 0) }}
-                                                                </span>
-                                                            </div>
-                                                        @endforeach
-                                                    </div>
-                                                @endforeach
+                                                    @endforeach
+                                                </div>
                                             </div>
-                                        </div>
-                                    @endif
+                                        @endif
                                 @endforeach
                             </div>
                         </div>
 
                         <div class="pos-receipt-footer">
-                           @if($pendingPayment && $pendingPayment->status === 'paid')
+                            @if($pendingPayment && $pendingPayment->status === 'paid')
                                 <div style="background: var(--accent-green-light); border: 1px solid var(--accent-green); padding: 1rem; border-radius: 12px; text-align: center;">
                                     <x-heroicon-s-check-circle style="width: 32px; height: 32px; color: var(--accent-green); margin: 0 auto 0.5rem auto;" />
                                     <div style="color: var(--accent-green); font-weight: 900; font-size: 1.1rem; text-transform: uppercase;">Final Bill Settled</div>
-                                    
                                     <div style="display: flex; justify-content: space-between; margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--accent-green);">
                                         <span style="color: var(--text-secondary); font-size: 0.9rem; font-weight: 600;">Amount Paid:</span>
                                         <span style="color: var(--text-primary); font-size: 0.9rem; font-weight: 800;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
                                     </div>
-                                    
                                     <div style="display: flex; justify-content: space-between; margin-top: 4px;">
                                         <span style="color: var(--text-secondary); font-size: 1rem; font-weight: 800;">Amount Due:</span>
                                         <span style="color: var(--accent-green); font-size: 1.2rem; font-weight: 900;">₹0.00</span>
                                     </div>
-                                    
                                     <div style="color: var(--text-muted); font-size: 0.75rem; margin-top: 12px;">Customer can now download PDF.</div>
                                 </div>
                             @else
@@ -485,7 +514,7 @@
                                         </button>
 
                                         <button wire:click="cancelPendingBill"
-                                            onclick="confirm('Are you sure you want to cancel this generated bill? You can add charges and regenerate it.') || event.stopImmediatePropagation()"
+                                            onclick="confirm('Cancel this generated bill?') || event.stopImmediatePropagation()"
                                             style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.25rem; background-color: transparent; color: #dc2626; padding: 0.75rem; border-radius: 12px; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; border: 1px solid #fca5a5; cursor: pointer;">
                                             Cancel Generated Bill
                                         </button>
@@ -497,16 +526,16 @@
                 @else
                     @if($this->selectedTableId)
                         @php 
-                            $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
+                                                $tableInfo = $tables->firstWhere('id', $this->selectedTableId);
                             $isRes = $tableInfo && (($tableInfo->status ?? '') === 'reserved' || ($tableInfo->is_reserved ?? false));
                         @endphp
 
                         <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
-                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; box-shadow: var(--glass-shadow); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-check-badge style="width: 40px; height: 40px; color: {{ $isRes ? 'var(--accent-pink)' : 'var(--accent-green)' }};" />
                             </div>
                             <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
-                                Table {{ $tableInfo->table_number ?? '' }} is {{ $isRes ? 'Reserved' : 'Empty' }}
+                                Table T-{{ sprintf('%02d', $tableInfo->table_number ?? 0) }} is {{ $isRes ? 'Reserved' : 'Empty' }}
                             </h3>
                             <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5; margin-bottom: 2rem;">
                                 {{ $isRes ? 'This table is currently reserved for upcoming guests.' : 'This table is clean and ready for new guests.' }}
@@ -517,13 +546,15 @@
                         </div>
                     @else
                         <div class="pos-receipt justify-center items-center p-8 text-center" style="border: 1.5px dashed #000000;">
-                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; box-shadow: var(--glass-shadow); display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
+                            <div style="background: var(--glass-bg); padding: 1.25rem; border-radius: 50%; border: 1px solid rgba(0,0,0,0.1); margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; margin-left: auto; margin-right: auto; width: 80px; height: 80px;">
                                 <x-heroicon-o-hand-raised style="width: 40px; height: 40px; color: var(--text-muted);" />
                             </div>
                             <h3 style="color: var(--text-primary); font-size: 1.25rem; font-weight: 900; margin-bottom: 0.5rem;">
-                                Select a Table</h3>
-                            <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5;">Click
-                                on any occupied table from the layout to view active orders and process checkout.</p>
+                                Select a Table
+                            </h3>
+                            <p style="color: var(--text-muted); font-size: 0.85rem; font-weight: 500; line-height: 1.5;">
+                                Click on any occupied table from the layout to view active orders and process checkout.
+                            </p>
                         </div>
                     @endif
                 @endif
@@ -532,4 +563,37 @@
     </div>
     
     <x-filament-actions::modals />
+
+    {{-- 👇 ADDED: HTML5 Browser Notification Script 👇 --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // 1. Request permission from the browser immediately on page load
+            if ("Notification" in window) {
+                if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+                    Notification.requestPermission();
+                }
+            }
+
+            // 2. Listen to the Livewire event dispatched from the backend
+            window.addEventListener('trigger-browser-notification', function (e) {
+                const data = e.detail;
+
+                // 3. Only show notification if the browser permits it
+                if ("Notification" in window && Notification.permission === "granted") {
+                    const notification = new Notification(data.title, {
+                        body: data.body,
+                        // icon: '/favicon.ico', // Optional: Set a path to your app's icon here
+                        requireInteraction: true // Forces the notification to stay on screen until clicked
+                    });
+
+                    // 4. If the manager clicks the notification, focus the browser tab
+                    notification.onclick = function(event) {
+                        event.preventDefault();
+                        window.focus(); 
+                        notification.close();
+                    };
+                }
+            });
+        });
+    </script>
 </x-filament-panels::page>

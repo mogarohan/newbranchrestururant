@@ -118,7 +118,7 @@ class ManageMenus extends ManageRecords
             Actions\Action::make('addCategory')
                 ->label('Add Categories')
                 ->modalHeading('Add New Categories')
-                ->modalDescription($fixedModalCss) 
+                ->modalDescription($fixedModalCss)
                 ->extraAttributes(['class' => 'hidden-add-category hidden'])
                 ->form([
                     Forms\Components\Repeater::make('categories')
@@ -131,13 +131,13 @@ class ManageMenus extends ManageRecords
                                 ->label('Category Name')
                                 ->required()
                                 ->maxLength(100),
-                            
+
                             Forms\Components\Toggle::make('is_active')
                                 ->label('Active by Default')
                                 ->default(true),
                         ])
                         ->columns(2)
-                        ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
+                        ->itemLabel(fn(array $state): ?string => $state['name'] ?? null),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
@@ -146,7 +146,7 @@ class ManageMenus extends ManageRecords
                     foreach ($data['categories'] as $catData) {
                         Category::create([
                             'restaurant_id' => $user->restaurant_id,
-                            'branch_id' => $user->branch_id, 
+                            'branch_id' => $user->branch_id,
                             'name' => $catData['name'],
                             'is_active' => $catData['is_active'],
                         ]);
@@ -160,7 +160,7 @@ class ManageMenus extends ManageRecords
             Actions\Action::make('addItem')
                 ->label('Add Items')
                 ->modalHeading('Add Items to Category')
-                ->modalDescription($fixedModalCss) 
+                ->modalDescription($fixedModalCss)
                 ->extraAttributes(['class' => 'hidden-add-item hidden'])
                 ->form([
                     Forms\Components\Select::make('category_id')
@@ -171,7 +171,7 @@ class ManageMenus extends ManageRecords
                             $query = Category::withoutGlobalScopes()
                                 ->where('restaurant_id', $user->restaurant_id)
                                 ->where('is_active', true)
-                                ->where(function($q) use ($user) {
+                                ->where(function ($q) use ($user) {
                                     $q->whereNull('branch_id');
                                     if ($user->branch_id) {
                                         $q->orWhere('branch_id', $user->branch_id);
@@ -192,11 +192,19 @@ class ManageMenus extends ManageRecords
                             Forms\Components\TextInput::make('name')->label('Item Name')->required()->maxLength(150),
                             Forms\Components\TextInput::make('price')->numeric()->minValue(0)->required()->prefix('₹'),
                             Forms\Components\Select::make('type')->label('Type')
-                                ->options(['veg' => 'Veg','non-veg' => 'Non-Veg',])
+                                ->options(['veg' => 'Veg', 'non-veg' => 'Non-Veg',])
                                 ->default('veg')
                                 ->required(),
+                            Forms\Components\TextInput::make('stock_quantity')
+                                ->numeric()
+                                ->placeholder('Unlimited')
+                                ->default(null), // FIX: Ensures blank values are sent as null, not 0
+                            Forms\Components\TextInput::make('low_stock_threshold')
+                                ->numeric()
+                                ->default(3)
+                                ->required(),
                             Forms\Components\Textarea::make('description')->maxLength(500)->rows(6),
-                            
+
                             Forms\Components\FileUpload::make('image_path')
                                 ->label('Item Image')
                                 ->image()
@@ -204,7 +212,7 @@ class ManageMenus extends ManageRecords
                                 ->directory(function (callable $get) {
                                     $user = auth()->user();
                                     $restaurantSlug = Str::slug($user->restaurant->name ?? 'restaurant');
-                                    
+
                                     $categoryId = $get('../../category_id');
                                     $categoryName = Category::find($categoryId)?->name ?? 'uncategorized';
                                     $categorySlug = Str::slug($categoryName);
@@ -223,7 +231,6 @@ class ManageMenus extends ManageRecords
                                     return "{$itemName}.{$extension}";
                                 })
                                 ->imageEditor()
-                                //->required()
                                 ->maxSize(2048),
 
                             Forms\Components\Toggle::make('is_available')
@@ -232,181 +239,32 @@ class ManageMenus extends ManageRecords
                                 ->columnSpanFull(),
                         ])
                         ->columns(2)
-                        ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
+                        ->itemLabel(fn(array $state): ?string => $state['name'] ?? null),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
                     $categoryId = $data['category_id'];
                     $itemsAdded = 0;
 
-                    foreach ($data['items'] as $itemData) {
+                    foreach ($data['items'] as $item) {
                         MenuItem::create([
                             'restaurant_id' => $user->restaurant_id,
-                            'branch_id' => $user->branch_id, 
+                            'branch_id' => $user->branch_id,
                             'category_id' => $categoryId,
-                            'name' => $itemData['name'],
-                            'price' => $itemData['price'],
-                            'type' => $itemData['type'],
-                            'description' => $itemData['description'] ?? null,
-                            'image_path' => $itemData['image_path'],
-                            'is_available' => $itemData['is_available'],
+                            'name' => $item['name'],
+                            'price' => $item['price'],
+                            'type' => $item['type'],
+                            'stock_quantity' => blank($item['stock_quantity']) ? null : $item['stock_quantity'], // FIX: Blank check
+                            'low_stock_threshold' => $item['low_stock_threshold'] ?? 3,
+                            'description' => $item['description'] ?? null,
+                            'image_path' => $item['image_path'],
+                            'is_available' => $item['is_available'],
                         ]);
                         $itemsAdded++;
                     }
 
-                    Notification::make()->title("{$itemsAdded} Item(s) Added Successfully")->success()->send();
+                    Notification::make()->title("{$itemsAdded} Item(s) Added")->success()->send();
                 }),
-
-            // 3. MANAGE CATEGORIES ACTION
-            Actions\Action::make('manageCategories')
-                ->label('Manage Categories')
-                ->extraAttributes(['class' => 'hidden-manage-category hidden'])
-                ->modalHeading('Manage Categories')
-                ->modalDescription(new HtmlString($fixedModalCss . '
-                    Update category names or toggle their availability.
-                    <style>
-                        .fi-fo-repeater-item-header-title, .fi-fo-repeater-item-header-icon { display: none !important; }
-                        .fi-fo-repeater-item-header { background: transparent !important; border-bottom: none !important; padding: 0 !important; position: absolute !important; bottom: 1rem !important; right: 1rem !important; top: auto !important; min-height: auto !important; z-index: 10; }
-                        
-                        /* 👇 ALTERNATING GLASS CATEGORY CARDS WITH BLACK BORDER 👇 */
-                        .fi-fo-repeater-item { 
-                            position: relative !important; 
-                            border-radius: 12px !important; 
-                            padding: 1rem 1rem 4rem 1rem !important; 
-                            background: rgba(255, 255, 255, 0.3) !important;
-                            backdrop-filter: blur(8px) !important;
-                            border: 1.5px solid #000000 !important; /* BLACK BORDER */
-                            box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
-                            transition: all 0.2s ease !important;
-                        }
-                        .fi-fo-repeater-item:hover { transform: translateY(-2px) !important; }
-                        .dark .fi-fo-repeater-item { background: rgba(0, 0, 0, 0.3) !important; }
-
-                        /* Alternate Colors - Blue */
-                        .fi-fo-repeater-item:nth-child(odd) { 
-                            border-top: 4px solid #2a4795 !important; 
-                            background: rgba(42, 71, 149, 0.05) !important;
-                        }
-                        .fi-fo-repeater-item:nth-child(odd) button[role="switch"][aria-checked="true"] { background-color: #2a4795 !important; }
-
-                        /* Alternate Colors - Orange */
-                        .fi-fo-repeater-item:nth-child(even) { 
-                            border-top: 4px solid #f16b3f !important; 
-                            background: rgba(241, 107, 63, 0.05) !important;
-                        }
-                        .fi-fo-repeater-item:nth-child(even) button[role="switch"][aria-checked="true"] { background-color: #f16b3f !important; }
-
-                        .fi-fo-repeater-item-header button { color: #ef4444 !important; }
-                        .absolute-bottom-left-toggle { position: absolute !important; bottom: 1rem !important; left: 1rem !important; margin: 0 !important; z-index: 20; }
-                    </style>
-                '))
-                ->fillForm(function () {
-                    $user = auth()->user();
-                    
-                    $query = Category::withoutGlobalScopes()
-                        ->where('restaurant_id', $user->restaurant_id)
-                        ->where(function($q) use ($user) {
-                            $q->whereNull('branch_id'); 
-                            if ($user->branch_id) {
-                                $q->orWhere('branch_id', $user->branch_id); 
-                            }
-                        });
-
-                    $categories = $query->get()->map(function ($cat) use ($user) {
-                        $isActive = $cat->is_active;
-                        
-                        if ($user->branch_id !== null && $cat->branch_id === null) {
-                            $status = DB::table('branch_category_status')
-                                ->where('category_id', $cat->id)
-                                ->where('branch_id', $user->branch_id)
-                                ->first();
-                            $isActive = $status ? (bool) $status->is_active : (bool) $cat->is_active;
-                        }
-
-                        return [
-                            'id' => $cat->id,
-                            'name' => $cat->name,
-                            'is_active' => $isActive,
-                            'branch_id' => $cat->branch_id, 
-                        ];
-                    })->toArray();
-
-                    return ['categories' => $categories];
-                })
-                ->form([
-                    Forms\Components\Repeater::make('categories')
-                        ->hiddenLabel()
-                        ->grid([
-                            'default' => 1,
-                            'sm' => 3,
-                            'md' => 4,
-                            'xl' => 5,
-                        ])
-                        ->schema([
-                            Forms\Components\Hidden::make('id'),
-                            Forms\Components\Hidden::make('branch_id'),
-
-                            Forms\Components\TextInput::make('name')
-                                ->label('Name')
-                                ->placeholder('Category Name')
-                                ->required()
-                                ->maxLength(100)
-                                ->disabled(fn(Forms\Get $get) => auth()->user()->branch_id !== null && $get('branch_id') === null),
-
-                            Forms\Components\Toggle::make('is_active')
-                                ->hiddenLabel()
-                                ->inline(false)
-                                ->extraAttributes(['class' => 'absolute-bottom-left-toggle']),
-                        ])
-                        ->addable(false)
-                        ->reorderable(false)
-                        ->deletable(fn(array $state) => auth()->user()->branch_id === null 
-                            ? empty($state['branch_id']) 
-                            : ($state['branch_id'] ?? null) === auth()->user()->branch_id
-                        )
-                        ->itemLabel(null),
-                ])
-                ->action(function (array $data) {
-                    $user = auth()->user();
-
-                    $submittedIds = collect($data['categories'] ?? [])->pluck('id')->filter()->toArray();
-
-                    $existingIdsQuery = Category::withoutGlobalScopes()->where('restaurant_id', $user->restaurant_id);
-                    
-                    if ($user->branch_id === null) {
-                        $existingIdsQuery->whereNull('branch_id'); 
-                    } else {
-                        $existingIdsQuery->where('branch_id', $user->branch_id); 
-                    }
-                    
-                    $existingIds = $existingIdsQuery->pluck('id')->toArray();
-                    $idsToDelete = array_diff($existingIds, $submittedIds);
-
-                    if (!empty($idsToDelete)) {
-                        Category::withoutGlobalScopes()->whereIn('id', $idsToDelete)->delete();
-                    }
-
-                    foreach ($data['categories'] ?? [] as $catData) {
-                        if (empty($catData['id'])) continue;
-
-                        $category = Category::withoutGlobalScopes()->find($catData['id']);
-                        if (!$category) continue;
-
-                        if ($user->branch_id !== null && $category->branch_id === null) {
-                            DB::table('branch_category_status')->updateOrInsert(
-                                ['category_id' => $category->id, 'branch_id' => $user->branch_id],
-                                ['is_active' => $catData['is_active'], 'updated_at' => now()]
-                            );
-                        } else {
-                            $category->update([
-                                'name' => $catData['name'],
-                                'is_active' => $catData['is_active'],
-                            ]);
-                        }
-                    }
-
-                    Notification::make()->title('Categories Updated')->success()->send();
-                })
         ];
     }
 }

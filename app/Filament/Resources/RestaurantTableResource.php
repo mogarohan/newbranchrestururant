@@ -187,7 +187,7 @@ class RestaurantTableResource extends Resource
                         if ($record->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($record->qr_path)) {
                             \Illuminate\Support\Facades\Storage::disk('public')->delete($record->qr_path);
                         }
-                        
+
                         // 2. Invalidate old QR code scans
                         $record->update([
                             'qr_token' => null,
@@ -222,15 +222,17 @@ class RestaurantTableResource extends Resource
                     ->color('primary')
                     ->disabled(function () {
                         $restaurant = auth()->user()->restaurant;
-                        if (!$restaurant || $restaurant->table_limits <= 0) return false;
-                        
+                        if (!$restaurant || $restaurant->table_limits <= 0)
+                            return false;
+
                         $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
                         return $currentCount >= $restaurant->table_limits;
                     })
                     ->tooltip(function () {
                         $restaurant = auth()->user()->restaurant;
-                        if (!$restaurant || $restaurant->table_limits <= 0) return null;
-                        
+                        if (!$restaurant || $restaurant->table_limits <= 0)
+                            return null;
+
                         $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
                         if ($currentCount >= $restaurant->table_limits) {
                             return "Table limit ({$restaurant->table_limits}) reached. Please contact Super Admin to increase limits.";
@@ -262,7 +264,7 @@ class RestaurantTableResource extends Resource
                     ->action(function (array $data) {
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
-                        
+
                         if ($restaurant && $restaurant->table_limits > 0) {
                             $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
                             if (($currentCount + $data['total_tables']) > $restaurant->table_limits) {
@@ -280,7 +282,7 @@ class RestaurantTableResource extends Resource
                         // 👇 FIX: Start query WITH soft-deleted items to prevent naming collisions
                         $lastTableQuery = \App\Models\RestaurantTable::withTrashed()
                             ->where('restaurant_id', $restaurant->id);
-                            
+
                         if ($branchId) {
                             $lastTableQuery->where('branch_id', $branchId);
                         } else {
@@ -303,7 +305,7 @@ class RestaurantTableResource extends Resource
 
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
                             $nextNumber = $lastNumber + $i;
-                            
+
                             // Formats the number cleanly (e.g., 1 becomes T-01, 10 becomes T-10)
                             $formattedTableNumber = 'T-' . sprintf('%02d', $nextNumber);
 
@@ -315,7 +317,7 @@ class RestaurantTableResource extends Resource
                             ]);
                             $qrService->generate($table);
                         }
-                        
+
                         \Filament\Notifications\Notification::make()
                             ->title('Tables Generated')
                             ->body("{$data['total_tables']} tables have been generated successfully.")
@@ -383,7 +385,7 @@ class RestaurantTableResource extends Resource
                                                 ->label('Live Design Preview')
                                                 ->content(function (\Filament\Forms\Get $get) {
                                                     $restaurant = auth()->user()->restaurant;
-                                                    
+
                                                     // Get Values
                                                     $bgType = $get('bg_type') ?? 'image';
                                                     $bgImage = $get('bg_image');
@@ -399,11 +401,11 @@ class RestaurantTableResource extends Resource
                                                     // Background Style
                                                     $bgStyle = '';
                                                     if ($bgType === 'image') {
-                                                        $url = asset('images/b.png'); 
+                                                        $url = asset('images/b.png');
 
                                                         if (!empty($bgImage)) {
                                                             $file = is_array($bgImage) ? reset($bgImage) : $bgImage;
-                                                            
+
                                                             if ($file instanceof TemporaryUploadedFile) {
                                                                 try {
                                                                     $url = $file->temporaryUrl();
@@ -477,7 +479,7 @@ class RestaurantTableResource extends Resource
                         $bgType = $data['bg_type'] ?? 'image';
                         $bgColor = $data['bg_color'] ?? '#E2F0CB';
                         $bgImage = $data['bg_image'] ?? null;
-                        
+
                         $nameColor = $data['name_color'] ?? '#9A3B2A';
                         $addressColor = $data['address_color'] ?? '#333333';
                         $tableColor = $data['table_color'] ?? '#32402A';
@@ -651,14 +653,14 @@ class RestaurantTableResource extends Resource
                             if ($table->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($table->qr_path)) {
                                 \Illuminate\Support\Facades\Storage::disk('public')->delete($table->qr_path);
                             }
-                            
+
                             // 2. Invalidate token before soft deleting
                             $table->update([
                                 'qr_token' => null,
                                 'qr_path' => null,
                                 'is_active' => false,
                             ]);
-                            
+
                             // 3. Perform Soft Delete
                             $table->delete();
                         }

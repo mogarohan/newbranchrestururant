@@ -79,33 +79,31 @@ class RestaurantResource extends Resource
                 ->minValue(1)
                 ->required(),
 
-            // 👇 NEW: Address Field 👇
             Forms\Components\Textarea::make('address')
                 ->label('Restaurant Address')
                 ->maxLength(65535)
                 ->columnSpanFull(),
 
-            // 👇 NEW: Phone Number Field 👇
             Forms\Components\TextInput::make('phone_no')
                 ->label('Phone Number')
                 ->tel()
                 ->maxLength(255),
+
             Forms\Components\Toggle::make('is_pay_first')
                 ->label('Pay First Model')
                 ->helperText('Enable if customers must pay before ordering'),
-                    
+
             Forms\Components\TextInput::make('gst_no')
                 ->label('GST Number')
                 ->placeholder('Enter GSTIN')
                 ->maxLength(20),
-                    
+
             Forms\Components\TextInput::make('table_limits')
                 ->label('Table Capacity Limit')
                 ->numeric()
                 ->default(0)
                 ->helperText('Maximum number of tables allowed for this restaurant'),
 
-            // 👇 NEW: UPI ID Field for Main Restaurant 👇
             Forms\Components\TextInput::make('upi_id')
                 ->label('Master UPI ID')
                 ->placeholder('e.g., yourname@okhdfcbank')
@@ -129,13 +127,13 @@ class RestaurantResource extends Resource
             Forms\Components\Toggle::make('is_active')
                 ->default(true),
 
-            Forms\Components\Section::make('Hospitality Modules')
-                ->description('Enable and manage hospitality modules like hotel rooms.')
+            Forms\Components\Section::make('Premium SaaS Modules')
+                ->description('Enable and manage high-tier premium modules for this restaurant subscription.')
                 ->schema([
                     Forms\Components\Toggle::make('is_rooms_facility')
                         ->label('Enable Rooms Facility')
                         ->helperText('Allow this restaurant to use the Hotel/Rooms dashboard and QR system.')
-                        ->live() // Makes the form reactive so we can show/hide the limit input
+                        ->live()
                         ->default(false),
 
                     Forms\Components\TextInput::make('rooms_limit')
@@ -144,24 +142,30 @@ class RestaurantResource extends Resource
                         ->default(0)
                         ->minValue(0)
                         ->helperText('The maximum number of rooms this restaurant can create under their plan.')
-                        ->visible(fn (\Filament\Forms\Get $get) => $get('is_rooms_facility') === true), // Only show if facility is enabled
+                        ->visible(fn(Forms\Get $get) => $get('is_rooms_facility') === true),
+
+                    // 👇 NEW SAAS FEATURE TOGGLE: Added for stock architecture configuration 👇
+                    Forms\Components\Toggle::make('has_inventory')
+                        ->label('Enable Inventory & Stock Control')
+                        ->helperText('Grants access to full raw material sheets, inline tracking, and FIFO server logic.')
+                        ->default(false),
                 ])
                 ->columns(2),
 
-            /* 👇 NAYI RESTAURANT BANATE WAQT RESTAURANT ADMIN CREATE KARNE KE LIYE FIELDS 👇 */
+            /* --- RESTAURANT ADMIN REGISTRATION CREDENTIALS --- */
             Forms\Components\Section::make('Create Restaurant Admin')
                 ->description('These credentials will be used by the restaurant admin to log in.')
                 ->schema([
                     Forms\Components\TextInput::make('admin_name')
                         ->label('Admin Name')
                         ->required()
-                        ->dehydrated(false), // Isko Restaurant table me save nahi karna hai
+                        ->dehydrated(false),
 
                     Forms\Components\TextInput::make('admin_email')
                         ->label('Admin Email')
                         ->email()
                         ->required()
-                        ->unique('users', 'email') // User table me unique hona chahiye
+                        ->unique('users', 'email')
                         ->dehydrated(false),
 
                     Forms\Components\TextInput::make('admin_password')
@@ -170,14 +174,10 @@ class RestaurantResource extends Resource
                         ->required()
                         ->dehydrated(false),
                 ])
-                // YEH SECTION SIRF CREATE WALE PAGE PAR DIKHEGA
                 ->visible(fn($livewire) => $livewire instanceof Pages\CreateRestaurant),
         ]);
     }
 
-    /* ---------------------------------------------------
-     | TABLE (UPDATED FOR TRANSPARENCY & PREMIUM LOOK)
-     |---------------------------------------------------*/
     public static function table(Table $table): Table
     {
         $bgImageUrl = asset('images/bg.png');
@@ -210,7 +210,7 @@ class RestaurantResource extends Resource
                         background: rgba(255, 255, 255, 0.45) !important;
                         backdrop-filter: blur(16px) saturate(140%) !important;
                         -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
-                        border: 1.5px solid #000000 !important; /* BLACK BORDER */
+                        border: 1.5px solid #000000 !important;
                         border-radius: 1.25rem !important;
                         box-shadow: 0 8px 32px rgba(42, 71, 149, 0.08) !important;
                         overflow: hidden !important;
@@ -220,7 +220,7 @@ class RestaurantResource extends Resource
                     /* --- TABLE HEADER --- */
                     .fi-ta-header-ctn {
                         background: rgba(255, 255, 255, 0.2) !important;
-                        border-bottom: 1.5px solid #000000 !important; /* Inner black separator */
+                        border-bottom: 1.5px solid #000000 !important;
                     }
                     
                     .fi-ta-header-cell {
@@ -228,17 +228,17 @@ class RestaurantResource extends Resource
                     }
 
                     .fi-ta-header-cell-label {
-                        color: #2a4795 !important; /* BRAND BLUE */
+                        color: #2a4795 !important;
                         font-weight: 800 !important;
                         text-transform: uppercase !important;
                         letter-spacing: 0.05em !important;
                     }
 
-                    /* --- TABLE ROWS (TEXT COLORS) --- */
+                    /* --- TABLE ROWS --- */
                     .fi-ta-cell-content, 
                     .fi-ta-text-item-label,
                     .fi-ta-text-item-description {
-                        color: #0f172a !important; /* Dark Slate Text */
+                        color: #0f172a !important;
                         font-family: "Inter", sans-serif !important;
                     }
 
@@ -248,28 +248,28 @@ class RestaurantResource extends Resource
                         transition: all 0.2s ease !important;
                     }
 
-                    /* --- 🔄 ALTERNATING ROW HOVER (BLUE & ORANGE) --- */
+                    /* --- ALTERNATING ROW HOVER --- */
                     .fi-ta-record:nth-child(odd):hover {
-                        background-color: rgba(42, 71, 149, 0.08) !important; /* Blue Tint */
+                        background-color: rgba(42, 71, 149, 0.08) !important;
                     }
                     .fi-ta-record:nth-child(even):hover {
-                        background-color: rgba(241, 107, 63, 0.08) !important; /* Orange Tint */
+                        background-color: rgba(241, 107, 63, 0.08) !important;
                     }
 
                     /* --- TABLE PAGINATION / FOOTER --- */
                     .fi-ta-content + div {
                         background: rgba(255, 255, 255, 0.2) !important;
-                        border-top: 1.5px solid #000000 !important; /* Black separator for footer */
+                        border-top: 1.5px solid #000000 !important;
                     }
 
                     /* --- SEARCH INPUT STYLING --- */
                     .fi-input-wrapper {
                         background-color: rgba(255, 255, 255, 0.5) !important;
-                        border: 1.5px solid #2a4795 !important; /* Blue border */
+                        border: 1.5px solid #2a4795 !important;
                         border-radius: 0.75rem !important;
                     }
                     .fi-input-wrapper:focus-within {
-                        border-color: #f16b3f !important; /* Orange border on focus */
+                        border-color: #f16b3f !important;
                         box-shadow: 0 0 0 3px rgba(241, 107, 63, 0.2) !important;
                     }
 
@@ -283,21 +283,21 @@ class RestaurantResource extends Resource
                         border-color: #000000 !important;
                     }
                     .dark .fi-ta-header-cell-label {
-                        color: #456aba !important; /* Light Blue */
+                        color: #456aba !important;
                     }
                     .dark .fi-ta-cell-content, 
                     .dark .fi-ta-text-item-label,
                     .dark .fi-ta-text-item-description {
-                        color: #f8fafc !important; /* White Text */
+                        color: #f8fafc !important;
                     }
                     .dark .fi-ta-record {
                         border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
                     }
                     .dark .fi-ta-record:nth-child(odd):hover {
-                        background-color: rgba(69, 106, 186, 0.15) !important; /* Blue Tint Dark */
+                        background-color: rgba(69, 106, 186, 0.15) !important;
                     }
                     .dark .fi-ta-record:nth-child(even):hover {
-                        background-color: rgba(241, 107, 63, 0.15) !important; /* Orange Tint Dark */
+                        background-color: rgba(241, 107, 63, 0.15) !important;
                     }
                     .dark .fi-ta-content + div {
                         background: rgba(0, 0, 0, 0.3) !important;
@@ -332,36 +332,36 @@ class RestaurantResource extends Resource
                     ->searchable()
                     ->placeholder('Not Set')
                     ->color('gray'),
-                    // 👇 NEW: Phone Number Column 👇
+
                 Tables\Columns\TextColumn::make('phone_no')
                     ->label('PHONE')
                     ->searchable()
                     ->copyable()
                     ->toggleable(),
+
                 Tables\Columns\IconColumn::make('is_pay_first')
                     ->label('Pay First')
                     ->boolean()
                     ->sortable(),
-                
+
                 Tables\Columns\TextColumn::make('gst_no')
                     ->label('GST No')
                     ->toggleable(),
-                
+
                 Tables\Columns\TextColumn::make('table_limits')
                     ->label('Table Limit')
                     ->numeric()
                     ->sortable(),
 
-                // 👇 NEW: Address Column 👇
                 Tables\Columns\TextColumn::make('address')
                     ->label('ADDRESS')
                     ->searchable()
-                    ->limit(30) // Limits the text so long addresses don't break the layout
+                    ->limit(30)
                     ->tooltip(function (Tables\Columns\TextColumn $column): ?string {
                         $state = $column->getState();
-                        return strlen($state) > 30 ? $state : null; // Shows full address on hover
+                        return strlen($state) > 30 ? $state : null;
                     })
-                    ->toggleable(isToggledHiddenByDefault: true), // Hidden by default to keep the table clean
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\IconColumn::make('has_branches')
                     ->label('MULTI-BRANCH')
@@ -376,7 +376,7 @@ class RestaurantResource extends Resource
                 Tables\Columns\TextColumn::make('user_limits')
                     ->label('USER LIMIT')
                     ->sortable(),
-                
+
                 Tables\Columns\IconColumn::make('is_rooms_facility')
                     ->label('Rooms Feature')
                     ->boolean()
@@ -387,6 +387,13 @@ class RestaurantResource extends Resource
                     ->numeric()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+
+                // 👇 NEW TABLE ACCESS COLUMN: Real-time SaaS metric deployment status check 👇
+                Tables\Columns\IconColumn::make('has_inventory')
+                    ->label('INVENTORY')
+                    ->boolean()
+                    ->sortable()
+                    ->alignCenter(),
 
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('STATUS')
@@ -402,7 +409,6 @@ class RestaurantResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                // 👇 BLUE EDIT BUTTON (WITH ORANGE HOVER) 👇
                 Tables\Actions\EditAction::make()
                     ->label('')
                     ->icon('heroicon-o-pencil-square')
@@ -413,7 +419,6 @@ class RestaurantResource extends Resource
                         'onmouseout' => "this.style.color='#456aba'",
                     ]),
 
-                // 👇 RED DELETE BUTTON (TO MATCH PREMIUM STYLE) 👇
                 Tables\Actions\DeleteAction::make()
                     ->label('')
                     ->icon('heroicon-o-trash')

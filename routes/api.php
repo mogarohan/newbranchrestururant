@@ -48,14 +48,14 @@ Route::post('/pusher/auth', function (Request $request) {
 
     // 1. Customer Session Validation (Tables & Rooms)
     if (!str_contains((string) $token, '|')) {
-        
+
         // A. Check Standard Table Session
         $qrSession = QrSession::where('session_token', $token)->first();
         if ($qrSession && str_starts_with($channelName, 'session.')) {
             $requestedId = str_replace('session.', '', $channelName);
             if (
-                $requestedId == $qrSession->id || 
-                $requestedId == $qrSession->restaurant_table_id || 
+                $requestedId == $qrSession->id ||
+                $requestedId == $qrSession->restaurant_table_id ||
                 ($qrSession->host_session_id && $requestedId == $qrSession->host_session_id)
             ) {
                 $authorized = true;
@@ -68,7 +68,7 @@ Route::post('/pusher/auth', function (Request $request) {
             if ($roomSession && str_starts_with($channelName, 'session.')) {
                 $requestedId = str_replace('session.', '', $channelName);
                 if (
-                    $requestedId == $roomSession->id || 
+                    $requestedId == $roomSession->id ||
                     $requestedId == $roomSession->room_id
                 ) {
                     $authorized = true;
@@ -179,3 +179,12 @@ Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, '
 Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'validateSession']);
 
 Route::get('/room/validate/{restaurantId}/{roomId}/{token}', [RoomQrController::class, 'validateScan']);
+
+// Add to your existing protected routes (where OrderController routes are)
+Route::middleware(['throttle:20,1'])->group(function () {
+    Route::post('/payment/razorpay/create', [\App\Http\Controllers\Api\RazorpayController::class, 'createOrder']);
+    Route::post('/payment/razorpay/verify', [\App\Http\Controllers\Api\RazorpayController::class, 'verifyPayment']);
+});
+
+// Put this OUTSIDE any auth middleware (Razorpay doesn't have an auth token)
+Route::middleware('throttle:100,1')->post('/webhooks/razorpay', [\App\Http\Controllers\Api\RazorpayController::class, 'webhook']);
