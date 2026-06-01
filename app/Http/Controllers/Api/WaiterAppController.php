@@ -9,6 +9,7 @@ use App\Models\ActivityLog;
 use App\Models\Order;
 use App\Models\OrderStatusLog;
 use App\Models\RestaurantTable;
+use App\Models\ParcelQrCode; // 👈 ADDED for Parcel Support
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -102,6 +103,7 @@ class WaiterAppController extends Controller
                 'metadata' => [
                     'table_id' => $order->restaurant_table_id,
                     'room_session_id' => $order->room_session_id,
+                    'parcel_session_id' => $order->parcel_qr_session_id, // 👈 Added Parcel Tracking
                 ]
             ]);
         });
@@ -118,8 +120,8 @@ class WaiterAppController extends Controller
     {
         $user = $request->user();
         
-        // Eager load roomSession.room to get the room number
-        $query = Order::with(['items.menuItem', 'table', 'session', 'roomSession.room'])
+        // 👇 FIX 1: Eager load parcel session and its code
+        $query = Order::with(['items.menuItem', 'table', 'session', 'roomSession.room', 'parcelQrSession.parcelQrCode'])
             ->where('restaurant_id', $user->restaurant_id);
 
         if ($user->branch_id) {
@@ -132,21 +134,31 @@ class WaiterAppController extends Controller
             ->orderBy('updated_at', 'asc')
             ->get()
             ->map(function ($order) {
-                // Calculate display string on the backend
-                if ($order->room_session_id) {
-                    $displayNumber = 'Room ' . ($order->roomSession->room->room_number ?? 'Unknown');
+                
+                // 👇 FIX 2: Dynamic display string calculations & service_type passing
+                $displayNumber = 'Unknown Location';
+                $serviceType = $order->service_type ?? 'dine_in';
+                
+                if ($serviceType === 'parcel' || $order->parcel_qr_session_id) {
+                    $counterName = $order->parcelQrSession->parcelQrCode->name ?? 'Main Counter';
+                    $displayNumber = $counterName;
+                    $serviceType = 'parcel';
+                } elseif ($serviceType === 'room_service' || $order->room_session_id) {
+                    $displayNumber = $order->roomSession->room->room_number ?? '?';
+                    $serviceType = 'room_service';
                 } elseif ($order->restaurant_table_id) {
-                    $displayNumber = 'Table ' . ($order->table ? ($order->table->number ?? $order->table->table_number) : 'Unknown');
-                } else {
-                    $displayNumber = 'Takeaway';
+                    $displayNumber = $order->table ? ($order->table->number ?? $order->table->table_number) : '?';
                 }
 
+                // Inject service_type so Waiter app knows how to style the badge
                 return [
                     'id' => $order->id,
                     'status' => $order->status,
                     'updated_at' => $order->updated_at,
                     'items' => $order->items,
+                    'service_type' => $serviceType, // 👈 CRITICAL FOR FRONTEND
                     'room_session_id' => $order->room_session_id,
+                    'parcel_session_id' => $order->parcel_qr_session_id,
                     'table_number' => $displayNumber, 
                     'customer_name' => $order->customer_name ?? 'Guest',
                     'total_items' => $order->items->sum('quantity'),
@@ -160,27 +172,51 @@ class WaiterAppController extends Controller
     public function getTables(Request $request)
     {
         $user = $request->user();
-        $query = RestaurantTable::where('restaurant_id', $user->restaurant_id);
+        
+        // 1. Fetch Normal Tables
+        $tablesQuery = RestaurantTable::where('restaurant_id', $user->restaurant_id);
         if ($user->branch_id) {
-            $query->where('branch_id', $user->branch_id);
+            $tablesQuery->where('branch_id', $user->branch_id);
         }
-
-        $tables = $query->get()->map(function ($table) {
+        $tables = $tablesQuery->get()->map(function ($table) {
             return [
-                'id' => $table->id,
+                'id' => 'table_' . $table->id, // Prevent key collision
+                'raw_id' => $table->id,
                 'number' => $table->number ?? $table->table_number,
                 'status' => $table->status ?? 'available',
                 'capacity' => $table->seating_capacity ?? 4,
+                'type' => 'table'
             ];
         });
-        return response()->json($tables);
+        
+        // 2. Fetch Parcel Counters so Waiters see them in the grid too
+        $parcelCountersQuery = ParcelQrCode::where('restaurant_id', $user->restaurant_id)->where('is_active', true);
+        if ($user->branch_id) {
+            $parcelCountersQuery->where('branch_id', $user->branch_id);
+        }
+        $parcelCounters = $parcelCountersQuery->get()->map(function ($counter) {
+            return [
+                'id' => 'parcel_' . $counter->id,
+                'raw_id' => $counter->id,
+                'number' => '🛍️ ' . $counter->name, // Displays nicely for waiter
+                'status' => 'parcel', // Special status
+                'capacity' => 'Queue',
+                'type' => 'parcel'
+            ];
+        });
+
+        // Merge both together
+        return response()->json($parcelCounters->merge($tables));
     }
 
     public function updateTableStatus(Request $request, $id)
     {
         $request->validate(['status' => 'required|string|in:available,occupied,cleaning']);
         $user = $request->user();
+        
+        // Safety check to ensure we only update real tables, not parcel counters
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($id);
+        
         $oldStatus = $table->status;
         $table->update(['status' => $request->status]);
         
