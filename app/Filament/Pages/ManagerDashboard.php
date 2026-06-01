@@ -181,6 +181,15 @@ class ManagerDashboard extends Page
         } else {
             $this->closeReceiptModal();
             $this->selectedTableId = $tableId;
+            $firstDiner = QrSession::where('restaurant_table_id', $tableId)
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->orderBy('created_at', 'asc') // Oldest first
+                ->first();
+                
+            if ($firstDiner) {
+                $this->selectedSessionId = $firstDiner->id;
+            }
         }
     }
 
@@ -191,6 +200,15 @@ class ManagerDashboard extends Page
         } else {
             $this->closeReceiptModal();
             $this->selectedParcelCounterId = $counterId;
+            
+            $firstDiner = ParcelQrSession::where('parcel_qr_code_id', $counterId)
+                ->where('status', 'active')
+                ->orderBy('created_at', 'asc') // Oldest first (head of queue)
+                ->first();
+                
+            if ($firstDiner) {
+                $this->selectedSessionId = $firstDiner->id;
+            }
         }
     }
 
