@@ -28,4 +28,15 @@ class Room extends Model
 
     public function sessions() 
     { return $this->hasMany(RoomSession::class); }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
+    // 👇 ADD THIS ONE TOO (just to be safe) 👇
+    // public function restaurant()
+    // {
+    //     return $this->belongsTo(Restaurant::class, 'restaurant_id');
+    // }
 }

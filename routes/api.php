@@ -8,10 +8,11 @@ use App\Http\Controllers\Public\QrSessionController;
 use App\Http\Controllers\Api\PlaceOrderController;
 use App\Http\Controllers\Api\WaiterAppController;
 use App\Models\QrSession;
+use App\Models\RoomSession; 
+use App\Models\ParcelQrSession; // 👈 IMPORTED PARCEL SESSION MODEL
 use Laravel\Sanctum\PersonalAccessToken;
 use Pusher\Pusher;
 use App\Http\Controllers\Api\RoomQrController;
-use App\Models\RoomSession; // 👈 CRITICAL: MUST IMPORT THIS
 
 /*
 |--------------------------------------------------------------------------
@@ -46,7 +47,7 @@ Route::post('/pusher/auth', function (Request $request) {
     $authorized = false;
     $user = null;
 
-    // 1. Customer Session Validation (Tables & Rooms)
+    // 1. Customer Session Validation (Tables, Rooms & Parcels)
     if (!str_contains((string) $token, '|')) {
 
         // A. Check Standard Table Session
@@ -62,7 +63,7 @@ Route::post('/pusher/auth', function (Request $request) {
             }
         }
 
-        // B. Check Hotel Room Session 👇 NEW LOGIC ADDED HERE 👇
+        // B. Check Hotel Room Session
         if (!$authorized) {
             $roomSession = RoomSession::where('session_token', $token)->first();
             if ($roomSession && str_starts_with($channelName, 'session.')) {
@@ -70,6 +71,21 @@ Route::post('/pusher/auth', function (Request $request) {
                 if (
                     $requestedId == $roomSession->id ||
                     $requestedId == $roomSession->room_id
+                ) {
+                    $authorized = true;
+                }
+            }
+        }
+
+        // C. Check Parcel Session 👇 ADDED LOGIC HERE 👇
+        if (!$authorized) {
+            $parcelSession = ParcelQrSession::where('session_token', $token)->first();
+            if ($parcelSession && str_starts_with($channelName, 'session.')) {
+                $requestedId = str_replace('session.', '', $channelName);
+                // Parcels authenticate against their own session ID or the physical counter ID
+                if (
+                    $requestedId == $parcelSession->id ||
+                    $requestedId == $parcelSession->parcel_qr_code_id
                 ) {
                     $authorized = true;
                 }
@@ -162,9 +178,15 @@ Route::get('/table/{tableId}/pending-requests', [QrSessionController::class, 'ge
 Route::post('/session/{sessionId}/respond', [QrSessionController::class, 'respondToJoin'])->middleware('throttle:10,1');
 
 Route::prefix('qr')->group(function () {
+    // Legacy GET routes (Optional - can be deprecated eventually)
     Route::get('/validate/{restaurant}/{table}/{token}', [QrSessionController::class, 'validateQr']);
-    Route::post('/session/leave', [QrSessionController::class, 'leaveSession'])->middleware('throttle:10,1');
     Route::post('/session/start/{restaurant}/{table}/{token}', [QrSessionController::class, 'startSession'])->middleware('throttle:10,1');
+    
+    // 👇 NEW UNIFIED ENDPOINTS FOR TABLE/ROOM/PARCEL 👇
+    Route::post('/validate', [QrSessionController::class, 'validateQr']);
+    Route::post('/session/start', [QrSessionController::class, 'startSession'])->middleware('throttle:10,1');
+    
+    Route::post('/session/leave', [QrSessionController::class, 'leaveSession'])->middleware('throttle:10,1');
 });
 
 Route::post('/session/request-bill', [\App\Http\Controllers\Api\PlaceOrderController::class, 'requestBill']);
@@ -176,15 +198,28 @@ Route::post('/orders/{orderId}/cancel', [\App\Http\Controllers\Api\PlaceOrderCon
 // Public Menu Access
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');
 
-Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'validateSession']);
+// Unified Session Checking (Reconnects Tables, Rooms, and Parcels)
+Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'checkSession']); 
 
+// Legacy Room Endpoint
 Route::get('/room/validate/{restaurantId}/{roomId}/{token}', [RoomQrController::class, 'validateScan']);
 
-// Add to your existing protected routes (where OrderController routes are)
-Route::middleware(['throttle:20,1'])->group(function () {
-    Route::post('/payment/razorpay/create', [\App\Http\Controllers\Api\RazorpayController::class, 'createOrder']);
-    Route::post('/payment/razorpay/verify', [\App\Http\Controllers\Api\RazorpayController::class, 'verifyPayment']);
-});
+// Payment Endpoints
+// Route::middleware(['throttle:20,1'])->group(function () {
+//     Route::post('/payment/razorpay/create', [\App\Http\Controllers\Api\RazorpayController::class, 'createOrder']);
+//     Route::post('/payment/razorpay/verify', [\App\Http\Controllers\Api\RazorpayController::class, 'verifyPayment']);
+//     Route::post('/payment/razorpay/upi-link', [\App\Http\Controllers\Api\RazorpayController::class, 'createUpiLink']);
+// });
 
-// Put this OUTSIDE any auth middleware (Razorpay doesn't have an auth token)
-Route::middleware('throttle:100,1')->post('/webhooks/razorpay', [\App\Http\Controllers\Api\RazorpayController::class, 'webhook']);
+// // Put this OUTSIDE any auth middleware (Razorpay doesn't have an auth token)
+// Route::middleware('throttle:100,1')->post('/webhooks/razorpay', [\App\Http\Controllers\Api\RazorpayController::class, 'webhook']);
+
+//upi routes (also outside auth middleware, but heavily throttled to prevent abuse)
+Route::middleware('throttle:20,1')->group(function () {
+
+    Route::post('/upi/initiate', [UpiController::class, 'initiate']);
+
+    Route::post('/upi/confirm', [UpiController::class, 'confirm']);
+
+    Route::get('/upi/status/{paymentId}', [UpiController::class, 'status']);
+});

@@ -21,7 +21,6 @@ class KitchenDisplayBoard extends Page
 
     public static function canAccess(): bool
     {
-        // 🔥 Updated: Chef ke saath Manager aur Admin bhi dekh sakte hain
         return auth()->check() && in_array(auth()->user()->role->name ?? null, ['chef']);
     }
 
@@ -33,28 +32,29 @@ class KitchenDisplayBoard extends Page
         ];
     }
 
-    // --- HELPER FOR ISOLATION ---
-
     protected function getBaseQueueQuery()
     {
         $user = auth()->user();
 
-        $query = KitchenQueue::with(['order.items', 'order.table'])
+        // 👇 FIX: Added room and parcel relationships to avoid N+1 and allow UI rendering
+        $query = KitchenQueue::with([
+            'order.items', 
+            'order.table', 
+            'order.roomSession.room', 
+            'order.parcelQrSession.parcelQrCode'
+        ])
             ->whereHas('order', function ($q) use ($user) {
                 $q->where('restaurant_id', $user->restaurant_id);
 
-                // 👇 FIX: Branch Isolation Logic
                 if ($user->branch_id) {
                     $q->where('branch_id', $user->branch_id);
                 } else {
-                    $q->whereNull('branch_id'); // Main Restaurant area
+                    $q->whereNull('branch_id'); 
                 }
             });
 
         return $query;
     }
-
-    // --- COLUMN DATA FETCHERS ---
 
     public function getPlacedOrdersProperty()
     {
@@ -79,8 +79,6 @@ class KitchenDisplayBoard extends Page
             ->orderBy('created_at', 'asc')
             ->get();
     }
-
-    // --- STATUS ACTION ---
 
     public function updateStatus($queueId, $newStatus)
     {

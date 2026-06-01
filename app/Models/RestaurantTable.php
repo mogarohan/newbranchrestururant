@@ -55,4 +55,8 @@ class RestaurantTable extends Model
     {
         return $this->hasMany(\App\Models\Order::class, 'restaurant_table_id');
     }
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }

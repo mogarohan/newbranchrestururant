@@ -20,7 +20,13 @@ class Order extends Model
         //'subtotal',
         'total_amount',
         'branch_id',
+        'parcel_qr_session_id',
+        'service_type',
     ];
+    public function parcelQrSession()
+    {
+        return $this->belongsTo(ParcelQrSession::class);
+    }
 
     public function restaurant(): BelongsTo
     {

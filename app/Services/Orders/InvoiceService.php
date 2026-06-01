@@ -16,7 +16,7 @@ class InvoiceService
     /**
      * 🔒 Atomic + Safe + Race-Proof Invoice Generation
      */
-    public static function generateInvoice(QrSession $session, Payment $payment)
+    public static function generateInvoice( $session, Payment $payment)
     {
         return DB::transaction(function () use ($session, $payment) {
 

@@ -49,4 +49,15 @@ class QrSession extends Model
     {
         return $this->belongsTo(QrSession::class, 'host_session_id');
     }
+
+    public function restaurantTable()
+    {
+        return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');
+    }
+
+    // Ensure you also have the restaurant relationship if it's missing
+    public function restaurant()
+    {
+        return $this->belongsTo(Restaurant::class, 'restaurant_id');
+    }
 }

@@ -16,4 +16,10 @@ class RoomSession extends Model
 
     public function room() { return $this->belongsTo(Room::class); }
     public function orders() { return $this->hasMany(Order::class); }
+   
+
+    public function restaurant()
+    {
+        return $this->belongsTo(Restaurant::class, 'restaurant_id');
+    }
 }
