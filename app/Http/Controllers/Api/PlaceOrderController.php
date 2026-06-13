@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use App\Events\OrderStatusUpdated;
 use App\Events\OrderCancelled;
+use App\Services\InventoryService;
 
 class PlaceOrderController extends Controller
 {
@@ -500,6 +501,12 @@ class PlaceOrderController extends Controller
                         }
                     }
                 }
+            }
+
+            // ── Detailed Inventory: Restore raw ingredients ──
+            $restaurant = Restaurant::find($order->restaurant_id);
+            if ($restaurant && $restaurant->has_detailed_inventory) {
+                InventoryService::restoreForOrder($order);
             }
 
             OrderStatusLog::create([

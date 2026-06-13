@@ -248,6 +248,70 @@ class MenuResource extends Resource
                     ->options(['veg' => 'Veg', 'non-veg' => 'Non-Veg']),
             ])
             ->actions([
+                Tables\Actions\Action::make('manage_recipe')
+                    ->label('Recipe')
+                    ->icon('heroicon-o-beaker')
+                    ->button()
+                    ->size('xs')
+                    ->color('info')
+                    ->visible(fn() => (bool) auth()->user()->restaurant?->has_detailed_inventory)
+                    ->modalHeading(fn($record) => "Recipe for: {$record->name}")
+                    ->modalWidth('3xl')
+                    ->form(fn($record) => [
+                        Forms\Components\Repeater::make('ingredients')
+                            ->label('Ingredients Required (per 1 portion)')
+                            ->schema([
+                                Forms\Components\Select::make('grocery_item_id')
+                                    ->label('Raw Material')
+                                    ->options(fn() => \App\Models\GroceryItem::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->columnSpan(2),
+
+                                Forms\Components\TextInput::make('quantity_required')
+                                    ->label('Qty Needed')
+                                    ->numeric()
+                                    ->minValue(0.0001)
+                                    ->required()
+                                    ->columnSpan(1),
+
+                                Forms\Components\Select::make('measurement_unit_id')
+                                    ->label('Unit')
+                                    ->options(fn() => \App\Models\MeasurementUnit::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                                    ->required()
+                                    ->searchable()
+                                    ->preload()
+                                    ->columnSpan(1),
+                            ])
+                            ->columns(4)
+                            ->defaultItems(0)
+                            ->addActionLabel('+ Add Ingredient')
+                            ->default(
+                                $record->recipes()->with('groceryItem', 'measurementUnit')->get()->map(fn($r) => [
+                                    'grocery_item_id' => $r->grocery_item_id,
+                                    'quantity_required' => $r->quantity_required,
+                                    'measurement_unit_id' => $r->measurement_unit_id,
+                                ])->toArray()
+                            ),
+                    ])
+                    ->action(function ($record, array $data) {
+                        $record->recipes()->delete();
+
+                        foreach ($data['ingredients'] ?? [] as $ingredient) {
+                            $record->recipes()->create([
+                                'grocery_item_id' => $ingredient['grocery_item_id'],
+                                'quantity_required' => $ingredient['quantity_required'],
+                                'measurement_unit_id' => $ingredient['measurement_unit_id'],
+                            ]);
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title('Recipe updated for ' . $record->name)
+                            ->body(count($data['ingredients'] ?? []) . ' ingredient(s) saved.')
+                            ->success()->send();
+                    }),
+
                 Tables\Actions\EditAction::make()
                     ->button()
                     ->size('xs')

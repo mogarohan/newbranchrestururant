@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 
 class MenuItem extends Model
@@ -84,6 +85,16 @@ class MenuItem extends Model
     }
 
     // ── Relations ────────────────────────────────────────────
+    public function recipes(): HasMany
+    {
+        return $this->hasMany(Recipe::class);
+    }
+
+    public function hasRecipes(): bool
+    {
+        return $this->recipes()->exists();
+    }
+
     public function restaurant(): BelongsTo
     {
         return $this->belongsTo(Restaurant::class);

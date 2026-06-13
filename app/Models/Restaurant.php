@@ -29,7 +29,8 @@ class Restaurant extends Model
         'table_limits',
         'is_rooms_facility',
         'rooms_limit',
-        'has_inventory', // 👈 FIXED: Added to unblock database mass-assignment writes
+        'has_inventory',
+        'has_detailed_inventory',
     ];
 
     /**
@@ -83,5 +84,20 @@ class Restaurant extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function groceryItems(): HasMany
+    {
+        return $this->hasMany(GroceryItem::class);
+    }
+
+    public function measurementUnits(): HasMany
+    {
+        return $this->hasMany(MeasurementUnit::class);
+    }
+
+    public function inventoryTransactions(): HasMany
+    {
+        return $this->hasMany(InventoryTransaction::class);
     }
 }

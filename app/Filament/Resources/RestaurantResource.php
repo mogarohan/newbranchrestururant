@@ -149,6 +149,11 @@ class RestaurantResource extends Resource
                         ->label('Enable Inventory & Stock Control')
                         ->helperText('Grants access to full raw material sheets, inline tracking, and FIFO server logic.')
                         ->default(false),
+
+                    Forms\Components\Toggle::make('has_detailed_inventory')
+                        ->label('Enable Detailed Auto Inventory')
+                        ->helperText('Enables recipe-based raw ingredient tracking with automated deduction on order acceptance.')
+                        ->default(false),
                 ])
                 ->columns(2),
 
@@ -391,6 +396,12 @@ class RestaurantResource extends Resource
                 // 👇 NEW TABLE ACCESS COLUMN: Real-time SaaS metric deployment status check 👇
                 Tables\Columns\IconColumn::make('has_inventory')
                     ->label('INVENTORY')
+                    ->boolean()
+                    ->sortable()
+                    ->alignCenter(),
+
+                Tables\Columns\IconColumn::make('has_detailed_inventory')
+                    ->label('DETAILED INV')
                     ->boolean()
                     ->sortable()
                     ->alignCenter(),

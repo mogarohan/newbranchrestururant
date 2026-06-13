@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Storage;
 use SimpleSoftwareIO\QrCode\Facades\QrCode;
 use Illuminate\Support\HtmlString;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use App\Services\InventoryService;
 
 class ManagerDashboard extends Page
 {
@@ -61,6 +62,7 @@ class ManagerDashboard extends Page
         $this->currentTab = $tab;
         $this->closeReceiptModal();
     }
+    
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -107,8 +109,34 @@ class ManagerDashboard extends Page
             "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => 'notifyWaiterCalled',
             "echo-private:restaurant.{$restaurantId}.alerts,.BillRequested" => 'notifyBillRequested',
             "echo-private:restaurant.{$restaurantId}.alerts,.PaymentMethodSelected" => 'notifyPaymentMethod',
-            "echo-private:restaurant.{$restaurantId},.NewParcelOrder" => '$refresh',
+            "echo-private:restaurant.{$restaurantId},.NewParcelOrder" => 'handleNewOrder', // 👈 Added Listener
+            "echo-private:restaurant.{$restaurantId},.NewOrderPlaced" => 'handleNewOrder', // 👈 Added Listener
         ];
+    }
+
+    // 👇 ADDED SPECIFIC LISTENER FOR NEW ORDERS
+    public function handleNewOrder($event)
+    {
+        $this->dispatch('$refresh');
+        
+        $order = $event['order'] ?? null;
+        if (!$order) return;
+        
+        $serviceType = $order['service_type'] ?? 'dine_in';
+
+        if ($serviceType === 'parcel') {
+            $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
+            $this->dispatch('trigger-browser-notification', title: "🛍️ Action Required: New Parcel Order", body: "A new order was just placed at {$counterName}. Please confirm it.");
+            Notification::make()->title("New Parcel Order: {$counterName}")->body("Action required.")->warning()->persistent()->send();
+        } elseif ($serviceType === 'room_service') {
+            $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
+            $this->dispatch('trigger-browser-notification', title: "🚪 Action Required: New Room Order", body: "Room {$roomNum} just placed a new order. Please confirm it.");
+            Notification::make()->title("New Room Order: {$roomNum}")->body("Action required.")->warning()->persistent()->send();
+        } else {
+            $tableNum = $order['table_number'] ?? $order['restaurant_table_id'] ?? 'Unknown';
+            $this->dispatch('trigger-browser-notification', title: "🛎️ Action Required: New Table Order", body: "Table {$tableNum} just placed a new order. Please confirm it.");
+            Notification::make()->title("New Table Order: {$tableNum}")->body("Action required.")->warning()->persistent()->send();
+        }
     }
 
     public function handleOrderStatusUpdated($event)
@@ -117,19 +145,12 @@ class ManagerDashboard extends Page
 
         $order = $event['order'] ?? null;
         $status = $order['status'] ?? null;
-        $serviceType = $order['service_type'] ?? 'dine_in';
-
+        
+        // Removed the browser notification logic from here to prevent double-firing
+        // since handleNewOrder now explicitly catches the placement.
         if ($status === 'placed') {
-            if ($serviceType === 'parcel') {
-                $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
-                $this->dispatch('trigger-browser-notification', title: "🛍️ Action Required: New Parcel Order", body: "A new order was just placed at {$counterName}. Please confirm it.");
-            } elseif ($serviceType === 'room_service') {
-                $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
-                $this->dispatch('trigger-browser-notification', title: "🚪 Action Required: New Room Order", body: "Room {$roomNum} just placed a new order. Please confirm it.");
-            } else {
-                $tableNum = $order['table_number'] ?? $order['restaurant_table_id'] ?? 'Unknown';
-                $this->dispatch('trigger-browser-notification', title: "🛎️ Action Required: New Table Order", body: "Table {$tableNum} just placed a new order. Please confirm it.");
-            }
+            // Fallback just in case NewOrderPlaced event fails
+            $this->handleNewOrder($event);
         }
     }
 
@@ -890,6 +911,11 @@ class ManagerDashboard extends Page
                     ]);
                 }
 
+                // ── Detailed Inventory: Deduct raw ingredients for manager-placed order ──
+                if (auth()->user()->restaurant?->has_detailed_inventory) {
+                    InventoryService::deductForOrder($order);
+                }
+
                 KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => 0]);
                 OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
                 Notification::make()->title('Order placed.')->success()->send();
@@ -1045,6 +1071,14 @@ class ManagerDashboard extends Page
                     }
                 }
                 $order->update(['total_amount' => $newTotal, 'confirmed_total' => $newTotal, 'stock_note' => $wasPartial ? 'Adjusted: ' . implode(' | ', $stockNotes) : null]);
+
+                // ── Detailed Inventory: Deduct raw ingredients ──
+                if ($order->restaurant && $order->restaurant->has_detailed_inventory) {
+                    $inventoryWarnings = InventoryService::deductForOrder($order);
+                    if (!empty($inventoryWarnings)) {
+                        $stockNotes = array_merge($stockNotes, $inventoryWarnings);
+                    }
+                }
             });
 
             $order->update(['status' => $wasPartial ? 'partial_accepted' : 'accepted']);
