@@ -8,11 +8,14 @@ use App\Http\Controllers\Public\QrSessionController;
 use App\Http\Controllers\Api\PlaceOrderController;
 use App\Http\Controllers\Api\WaiterAppController;
 use App\Models\QrSession;
-use App\Models\RoomSession; 
+use App\Models\RoomSession;
 use App\Models\ParcelQrSession; // 👈 IMPORTED PARCEL SESSION MODEL
 use Laravel\Sanctum\PersonalAccessToken;
 use Pusher\Pusher;
 use App\Http\Controllers\Api\RoomQrController;
+use App\Http\Controllers\Api\AuthController;
+
+Route::post('/login', [AuthController::class, 'login']);
 
 /*
 |--------------------------------------------------------------------------
@@ -181,11 +184,11 @@ Route::prefix('qr')->group(function () {
     // Legacy GET routes (Optional - can be deprecated eventually)
     Route::get('/validate/{restaurant}/{table}/{token}', [QrSessionController::class, 'validateQr']);
     Route::post('/session/start/{restaurant}/{table}/{token}', [QrSessionController::class, 'startSession'])->middleware('throttle:10,1');
-    
+
     // 👇 NEW UNIFIED ENDPOINTS FOR TABLE/ROOM/PARCEL 👇
     Route::post('/validate', [QrSessionController::class, 'validateQr']);
     Route::post('/session/start', [QrSessionController::class, 'startSession'])->middleware('throttle:10,1');
-    
+
     Route::post('/session/leave', [QrSessionController::class, 'leaveSession'])->middleware('throttle:10,1');
 });
 
@@ -199,7 +202,7 @@ Route::post('/orders/{orderId}/cancel', [\App\Http\Controllers\Api\PlaceOrderCon
 Route::get('/menu/{restaurant}/{table}/{token}', [PublicMenuController::class, 'show'])->name('menu.view');
 
 // Unified Session Checking (Reconnects Tables, Rooms, and Parcels)
-Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'checkSession']); 
+Route::get('/session/validate', [\App\Http\Controllers\Public\QrSessionController::class, 'checkSession']);
 
 // Legacy Room Endpoint
 Route::get('/room/validate/{restaurantId}/{roomId}/{token}', [RoomQrController::class, 'validateScan']);

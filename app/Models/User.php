@@ -28,6 +28,9 @@ class User extends Authenticatable implements FilamentUser
         'password',
         'is_active',
         'total_served',
+        // 🌟 YE DONO ADD KARNA ZAROORI HAI 🌟
+        'monthly_salary',
+        'shift_hours',
     ];
 
     protected $casts = [
