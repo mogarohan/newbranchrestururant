@@ -24,19 +24,86 @@ class StaffAttendanceResource extends Resource
     protected static ?string $navigationGroup = 'Access Control';
     protected static ?string $pluralLabel = 'Attendance & Reports';
 
-    // 🌟 YEH FUNCTION CHECK KAREGA KI SALARY DIKHANI HAI YA NAHI 🌟
+    /* -----------------------------------------------------------------
+     | 🌟 SECURITY HELPER 0: Menu Visibility
+     |-----------------------------------------------------------------*/
+    /* -----------------------------------------------------------------
+       | 🌟 SECURITY HELPER 0: Menu Visibility (SaaS Logic)
+       |-----------------------------------------------------------------*/
+    public static function canAccess(): bool
+    {
+        $user = auth()->user();
+
+        // 1. Super Admin ko yeh menu apne panel me nahi dikhega
+        if ($user->isSuperAdmin()) {
+            return false;
+        }
+
+        // 2. 🌟 SAAS LOGIC: Check agar is restaurant ko Super Admin ne permission di hai ya nahi
+        $restaurant = $user->restaurant;
+        if (!$restaurant || !$restaurant->has_attendance) {
+            // Agar permission nahi hai, toh menu bilkul hide ho jayega!
+            return false;
+        }
+
+        // 3. Agar permission mili hai, toh sirf in 3 logo ko access do
+        return $user->isRestaurantAdmin() || $user->isBranchAdmin() || $user->isManager();
+    }
+    /* -----------------------------------------------------------------
+     | 🌟 SECURITY HELPER 1: Kaun Salary/Payroll Data Dekh Sakta Hai
+     |-----------------------------------------------------------------*/
     public static function canViewSalary(): bool
     {
         $user = auth()->user();
-        return $user->isSuperAdmin() || $user->isRestaurantAdmin() || $user->isBranchAdmin() || $user->isManager();
+        // Sirf Admin aur Branch Admin ko salary dikhegi, Manager ko nahi.
+        return $user->isRestaurantAdmin() || $user->isBranchAdmin();
     }
 
+    /* -----------------------------------------------------------------
+     | 🌟 SECURITY HELPER 2: Kaun Kiski Attendance Laga Sakta Hai
+     |-----------------------------------------------------------------*/
+    public static function canMarkAttendance(StaffAttendance $record): bool
+    {
+        $currentUser = auth()->user();
+
+        $targetRoleName = strtolower(str_replace([' ', '-'], '_', $record->staff->role?->name ?? ''));
+
+        // Admin log (manager, chef, waiter) sabko edit kar sakte hain
+        if ($currentUser->isRestaurantAdmin() || $currentUser->isBranchAdmin()) {
+            return in_array($targetRoleName, ['manager', 'chef', 'waiter']);
+        }
+
+        // Manager SIRF chef aur waiter ko edit kar sakta hai
+        if ($currentUser->isManager()) {
+            return in_array($targetRoleName, ['chef', 'waiter']);
+        }
+
+        return false;
+    }
+
+    /* -----------------------------------------------------------------
+     | TABLE CONFIGURATION
+     |-----------------------------------------------------------------*/
     public static function table(Table $table): Table
     {
         return $table
             ->modifyQueryUsing(function (Builder $query, $livewire) {
                 $date = $livewire->activeDate ?? now()->toDateString();
-                return $query->whereDate('date', $date);
+
+                // Active date filter
+                $query->whereDate('date', $date);
+
+                $currentUser = auth()->user();
+
+                // 🌟 FIX: Manager ko data na dikhne wali problem yahan theek ki hai 🌟
+                if ($currentUser->isManager()) {
+                    $query->whereHas('staff.role', function ($q) {
+                        // Case-insensitive array takki DB me chhota/bada kaisa bhi naam ho, list me show ho!
+                        $q->whereIn('name', ['chef', 'Chef', 'CHEF', 'waiter', 'Waiter', 'WAITER']);
+                    });
+                }
+
+                return $query;
             })
             ->columns([
                 TextColumn::make('date')
@@ -69,25 +136,29 @@ class StaffAttendanceResource extends Resource
                         'half_day' => 'H - Half Day',
                     ])
                     ->selectablePlaceholder(false)
-                    ->extraAttributes(['style' => 'min-width: 140px; font-weight: 700;']),
+                    ->extraAttributes(['style' => 'min-width: 140px; font-weight: 700;'])
+                    // Dropdown lock logic
+                    ->disabled(fn(StaffAttendance $record) => !self::canMarkAttendance($record)),
 
-                // 🌟 VISIBILITY FIX 🌟
                 TextInputColumn::make('overtime_hours')
                     ->label('OT (Hrs)')
                     ->type('number')
                     ->visible(fn() => self::canViewSalary())
+                    ->disabled(fn(StaffAttendance $record) => !self::canMarkAttendance($record))
                     ->extraAttributes(['style' => 'width: 80px;']),
 
                 TextInputColumn::make('manual_deduction')
                     ->label('Cut (-) ₹')
                     ->type('number')
                     ->visible(fn() => self::canViewSalary())
+                    ->disabled(fn(StaffAttendance $record) => !self::canMarkAttendance($record))
                     ->extraAttributes(['style' => 'width: 90px; color: red; font-weight: bold;']),
 
                 TextInputColumn::make('manual_bonus')
                     ->label('Add (+) ₹')
                     ->type('number')
                     ->visible(fn() => self::canViewSalary())
+                    ->disabled(fn(StaffAttendance $record) => !self::canMarkAttendance($record))
                     ->extraAttributes(['style' => 'width: 90px; color: green; font-weight: bold;']),
             ])
             ->defaultSort('staff.name', 'asc')
@@ -96,16 +167,15 @@ class StaffAttendanceResource extends Resource
                     ->relationship('staff.role', 'label')
                     ->label('Filter by Role'),
             ])
-
             ->actions([
-                // 🌟 VISIBILITY FIX FOR SETUP PAYROLL BUTTON 🌟
+                // Salary Setup button
                 Tables\Actions\Action::make('setup_payroll')
                     ->label('Salary Setup')
                     ->icon('heroicon-o-banknotes')
                     ->color('warning')
                     ->button()
                     ->outlined()
-                    ->visible(fn() => self::canViewSalary())
+                    ->visible(fn() => self::canViewSalary()) // Sirf Admin/Branch Admin dekhega
                     ->mountUsing(function (Forms\ComponentContainer $form, StaffAttendance $record) {
                         $form->fill([
                             'monthly_salary' => $record->staff->monthly_salary ?? 25000,
@@ -149,14 +219,26 @@ class StaffAttendanceResource extends Resource
                         ->label('Mark Selected as Present')
                         ->icon('heroicon-o-check-circle')
                         ->color('success')
-                        ->action(fn(Collection $records) => $records->each->update(['status' => 'present']))
+                        ->action(function (Collection $records) {
+                            $records->each(function ($record) {
+                                if (self::canMarkAttendance($record)) {
+                                    $record->update(['status' => 'present']);
+                                }
+                            });
+                        })
                         ->deselectRecordsAfterCompletion(),
 
                     Tables\Actions\BulkAction::make('mark_all_absent')
                         ->label('Mark Selected as Absent')
                         ->icon('heroicon-o-x-circle')
                         ->color('danger')
-                        ->action(fn(Collection $records) => $records->each->update(['status' => 'absent']))
+                        ->action(function (Collection $records) {
+                            $records->each(function ($record) {
+                                if (self::canMarkAttendance($record)) {
+                                    $record->update(['status' => 'absent']);
+                                }
+                            });
+                        })
                         ->deselectRecordsAfterCompletion(),
                 ]),
             ]);

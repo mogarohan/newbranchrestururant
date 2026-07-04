@@ -13,9 +13,7 @@ use App\Models\ParcelQrSession; // 👈 IMPORTED PARCEL SESSION MODEL
 use Laravel\Sanctum\PersonalAccessToken;
 use Pusher\Pusher;
 use App\Http\Controllers\Api\RoomQrController;
-use App\Http\Controllers\Api\AuthController;
 
-Route::post('/login', [AuthController::class, 'login']);
 
 /*
 |--------------------------------------------------------------------------
