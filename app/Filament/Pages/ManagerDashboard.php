@@ -41,7 +41,7 @@ class ManagerDashboard extends Page
     protected static ?string $title = 'Manager Dashboard Control';
     protected static ?int $navigationSort = 1;
 
-    public $currentTab = 'tables'; 
+    public $currentTab = 'tables';
 
     public $selectedTableId = null;
     public $selectedParcelCounterId = null;
@@ -62,11 +62,11 @@ class ManagerDashboard extends Page
         $this->currentTab = $tab;
         $this->closeReceiptModal();
     }
-    
+
     public static function canAccess(): bool
     {
         $user = auth()->user();
-        return $user && $user->restaurant_id !== null 
+        return $user && $user->restaurant_id !== null
             && in_array($user->role->name ?? '', ['restaurant_admin', 'branch_admin', 'manager']);
     }
 
@@ -109,19 +109,19 @@ class ManagerDashboard extends Page
             "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => 'notifyWaiterCalled',
             "echo-private:restaurant.{$restaurantId}.alerts,.BillRequested" => 'notifyBillRequested',
             "echo-private:restaurant.{$restaurantId}.alerts,.PaymentMethodSelected" => 'notifyPaymentMethod',
-            "echo-private:restaurant.{$restaurantId},.NewParcelOrder" => 'handleNewOrder', // 👈 Added Listener
-            "echo-private:restaurant.{$restaurantId},.NewOrderPlaced" => 'handleNewOrder', // 👈 Added Listener
+            "echo-private:restaurant.{$restaurantId},.NewParcelOrder" => 'handleNewOrder',
+            "echo-private:restaurant.{$restaurantId},.NewOrderPlaced" => 'handleNewOrder',
         ];
     }
 
-    // 👇 ADDED SPECIFIC LISTENER FOR NEW ORDERS
     public function handleNewOrder($event)
     {
         $this->dispatch('$refresh');
-        
+
         $order = $event['order'] ?? null;
-        if (!$order) return;
-        
+        if (!$order)
+            return;
+
         $serviceType = $order['service_type'] ?? 'dine_in';
 
         if ($serviceType === 'parcel') {
@@ -145,11 +145,8 @@ class ManagerDashboard extends Page
 
         $order = $event['order'] ?? null;
         $status = $order['status'] ?? null;
-        
-        // Removed the browser notification logic from here to prevent double-firing
-        // since handleNewOrder now explicitly catches the placement.
+
         if ($status === 'placed') {
-            // Fallback just in case NewOrderPlaced event fails
             $this->handleNewOrder($event);
         }
     }
@@ -205,9 +202,9 @@ class ManagerDashboard extends Page
             $firstDiner = QrSession::where('restaurant_table_id', $tableId)
                 ->where('is_active', true)
                 ->where('is_primary', true)
-                ->orderBy('created_at', 'asc') // Oldest first
+                ->orderBy('created_at', 'asc')
                 ->first();
-                
+
             if ($firstDiner) {
                 $this->selectedSessionId = $firstDiner->id;
             }
@@ -221,12 +218,12 @@ class ManagerDashboard extends Page
         } else {
             $this->closeReceiptModal();
             $this->selectedParcelCounterId = $counterId;
-            
+
             $firstDiner = ParcelQrSession::where('parcel_qr_code_id', $counterId)
                 ->where('status', 'active')
-                ->orderBy('created_at', 'asc') // Oldest first (head of queue)
+                ->orderBy('created_at', 'asc')
                 ->first();
-                
+
             if ($firstDiner) {
                 $this->selectedSessionId = $firstDiner->id;
             }
@@ -257,7 +254,8 @@ class ManagerDashboard extends Page
 
     protected function getActiveSession()
     {
-        if (!$this->selectedSessionId) return null;
+        if (!$this->selectedSessionId)
+            return null;
 
         if ($this->selectedParcelCounterId) {
             return ParcelQrSession::find($this->selectedSessionId);
@@ -268,8 +266,6 @@ class ManagerDashboard extends Page
         }
     }
 
-    // ── Original Room QR & Management Actions ──────────────────────────────────
-    
     public function checkInAction(): Action
     {
         return Action::make('checkInAction')
@@ -283,18 +279,18 @@ class ManagerDashboard extends Page
             ])
             ->action(function (array $data, array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if(!$room) return;
+                if (!$room)
+                    return;
 
-                // 1. Generate unique stay token
                 $token = Str::uuid()->toString();
                 $restaurantSlug = Str::slug($room->restaurant->name);
                 $folder = "restaurants/{$restaurantSlug}/RoomsQR";
                 Storage::disk('public')->makeDirectory($folder);
-                
+
                 $path = "{$folder}/room_{$room->room_number}_stay.svg";
                 $appUrl = 'https://customer.annsathi.com';
                 $scanUrl = "{$appUrl}/?type=room&r={$room->restaurant_id}&t={$room->id}&token={$token}";
-                // 2. Create physical QR
+
                 $qrImage = QrCode::format('svg')->size(300)->margin(1)->generate($scanUrl);
                 Storage::disk('public')->put($path, $qrImage);
 
@@ -329,9 +325,9 @@ class ManagerDashboard extends Page
         return Action::make('checkoutAction')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if(!$room) return;
-                
-                // Delete physical QR file
+                if (!$room)
+                    return;
+
                 if ($room->qr_path) {
                     Storage::disk('public')->delete($room->qr_path);
                 }
@@ -350,7 +346,7 @@ class ManagerDashboard extends Page
                     'qr_token' => null,
                     'qr_path' => null,
                 ]);
-                
+
                 $this->closeReceiptModal();
                 Notification::make()->title('Checkout complete. Stay QR has been disabled.')->success()->send();
             });
@@ -361,31 +357,35 @@ class ManagerDashboard extends Page
         return Action::make('markCleanAction')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if($room) $room->update(['status' => 'available']);
+                if ($room)
+                    $room->update(['status' => 'available']);
                 Notification::make()->title('Room available for next guest.')->success()->send();
             });
     }
 
     public function settleRoomBill()
     {
-        if (!$this->selectedRoomId || !$this->selectedSessionId) return;
+        if (!$this->selectedRoomId || !$this->selectedSessionId)
+            return;
 
         $orders = Order::where('room_session_id', $this->selectedSessionId)->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])->get();
-        if ($orders->isEmpty()) return;
+        if ($orders->isEmpty())
+            return;
 
         $subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
         $amountPaid = $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
         $amountDue = max(0, $subtotal - $amountPaid);
         $latestOrderId = $orders->pluck('id')->last();
 
-        if ($amountDue <= 0) return;
+        if ($amountDue <= 0)
+            return;
 
         try {
             DB::transaction(function () use ($latestOrderId, $subtotal, $amountDue) {
                 Payment::updateOrCreate(['order_id' => $latestOrderId], [
                     'restaurant_id' => auth()->user()->restaurant_id,
                     'subtotal' => $subtotal,
-                    'amount' => $amountDue, 
+                    'amount' => $amountDue,
                     'status' => 'paid',
                     'payment_method' => 'room_charge',
                     'paid_at' => now(),
@@ -451,7 +451,7 @@ class ManagerDashboard extends Page
                                     ->label('Live Design Preview')
                                     ->content(function (\Filament\Forms\Get $get) {
                                         $restaurant = auth()->user()->restaurant;
-                                        
+
                                         $bgType = $get('bg_type') ?? 'image';
                                         $bgImage = $get('bg_image');
                                         $bgColor = $get('bg_color') ?? '#E2F0CB';
@@ -464,12 +464,15 @@ class ManagerDashboard extends Page
 
                                         $bgStyle = '';
                                         if ($bgType === 'image') {
-                                            $url = asset('images/b.png'); 
+                                            $url = asset('images/b.png');
                                             if (!empty($bgImage)) {
                                                 $file = is_array($bgImage) ? reset($bgImage) : $bgImage;
                                                 if ($file instanceof TemporaryUploadedFile) {
-                                                    try { $url = $file->temporaryUrl(); } 
-                                                    catch (\Exception $e) { $url = 'data:' . $file->getClientMimeType() . ';base64,' . base64_encode(file_get_contents($file->getRealPath())); }
+                                                    try {
+                                                        $url = $file->temporaryUrl();
+                                                    } catch (\Exception $e) {
+                                                        $url = 'data:' . $file->getClientMimeType() . ';base64,' . base64_encode(file_get_contents($file->getRealPath()));
+                                                    }
                                                 } elseif (is_string($file)) {
                                                     $url = Storage::disk('public')->url($file);
                                                 }
@@ -514,9 +517,11 @@ class ManagerDashboard extends Page
                     ]),
             ])
             ->action(function (array $data) {
-                if (!$this->selectedRoomId) return;
+                if (!$this->selectedRoomId)
+                    return;
                 $room = Room::with('restaurant')->find($this->selectedRoomId);
-                if (!$room || !$room->qr_path) return;
+                if (!$room || !$room->qr_path)
+                    return;
 
                 $restaurant = $room->restaurant;
                 $bgType = $data['bg_type'] ?? 'image';
@@ -603,8 +608,6 @@ class ManagerDashboard extends Page
             });
     }
 
-    // ── Table & General Actions ──────────────────────────────────────────────────
-    
     public function cancelPendingBill(): void
     {
         $viewData = $this->getViewData();
@@ -613,7 +616,7 @@ class ManagerDashboard extends Page
         if ($pendingPayment && $pendingPayment->status === 'pending') {
             $pendingPayment->delete();
             $session = $this->getActiveSession();
-            if($session) {
+            if ($session) {
                 event(new \App\Events\BillGenerated($session->id, null));
             }
             $this->discountAmount = 0;
@@ -635,14 +638,17 @@ class ManagerDashboard extends Page
         }
 
         $session = $this->getActiveSession();
-        if (!$session) return;
-        
+        if (!$session)
+            return;
+
         $restaurant = auth()->user()->restaurant;
-        
+
         $locationName = 'Counter';
-        if ($this->selectedParcelCounterId) $locationName = ParcelQrCode::find($this->selectedParcelCounterId)->name ?? 'Parcel';
-        elseif ($this->selectedTableId) $locationName = 'T-' . RestaurantTable::find($this->selectedTableId)->table_number;
-        
+        if ($this->selectedParcelCounterId)
+            $locationName = ParcelQrCode::find($this->selectedParcelCounterId)->name ?? 'Parcel';
+        elseif ($this->selectedTableId)
+            $locationName = 'T-' . RestaurantTable::find($this->selectedTableId)->table_number;
+
         $gstIn = $restaurant->gst_no ?? '-';
         $phone = $restaurant->phone ?? '012345678910';
         $address = $restaurant->address ?? '-';
@@ -653,7 +659,8 @@ class ManagerDashboard extends Page
         foreach ($orders as $order) {
             foreach ($order->items as $item) {
                 $displayQty = $item->confirmed_qty ?? $item->quantity;
-                if ($displayQty <= 0) continue;
+                if ($displayQty <= 0)
+                    continue;
                 $rate = $item->unit_price;
                 $amount = $rate * $displayQty;
                 $itemsHtml .= "<tr>
@@ -712,8 +719,9 @@ class ManagerDashboard extends Page
     public function sendBillToCustomer(): void
     {
         $viewData = $this->getViewData();
-        
-        if (!$this->selectedSessionId) return;
+
+        if (!$this->selectedSessionId)
+            return;
 
         $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : 'qr_session_id';
         if (\App\Models\Invoice::where($sessionCol, $this->selectedSessionId)->exists()) {
@@ -722,10 +730,12 @@ class ManagerDashboard extends Page
         }
 
         $session = $this->getActiveSession();
-        if (!$session) return;
+        if (!$session)
+            return;
 
         $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
-        if ($orders->isEmpty()) return;
+        if ($orders->isEmpty())
+            return;
 
         $subtotal = $orders->sum(fn($order) => $order->confirmed_total ?? $order->total_amount);
         $amountAlreadyPaid = $orders->where('payment_status', 'paid')->sum(fn($order) => $order->confirmed_total ?? $order->total_amount);
@@ -773,7 +783,7 @@ class ManagerDashboard extends Page
 
             if ($billStatus === 'paid') {
                 Notification::make()->title('Bill Auto-Settled & Invoice Generated')->success()->send();
-                $this->closeReceiptModal(); 
+                $this->closeReceiptModal();
             } else {
                 Notification::make()->title('Final Bill Sent!')->success()->send();
             }
@@ -786,18 +796,20 @@ class ManagerDashboard extends Page
     {
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
-        
-        if (!$pendingPayment || !$this->selectedSessionId) return;
+
+        if (!$pendingPayment || !$this->selectedSessionId)
+            return;
 
         $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : 'qr_session_id';
         if (\App\Models\Invoice::where($sessionCol, $this->selectedSessionId)->exists()) {
             Notification::make()->title('Invoice already generated.')->warning()->send();
-            $this->closeReceiptModal(); 
+            $this->closeReceiptModal();
             return;
         }
 
         $session = $this->getActiveSession();
-        if (!$session) return;
+        if (!$session)
+            return;
 
         try {
             DB::transaction(function () use ($pendingPayment, $session, &$paymentPayload) {
@@ -821,7 +833,7 @@ class ManagerDashboard extends Page
 
             event(new \App\Events\BillGenerated($this->selectedSessionId, $paymentPayload));
             Notification::make()->title('Payment Confirmed & Invoice Generated')->success()->send();
-            $this->closeReceiptModal(); 
+            $this->closeReceiptModal();
         } catch (\Exception $e) {
             Notification::make()->title('Invoice Generation Failed')->body($e->getMessage())->danger()->send();
         }
@@ -869,7 +881,8 @@ class ManagerDashboard extends Page
                     Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
                 }
 
-                if (empty($validatedItems)) return;
+                if (empty($validatedItems))
+                    return;
 
                 $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
 
@@ -897,7 +910,8 @@ class ManagerDashboard extends Page
                     $menuItem = MenuItem::find($item['menu_item_id']);
                     if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
                         $menuItem->decrement('stock_quantity', $item['quantity']);
-                        if ($menuItem->fresh()->stock_quantity <= 0) $menuItem->update(['is_available' => false]);
+                        if ($menuItem->fresh()->stock_quantity <= 0)
+                            $menuItem->update(['is_available' => false]);
                     }
                     $order->items()->create([
                         'menu_item_id' => $item['menu_item_id'],
@@ -911,7 +925,6 @@ class ManagerDashboard extends Page
                     ]);
                 }
 
-                // ── Detailed Inventory: Deduct raw ingredients for manager-placed order ──
                 if (auth()->user()->restaurant?->has_detailed_inventory) {
                     InventoryService::deductForOrder($order);
                 }
@@ -939,12 +952,14 @@ class ManagerDashboard extends Page
             ])
             ->fillForm(function (array $arguments) {
                 $order = Order::with('items')->find($arguments['orderId']);
-                if (!$order) return [];
+                if (!$order)
+                    return [];
                 return ['items' => $order->items->map(fn($item) => ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes])->toArray()];
             })
             ->action(function (array $data, array $arguments) {
                 $order = Order::find($arguments['orderId']);
-                if (!$order) return;
+                if (!$order)
+                    return;
 
                 $totalAmount = 0;
                 $existingItemIds = [];
@@ -958,13 +973,27 @@ class ManagerDashboard extends Page
                         $orderItem = $order->items()->find($itemData['id']);
                         if ($orderItem) {
                             $orderItem->update([
-                                'menu_item_id' => $itemData['menu_item_id'], 'item_name' => $menuItem ? $menuItem->name : 'Custom Item', 'quantity' => $itemData['quantity'], 'confirmed_qty' => $itemData['quantity'], 'requested_qty' => $itemData['quantity'], 'unit_price' => $itemData['unit_price'], 'total_price' => $totalPrice, 'notes' => $itemData['notes'] ?? null,
+                                'menu_item_id' => $itemData['menu_item_id'],
+                                'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
+                                'quantity' => $itemData['quantity'],
+                                'confirmed_qty' => $itemData['quantity'],
+                                'requested_qty' => $itemData['quantity'],
+                                'unit_price' => $itemData['unit_price'],
+                                'total_price' => $totalPrice,
+                                'notes' => $itemData['notes'] ?? null,
                             ]);
                             $existingItemIds[] = $orderItem->id;
                         }
                     } else {
                         $newItem = $order->items()->create([
-                            'menu_item_id' => $itemData['menu_item_id'], 'item_name' => $menuItem ? $menuItem->name : 'Custom Item', 'quantity' => $itemData['quantity'], 'confirmed_qty' => $itemData['quantity'], 'requested_qty' => $itemData['quantity'], 'unit_price' => $itemData['unit_price'], 'total_price' => $totalPrice, 'notes' => $itemData['notes'] ?? null,
+                            'menu_item_id' => $itemData['menu_item_id'],
+                            'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
+                            'quantity' => $itemData['quantity'],
+                            'confirmed_qty' => $itemData['quantity'],
+                            'requested_qty' => $itemData['quantity'],
+                            'unit_price' => $itemData['unit_price'],
+                            'total_price' => $totalPrice,
+                            'notes' => $itemData['notes'] ?? null,
                         ]);
                         $existingItemIds[] = $newItem->id;
                     }
@@ -984,12 +1013,13 @@ class ManagerDashboard extends Page
         $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($tableId);
 
         if (QrSession::where('restaurant_table_id', $table->id)->where('is_active', true)->count() > 0) {
-            Notification::make()->title('Table is occupied')->danger()->send(); return;
+            Notification::make()->title('Table is occupied')->danger()->send();
+            return;
         }
 
         $table->update(['status' => $table->status === 'reserved' ? 'available' : 'reserved']);
         Notification::make()->title("Table {$table->table_number} status updated")->success()->send();
-        $this->closeReceiptModal(); 
+        $this->closeReceiptModal();
     }
 
     public function cleanTable($tableId): void
@@ -1006,21 +1036,24 @@ class ManagerDashboard extends Page
         $table->update(['status' => 'available']);
         event(new \App\Events\TableStatusUpdated($table->id, 'available', $table->restaurant_id));
         Notification::make()->title("Table {$table->table_number} Cleaned")->success()->send();
-        $this->closeReceiptModal(); 
+        $this->closeReceiptModal();
     }
 
     public function cleanParcelSession($sessionId): void
     {
         $user = auth()->user();
         $session = ParcelQrSession::where('restaurant_id', $user->restaurant_id)->find($sessionId);
-        if (!$session) return;
+        if (!$session)
+            return;
 
         $session->update(['status' => 'completed', 'is_active' => false]);
         Order::where('parcel_qr_session_id', $session->id)->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'])->update(['status' => 'served']);
         event(new \App\Events\SessionEnded($session->id, null));
-        
+
         Notification::make()->title("Parcel Session Completed & Cleared")->success()->send();
-        if ($this->selectedSessionId === $sessionId) { $this->selectedSessionId = null; }
+        if ($this->selectedSessionId === $sessionId) {
+            $this->selectedSessionId = null;
+        }
     }
 
     public function updateStatus($orderId, $status)
@@ -1035,7 +1068,8 @@ class ManagerDashboard extends Page
             DB::transaction(function () use ($order, &$wasPartial, &$stockNotes) {
                 $newTotal = 0;
                 foreach ($order->items as $orderItem) {
-                    if (!$orderItem->menu_item_id) continue;
+                    if (!$orderItem->menu_item_id)
+                        continue;
                     $menuItem = MenuItem::where('id', $orderItem->menu_item_id)->lockForUpdate()->first();
 
                     if (!$menuItem || !$menuItem->track_stock || $menuItem->stock_quantity === null) {
@@ -1057,14 +1091,18 @@ class ManagerDashboard extends Page
                         $stockNotes[] = '"' . $menuItem->name . '": ordered ' . $requested . ', only ' . $available . ' available.';
 
                         $menuItem->decrement('stock_quantity', $newQty);
-                        if ($menuItem->fresh()->stock_quantity <= 0) { $menuItem->update(['is_available' => false]); }
+                        if ($menuItem->fresh()->stock_quantity <= 0) {
+                            $menuItem->update(['is_available' => false]);
+                        }
 
                         $orderItem->update(['quantity' => $newQty, 'confirmed_qty' => $newQty, 'total_price' => $newTotalPrice]);
                         $newTotal += $newTotalPrice;
                         $wasPartial = true;
                     } else {
                         $menuItem->decrement('stock_quantity', $requested);
-                        if ($menuItem->fresh()->stock_quantity <= 0) { $menuItem->update(['is_available' => false]); }
+                        if ($menuItem->fresh()->stock_quantity <= 0) {
+                            $menuItem->update(['is_available' => false]);
+                        }
 
                         $orderItem->update(['confirmed_qty' => $requested]);
                         $newTotal += $orderItem->total_price;
@@ -1072,7 +1110,6 @@ class ManagerDashboard extends Page
                 }
                 $order->update(['total_amount' => $newTotal, 'confirmed_total' => $newTotal, 'stock_note' => $wasPartial ? 'Adjusted: ' . implode(' | ', $stockNotes) : null]);
 
-                // ── Detailed Inventory: Deduct raw ingredients ──
                 if ($order->restaurant && $order->restaurant->has_detailed_inventory) {
                     $inventoryWarnings = InventoryService::deductForOrder($order);
                     if (!empty($inventoryWarnings)) {
@@ -1099,6 +1136,14 @@ class ManagerDashboard extends Page
         $branchId = $user->branch_id;
         $hasRoomsFacility = (bool) $user->restaurant->is_rooms_facility;
 
+        $data['upiId'] = $branchId ? (\App\Models\Branch::find($branchId)->upi_id ?? '') : ($user->restaurant->upi_id ?? '');
+
+        if (empty($data['upiId'])) {
+            $data['upiId'] = 'merchant@upi';
+        }
+
+        $data['restaurantName'] = $user->restaurant->name ?? 'Restaurant';
+
         $incomingTableOrders = Order::where('restaurant_id', $restaurantId)->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))
             ->where('status', 'placed')->where(fn($q) => $q->where('service_type', 'dine_in')->orWhereNull('service_type'))
             ->with(['items.menuItem.category', 'restaurantTable'])->orderBy('created_at', 'asc')->get();
@@ -1111,18 +1156,18 @@ class ManagerDashboard extends Page
             ->where('status', 'placed')->where('service_type', 'room_service')
             ->with(['items.menuItem.category', 'roomSession.room'])->orderBy('created_at', 'asc')->get();
 
-        $data = [
-            'incomingTableOrders' => $incomingTableOrders,
-            'parcelOrders' => $incomingParcelOrders, // 👈 FIXED: Maps perfectly to Blade's parcelOrders variable
-            'incomingRoomOrders' => $incomingRoomOrders,
-            'hasRoomsFacility' => $hasRoomsFacility
-        ];
+        $data['incomingTableOrders'] = $incomingTableOrders;
+        $data['parcelOrders'] = $incomingParcelOrders;
+        $data['incomingRoomOrders'] = $incomingRoomOrders;
+        $data['hasRoomsFacility'] = $hasRoomsFacility;
 
-        // ── LOAD GRID DATA BASED ON TAB ──
         if ($this->currentTab === 'tables') {
             $tablesQuery = RestaurantTable::where('restaurant_id', $restaurantId);
-            if ($branchId) $tablesQuery->where('branch_id', $branchId); else $tablesQuery->whereNull('branch_id');
-            
+            if ($branchId)
+                $tablesQuery->where('branch_id', $branchId);
+            else
+                $tablesQuery->whereNull('branch_id');
+
             $data['tables'] = $tablesQuery->with(['qrSessions' => fn($q) => $q->where('is_active', true)])
                 ->withCount(['qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true)])->get()
                 ->map(function ($table) {
@@ -1131,12 +1176,16 @@ class ManagerDashboard extends Page
                     $table->live_subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
                     $table->live_due = max(0, $table->live_subtotal - $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount));
                     $table->live_orders_count = $orders->count();
+                    $table->pending_payment = Payment::whereIn('order_id', $orders->pluck('id'))->where('status', 'pending')->latest()->first();
                     return $table;
                 })->sortByDesc(fn($t) => $t->active_sessions_count > 0 ? 2 : ((($t->status ?? '') === 'reserved') ? 1 : 0))->values();
 
             $parcelQuery = ParcelQrCode::where('restaurant_id', $restaurantId)->where('is_active', true);
-            if ($branchId) $parcelQuery->where('branch_id', $branchId); else $parcelQuery->whereNull('branch_id');
-            
+            if ($branchId)
+                $parcelQuery->where('branch_id', $branchId);
+            else
+                $parcelQuery->whereNull('branch_id');
+
             $data['parcelCounters'] = $parcelQuery->with(['sessions' => fn($q) => $q->where('status', 'active')])
                 ->withCount(['sessions as active_sessions_count' => fn($q) => $q->where('status', 'active')])->get()
                 ->map(function ($counter) {
@@ -1145,6 +1194,7 @@ class ManagerDashboard extends Page
                     $counter->live_subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
                     $counter->live_due = max(0, $counter->live_subtotal - $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount));
                     $counter->live_orders_count = $orders->count();
+                    $counter->pending_payment = Payment::whereIn('order_id', $orders->pluck('id'))->where('status', 'pending')->latest()->first();
                     return $counter;
                 })->values();
 
@@ -1154,13 +1204,17 @@ class ManagerDashboard extends Page
             $data['activeSessions'] = $data['tables']->sum('active_sessions_count') + $data['parcelCounters']->sum('active_sessions_count');
         } else {
             $roomsQuery = Room::where('restaurant_id', $restaurantId);
-            if ($branchId) $roomsQuery->where('branch_id', $branchId); else $roomsQuery->whereNull('branch_id');
-            
+            if ($branchId)
+                $roomsQuery->where('branch_id', $branchId);
+            else
+                $roomsQuery->whereNull('branch_id');
+
             $data['rooms'] = $roomsQuery->with('activeSession')->get()->map(function ($room) {
                 if ($room->activeSession) {
                     $orders = Order::where('room_session_id', $room->activeSession->id)->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])->get();
                     $room->live_due = max(0, $orders->sum('total_amount') - $orders->where('payment_status', 'paid')->sum('total_amount'));
                     $room->live_orders_count = $orders->count();
+                    $room->pending_payment = Payment::whereIn('order_id', $orders->pluck('id'))->where('status', 'pending')->latest()->first();
                 }
                 return $room;
             });
@@ -1169,7 +1223,6 @@ class ManagerDashboard extends Page
             $data['occupancyRateRooms'] = $data['totalRooms'] > 0 ? round(($data['occupiedRooms'] / $data['totalRooms']) * 100) : 0;
         }
 
-        // ── LOAD MODAL DATA ──
         $data['selectedEntityData'] = null;
         $data['activeDinersList'] = collect();
         $data['tableOrders'] = collect();
