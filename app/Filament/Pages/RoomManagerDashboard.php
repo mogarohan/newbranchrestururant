@@ -34,7 +34,8 @@ class RoomManagerDashboard extends Page
     public function getListeners(): array
     {
         $user = auth()->user();
-        if (!$user || !$user->restaurant_id) return [];
+        if (!$user || !$user->restaurant_id)
+            return [];
         $restaurantId = $user->restaurant_id;
 
         return [
@@ -70,7 +71,7 @@ class RoomManagerDashboard extends Page
     public static function canAccess(): bool
     {
         $user = auth()->user();
-        return $user && $user->restaurant_id !== null 
+        return $user && $user->restaurant_id !== null
             && in_array($user->role->name ?? '', ['restaurant_admin', 'branch_admin', 'manager']);
     }
 
@@ -119,11 +120,13 @@ class RoomManagerDashboard extends Page
     {
         $viewData = $this->getViewData();
         $activeSessionId = $viewData['activeSessionId'];
-        if (!$activeSessionId) return;
+        if (!$activeSessionId)
+            return;
 
         $session = RoomSession::find($activeSessionId);
         $orders = collect($viewData['roomOrders'])->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served']);
-        if ($orders->isEmpty()) return;
+        if ($orders->isEmpty())
+            return;
 
         $subtotal = $orders->sum('total_amount');
         $amountPaid = $orders->where('payment_status', 'paid')->sum('total_amount');
@@ -135,7 +138,7 @@ class RoomManagerDashboard extends Page
                 Payment::updateOrCreate(['order_id' => $latestOrderId], [
                     'restaurant_id' => auth()->user()->restaurant_id,
                     'subtotal' => $subtotal,
-                    'amount' => $amountDue, 
+                    'amount' => $amountDue,
                     'status' => 'paid',
                     'payment_method' => 'room_charge',
                     'paid_at' => now(),
@@ -162,14 +165,15 @@ class RoomManagerDashboard extends Page
             ])
             ->action(function (array $data, array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if(!$room) return;
+                if (!$room)
+                    return;
 
                 // 1. Generate unique stay token
                 $token = Str::uuid()->toString();
                 $restaurantSlug = Str::slug($room->restaurant->name);
                 $folder = "restaurants/{$restaurantSlug}/RoomsQR";
                 Storage::disk('public')->makeDirectory($folder);
-                
+
                 $path = "{$folder}/room_{$room->room_number}_stay.svg";
                 $appUrl = 'https://customer.annsathi.com';
                 $scanUrl = "{$appUrl}/?type=room&r={$room->restaurant_id}&t={$room->id}&token={$token}";
@@ -207,8 +211,9 @@ class RoomManagerDashboard extends Page
         return Action::make('checkoutAction')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if(!$room) return;
-                
+                if (!$room)
+                    return;
+
                 // Delete physical QR file
                 if ($room->qr_path) {
                     Storage::disk('public')->delete($room->qr_path);
@@ -228,7 +233,7 @@ class RoomManagerDashboard extends Page
                     'qr_token' => null,
                     'qr_path' => null,
                 ]);
-                
+
                 Notification::make()->title('Checkout complete. Stay QR has been disabled.')->success()->send();
             });
     }
@@ -238,7 +243,8 @@ class RoomManagerDashboard extends Page
         return Action::make('markCleanAction')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if($room) $room->update(['status' => 'available']);
+                if ($room)
+                    $room->update(['status' => 'available']);
                 Notification::make()->title('Room available for next guest.')->success()->send();
             });
     }
@@ -295,7 +301,7 @@ class RoomManagerDashboard extends Page
                                     ->label('Live Design Preview')
                                     ->content(function (\Filament\Forms\Get $get) {
                                         $restaurant = auth()->user()->restaurant;
-                                        
+
                                         $bgType = $get('bg_type') ?? 'image';
                                         $bgImage = $get('bg_image');
                                         $bgColor = $get('bg_color') ?? '#E2F0CB';
@@ -308,12 +314,15 @@ class RoomManagerDashboard extends Page
 
                                         $bgStyle = '';
                                         if ($bgType === 'image') {
-                                            $url = asset('images/b.png'); 
+                                            $url = asset('images/b.png');
                                             if (!empty($bgImage)) {
                                                 $file = is_array($bgImage) ? reset($bgImage) : $bgImage;
                                                 if ($file instanceof TemporaryUploadedFile) {
-                                                    try { $url = $file->temporaryUrl(); } 
-                                                    catch (\Exception $e) { $url = 'data:' . $file->getClientMimeType() . ';base64,' . base64_encode(file_get_contents($file->getRealPath())); }
+                                                    try {
+                                                        $url = $file->temporaryUrl();
+                                                    } catch (\Exception $e) {
+                                                        $url = 'data:' . $file->getClientMimeType() . ';base64,' . base64_encode(file_get_contents($file->getRealPath()));
+                                                    }
                                                 } elseif (is_string($file)) {
                                                     $url = Storage::disk('public')->url($file);
                                                 }
@@ -358,9 +367,11 @@ class RoomManagerDashboard extends Page
                     ]),
             ])
             ->action(function (array $data) {
-                if (!$this->selectedRoomId) return;
+                if (!$this->selectedRoomId)
+                    return;
                 $room = Room::with('restaurant')->find($this->selectedRoomId);
-                if (!$room || !$room->qr_path) return;
+                if (!$room || !$room->qr_path)
+                    return;
 
                 $restaurant = $room->restaurant;
                 $bgType = $data['bg_type'] ?? 'image';
@@ -452,7 +463,8 @@ class RoomManagerDashboard extends Page
         $user = auth()->user();
         $restaurantId = $user->restaurant_id;
         $roomsQuery = Room::where('restaurant_id', $restaurantId);
-        if ($user->branch_id) $roomsQuery->where('branch_id', $user->branch_id);
+        if ($user->branch_id)
+            $roomsQuery->where('branch_id', $user->branch_id);
 
         $rooms = $roomsQuery->with('activeSession')->get()->map(function ($room) {
             if ($room->activeSession) {

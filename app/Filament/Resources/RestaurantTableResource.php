@@ -175,7 +175,6 @@ class RestaurantTableResource extends Resource
                     ->button()
                     ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager'])),
 
-                // 👇 UPDATED: Single Delete Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                 Tables\Actions\DeleteAction::make()
                     ->iconButton()
                     ->icon('heroicon-o-trash')
@@ -183,12 +182,10 @@ class RestaurantTableResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager']))
                     ->before(function ($record) {
-                        // 1. Delete physical QR from server
                         if ($record->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($record->qr_path)) {
                             \Illuminate\Support\Facades\Storage::disk('public')->delete($record->qr_path);
                         }
 
-                        // 2. Invalidate old QR code scans
                         $record->update([
                             'qr_token' => null,
                             'qr_path' => null,
@@ -198,7 +195,6 @@ class RestaurantTableResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    // 👇 UPDATED: Bulk Delete Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                     Tables\Actions\DeleteBulkAction::make()
                         ->visible(fn() => in_array(auth()->user()->role->name, ['restaurant_admin', 'branch_admin', 'manager']))
                         ->before(function (\Illuminate\Database\Eloquent\Collection $records) {
@@ -242,7 +238,6 @@ class RestaurantTableResource extends Resource
                     ->form(function () {
                         $restaurant = auth()->user()->restaurant;
                         $limit = $restaurant ? $restaurant->table_limits : 0;
-                        // Count only non-trashed active models to determine current usage
                         $currentCount = $restaurant ? \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count() : 0;
                         $remaining = max(0, $limit - $currentCount);
 
@@ -279,7 +274,6 @@ class RestaurantTableResource extends Resource
 
                         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
 
-                        // 👇 FIX: Start query WITH soft-deleted items to prevent naming collisions
                         $lastTableQuery = \App\Models\RestaurantTable::withTrashed()
                             ->where('restaurant_id', $restaurant->id);
 
@@ -289,15 +283,12 @@ class RestaurantTableResource extends Resource
                             $lastTableQuery->whereNull('branch_id');
                         }
 
-                        // Grab the last created table to figure out the highest number currently used
                         $lastTableRecord = $lastTableQuery->orderByDesc('id')->first();
 
                         $lastNumber = 0;
-                        // Extract the numeric part from the table name (e.g., "T-05" -> 5)
                         if ($lastTableRecord && preg_match('/(\d+)$/', $lastTableRecord->table_number, $matches)) {
                             $lastNumber = (int) $matches[1];
                         } else {
-                            // Fallback just in case
                             $lastNumber = $lastTableQuery->count();
                         }
 
@@ -306,7 +297,6 @@ class RestaurantTableResource extends Resource
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
                             $nextNumber = $lastNumber + $i;
 
-                            // Formats the number cleanly (e.g., 1 becomes T-01, 10 becomes T-10)
                             $formattedTableNumber = 'T-' . sprintf('%02d', $nextNumber);
 
                             $table = \App\Models\RestaurantTable::create([
@@ -386,7 +376,6 @@ class RestaurantTableResource extends Resource
                                                 ->content(function (\Filament\Forms\Get $get) {
                                                     $restaurant = auth()->user()->restaurant;
 
-                                                    // Get Values
                                                     $bgType = $get('bg_type') ?? 'image';
                                                     $bgImage = $get('bg_image');
                                                     $bgColor = $get('bg_color') ?? '#E2F0CB';
@@ -398,7 +387,6 @@ class RestaurantTableResource extends Resource
                                                     $accentColor = $get('accent_color') ?? '#E47A33';
                                                     $pillBgColor = $get('pill_bg_color') ?? '#B85C4A';
 
-                                                    // Background Style
                                                     $bgStyle = '';
                                                     if ($bgType === 'image') {
                                                         $url = asset('images/b.png');
@@ -426,32 +414,34 @@ class RestaurantTableResource extends Resource
                                                     $logoUrl = ($restaurant && $restaurant->logo_path) ? Storage::disk('public')->url($restaurant->logo_path) : null;
 
                                                     $logoHtml = $logoUrl ? "<img src='{$logoUrl}' style='max-width: 50px; max-height: 50px; object-fit: contain; margin-bottom: 5px;' />" : "";
-                                                    $addressHtml = $address ? "<div style='font-size: 9px; color: {$addressColor}; margin: 4px 10px; line-height: 1.2;'>" . nl2br(htmlspecialchars($address)) . "</div>" : "";
+                                                    $addressHtml = $address ? "<div style='font-size: 10px; color: {$addressColor}; margin: 4px 10px; line-height: 1.2;'>" . nl2br(htmlspecialchars($address)) . "</div>" : "";
 
                                                     return new HtmlString("
-                                                        <div style='width: 100%; max-width: 320px; height: 420px; border: 1px dashed #ccc; border-radius: 8px; padding: 20px; text-align: center; margin: 0 auto; {$bgStyle} box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);'>
-                                                            {$logoHtml}
-                                                            <div style='font-family: Times, serif; font-size: 18px; font-weight: bold; color: {$nameColor}; text-transform: uppercase; letter-spacing: 1px;'>{$restName}</div>
-                                                            {$addressHtml}
-                                                            
-                                                            <div style='border-top: 3px solid {$accentColor}; width: 35px; margin: 8px auto;'></div>
-                                                            <div style='font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 1px;'>EXQUISITE DINING EXPERIENCE</div>
-                                                            
-                                                            <div style='display: flex; justify-content: center; align-items: center; margin-top: 15px;'>
-                                                                <div style='border-top: 3px solid {$accentColor}; border-left: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(-55px, -55px);'></div>
-                                                                <div style='border-bottom: 3px solid {$accentColor}; border-right: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(55px, 55px);'></div>
+                                                        <div style='width: 100%; max-width: 300px; height: 460px; border: 1px dashed #999; padding: 8px; margin: 0 auto; box-sizing: border-box;'>
+                                                            <div style='width: 100%; height: 100%; border-radius: 12px; padding: 8px; text-align: center; box-sizing: border-box; {$bgStyle} box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); overflow: hidden;'>
+                                                                {$logoHtml}
+                                                                <div style='font-family: Times, serif; font-size: 20px; font-weight: bold; color: {$nameColor}; text-transform: uppercase; letter-spacing: 1px;'>{$restName}</div>
+                                                                {$addressHtml}
                                                                 
-                                                                <div style='background: white; padding: 6px; border-radius: 8px; border: 2px solid #8B5CF6; z-index: 10;'>
-                                                                    <img src='https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=LivePreview' style='width: 100px; height: 100px; display: block;' />
+                                                                <div style='border-top: 3px solid {$accentColor}; width: 40px; margin: 6px auto;'></div>
+                                                                <div style='font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 1px;'>EXQUISITE DINING EXPERIENCE</div>
+                                                                
+                                                                <div style='display: flex; justify-content: center; align-items: center; margin-top: 10px; margin-bottom: 8px;'>
+                                                                    <div style='border-top: 4px solid {$accentColor}; border-left: 4px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(-65px, -65px);'></div>
+                                                                    <div style='border-bottom: 4px solid {$accentColor}; border-right: 4px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(65px, 65px);'></div>
+                                                                    
+                                                                    <div style='background: white; padding: 6px; border-radius: 10px; border: 2px solid #8B5CF6; z-index: 10;'>
+                                                                        <img src='https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=LivePreview' style='width: 120px; height: 120px; display: block;' />
+                                                                    </div>
                                                                 </div>
+                                                                
+                                                                <div style='margin-top: 8px;'>
+                                                                    <span style='background-color: {$pillBgColor}; color: white; padding: 6px 20px; border-radius: 16px; font-size: 10px; font-weight: bold; letter-spacing: 1px;'>SCAN TO MENU</span>
+                                                                </div>
+                                                                
+                                                                <div style='margin-top: 8px; font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 0.5px;'>YOUR LOCATION</div>
+                                                                <div style='font-family: Times, serif; font-size: 28px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Table T-01</div>
                                                             </div>
-                                                            
-                                                            <div style='margin-top: 15px;'>
-                                                                <span style='background-color: {$pillBgColor}; color: white; padding: 6px 20px; border-radius: 15px; font-size: 10px; font-weight: bold; letter-spacing: 1px;'>SCAN TO MENU</span>
-                                                            </div>
-                                                            
-                                                            <div style='margin-top: 12px; font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 0.5px;'>YOUR LOCATION</div>
-                                                            <div style='font-family: Times, serif; font-size: 26px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Table T-01</div>
                                                         </div>
                                                     ");
                                                 }),
@@ -475,7 +465,6 @@ class RestaurantTableResource extends Resource
                         }
                         $tables = $query->get();
 
-                        // Parse Data from Modal
                         $bgType = $data['bg_type'] ?? 'image';
                         $bgColor = $data['bg_color'] ?? '#E2F0CB';
                         $bgImage = $data['bg_image'] ?? null;
@@ -487,7 +476,6 @@ class RestaurantTableResource extends Resource
                         $accentColor = $data['accent_color'] ?? '#E47A33';
                         $pillBgColor = $data['pill_bg_color'] ?? '#B85C4A';
 
-                        // Process Background Image into Base64 for the PDF render
                         $cardBackgroundStyle = '';
                         if ($bgType === 'image') {
                             if (!empty($bgImage)) {
@@ -527,7 +515,6 @@ class RestaurantTableResource extends Resource
                             $cardBackgroundStyle = 'background-color: ' . $bgColor . ';';
                         }
 
-                        // Process Logo
                         $restaurantName = strtoupper($restaurant->name ?? 'RESTAURANT');
                         $address = $restaurant->address ?? '';
                         $logoBase64 = '';
@@ -541,30 +528,30 @@ class RestaurantTableResource extends Resource
                             }
                         }
 
-                        $logoHtml = $logoBase64 ? '<img src="' . $logoBase64 . '" style="max-width: 55px; max-height: 55px; object-fit: contain; margin-bottom: 5px;" />' : '';
-                        $addressHtml = $address ? '<div style="font-size: 10px; color: ' . $addressColor . '; margin: 4px 15px; line-height: 1.2;">' . nl2br(htmlspecialchars($address)) . '</div>' : '';
+                        $logoHtml = $logoBase64 ? '<img src="' . $logoBase64 . '" style="max-width: 50px; max-height: 50px; object-fit: contain; margin-bottom: 5px;" />' : '';
+                        $addressHtml = $address ? '<div style="font-size: 11px; color: ' . $addressColor . '; margin: 4px 15px; line-height: 1.2;">' . nl2br(htmlspecialchars($address)) . '</div>' : '';
 
-                        // CSS and Layout
+                        // CSS aur Layout - Height guaranteed small enough ki 1 page pe 4 fit hon!
                         $html = '<!DOCTYPE html><html><head><style>
-                            @page { margin: 15px; size: A4 portrait; }
+                            @page { margin: 10mm; size: A4 portrait; }
                             body { margin: 0; padding: 0; background-color: #ffffff; font-family: "Helvetica", "Arial", sans-serif; }
-                            .page-table { width: 100%; border-collapse: separate; border-spacing: 15px; table-layout: fixed; page-break-after: always; }
+                            .page-table { width: 100%; border-collapse: collapse; table-layout: fixed; page-break-after: always; margin: 0; padding: 0; }
                             .page-table:last-child { page-break-after: auto; }
-                            .quadrant { width: 50%; height: 460px; padding: 0; vertical-align: top; }
-                            .card { border: 1px dashed #cbd5e1; border-radius: 8px; height: 460px; box-sizing: border-box; text-align: center; ' . $cardBackgroundStyle . ' }
-                            .content-wrapper { background-color: transparent; width: 100%; height: 100%; padding-top: 15px; box-sizing: border-box; }
-                            .title { font-family: "Times", serif; font-size: 24px; font-weight: bold; color: ' . $nameColor . '; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+                            .quadrant { width: 50%; height: 130mm; padding: 4mm; vertical-align: top; border: 1px dashed #999; box-sizing: border-box; }
+                            .card { border-radius: 12px; width: 100%; height: 122mm; box-sizing: border-box; text-align: center; ' . $cardBackgroundStyle . ' overflow: hidden; position: relative; }
+                            .content-wrapper { background-color: transparent; width: 100%; height: 100%; padding-top: 8px; box-sizing: border-box; }
+                            .title { font-family: "Times", serif; font-size: 20px; font-weight: bold; color: ' . $nameColor . '; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
                             .orange-line { border-top: 3px solid ' . $accentColor . '; width: 40px; margin: 6px auto; } 
-                            .subtitle { font-size: 9px; color: ' . $subtitleColor . '; font-weight: bold; letter-spacing: 1px; margin-bottom: 8px; }
-                            .qr-bracket-table { margin: 0 auto 10px auto; border-collapse: collapse; }
+                            .subtitle { font-size: 9px; color: ' . $subtitleColor . '; font-weight: bold; letter-spacing: 1.5px; margin-bottom: 8px; }
+                            .qr-bracket-table { margin: 0 auto 8px auto; border-collapse: collapse; }
                             .qr-bracket-table td { padding: 0; }
-                            .br-tl { border-top: 3px solid ' . $accentColor . '; border-left: 3px solid ' . $accentColor . '; width: 25px; height: 25px; }
-                            .br-br { border-bottom: 3px solid ' . $accentColor . '; border-right: 3px solid ' . $accentColor . '; width: 25px; height: 25px; }
-                            .qr-img { width: 125px; height: 125px; border: 2px solid #8B5CF6; border-radius: 8px; padding: 4px; background-color: #ffffff; display: block; margin: 6px; }
-                            .btn-wrapper { margin-bottom: 10px; } 
-                            .scan-pill { background-color: ' . $pillBgColor . '; color: #ffffff; padding: 6px 25px; border-radius: 15px; font-size: 10px; font-weight: bold; display: inline-block; letter-spacing: 1px;}
+                            .br-tl { border-top: 4px solid ' . $accentColor . '; border-left: 4px solid ' . $accentColor . '; width: 20px; height: 20px; }
+                            .br-br { border-bottom: 4px solid ' . $accentColor . '; border-right: 4px solid ' . $accentColor . '; width: 20px; height: 20px; }
+                            .qr-img { width: 130px; height: 130px; border: 2px solid #8B5CF6; border-radius: 10px; padding: 6px; background-color: #ffffff; display: block; margin: 5px; }
+                            .btn-wrapper { margin-bottom: 8px; } 
+                            .scan-pill { background-color: ' . $pillBgColor . '; color: #ffffff; padding: 6px 20px; border-radius: 16px; font-size: 10px; font-weight: bold; display: inline-block; letter-spacing: 1px;}
                             .loc-label { font-size: 9px; color: ' . $subtitleColor . '; font-weight: bold; margin-bottom: 2px; letter-spacing: 0.5px; } 
-                            .table-number { font-family: "Times", serif; font-size: 32px; font-style: italic; font-weight: bold; color: ' . $tableColor . '; margin: 0; }
+                            .table-number { font-family: "Times", serif; font-size: 28px; font-style: italic; font-weight: bold; color: ' . $tableColor . '; margin: 0; }
                         </style></head><body>';
 
                         $pages = $tables->chunk(4);
@@ -596,13 +583,16 @@ class RestaurantTableResource extends Resource
                                 }
 
                                 if ($rowItems->count() == 1) {
-                                    $html .= '<td class="quadrant"></td>';
+                                    $html .= '<td class="quadrant"><div class="card" style="background: transparent; border: none; box-shadow: none;">&nbsp;</div></td>';
                                 }
                                 $html .= '</tr>';
                             }
 
                             if ($rows->count() == 1) {
-                                $html .= '<tr><td class="quadrant"></td><td class="quadrant"></td></tr>';
+                                $html .= '<tr>
+                                    <td class="quadrant"><div class="card" style="background: transparent; border: none; box-shadow: none;">&nbsp;</div></td>
+                                    <td class="quadrant"><div class="card" style="background: transparent; border: none; box-shadow: none;">&nbsp;</div></td>
+                                </tr>';
                             }
                             $html .= '</table>';
                         }
@@ -625,7 +615,6 @@ class RestaurantTableResource extends Resource
                         }
                     }),
 
-                // 👇 UPDATED: Delete All Action (Soft Delete + QR Removal + Token Invalidaton) 👇
                 Tables\Actions\Action::make('delete_all_qr')
                     ->label('Delete All QRs')
                     ->icon('heroicon-o-trash')
@@ -649,19 +638,16 @@ class RestaurantTableResource extends Resource
 
                         $tables = $query->get();
                         foreach ($tables as $table) {
-                            // 1. Delete physical QR from server
                             if ($table->qr_path && \Illuminate\Support\Facades\Storage::disk('public')->exists($table->qr_path)) {
                                 \Illuminate\Support\Facades\Storage::disk('public')->delete($table->qr_path);
                             }
 
-                            // 2. Invalidate token before soft deleting
                             $table->update([
                                 'qr_token' => null,
                                 'qr_path' => null,
                                 'is_active' => false,
                             ]);
 
-                            // 3. Perform Soft Delete
                             $table->delete();
                         }
 
