@@ -631,6 +631,8 @@ class ManagerDashboard extends Page
     {
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
+        $upiId = $viewData['upiId'];
+        $restaurantName = $viewData['restaurantName'];
 
         if (!$pendingPayment || !$this->selectedSessionId) {
             Notification::make()->title('No active bill found.')->danger()->send();
@@ -672,6 +674,19 @@ class ManagerDashboard extends Page
             }
         }
 
+        // 👇 NEW: Generate UPI QR Code SVG if payment method is not purely Cash
+        $qrHtml = '';
+        if ($pendingPayment->payment_method !== 'cash' && !empty($upiId)) {
+            $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($restaurantName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
+            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size(120)->margin(0)->generate($upiUrl);
+
+            $qrHtml = "
+            <div style='text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #000;'>
+                <div style='font-size: 11px; font-weight: bold; margin-bottom: 8px;'>SCAN TO PAY ₹" . number_format($pendingPayment->amount, 0) . "</div>
+                <div style='display: block; margin: 0 auto;'>{$qrSvg}</div>
+            </div>";
+        }
+
         $html = "
         <html><head><style>@page { margin: 0; size: 80mm auto; } body { margin: 5px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; } table { width: 100%; border-collapse: collapse; }</style></head>
         <body>
@@ -704,10 +719,15 @@ class ManagerDashboard extends Page
                 <div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>
                 <div style='font-size: 18px; margin-top: 5px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>
             </div>
+            
+            {$qrHtml} <!-- 👇 INJECTED QR CODE HERE -->
+
             <div style='text-align:center; margin-top:20px; font-size:12px; font-weight:bold;'>*** THANK YOU FOR DINING WITH US! ***</div>
         </body></html>";
 
+        // JSON encode handles escaping of raw SVG tags perfectly for JS interpolation.
         $escapedHtml = json_encode($html);
+        
         $this->js("
             const printWindow = window.open('', '_blank', 'width=400,height=600');
             printWindow.document.write({$escapedHtml});
@@ -1138,9 +1158,9 @@ class ManagerDashboard extends Page
 
         $data['upiId'] = $branchId ? (\App\Models\Branch::find($branchId)->upi_id ?? '') : ($user->restaurant->upi_id ?? '');
 
-        if (empty($data['upiId'])) {
-            $data['upiId'] = 'merchant@upi';
-        }
+        // if (empty($data['upiId'])) {
+        //     $data['upiId'] = 'merchant@upi';
+        // }
 
         $data['restaurantName'] = $user->restaurant->name ?? 'Restaurant';
 
