@@ -114,6 +114,119 @@ class ManageMenus extends ManageRecords
         ');
 
         return [
+            // 0. MANAGE CATEGORIES — same Repeater/modal style as "Add Categories", no separate blade/widget needed.
+            // Pre-fills with existing categories; toggle = active/inactive, trash icon = delete, edit name inline.
+            Actions\Action::make('manageCategories')
+                ->label('Manage Categories')
+                ->modalHeading('Manage Categories')
+                ->modalDescription($fixedModalCss)
+                ->extraAttributes(['class' => 'hidden-manage-category hidden'])
+                ->fillForm(function () {
+                    $user = auth()->user();
+                    // branch_id null hone par kabhi bhi branch_category_status table use nahi karna (warna insert fail hoga)
+                    $isBranchOverride = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
+
+                    $query = Category::withoutGlobalScopes()
+                        ->where('restaurant_id', $user->restaurant_id);
+
+                    if ($isBranchOverride) {
+                        $query->whereNull('branch_id');
+                    }
+
+                    $categories = $query->orderBy('name')->get();
+
+                    return [
+                        'categories' => $categories->map(function ($cat) use ($user, $isBranchOverride) {
+                            $isActive = (bool) $cat->is_active;
+
+                            if ($isBranchOverride) {
+                                $status = DB::table('branch_category_status')
+                                    ->where('category_id', $cat->id)
+                                    ->where('branch_id', $user->branch_id)
+                                    ->first();
+                                $isActive = $status ? (bool) $status->is_active : (bool) $cat->is_active;
+                            }
+
+                            return [
+                                'id' => $cat->id,
+                                'name' => $cat->name,
+                                'is_active' => $isActive,
+                            ];
+                        })->toArray(),
+                    ];
+                })
+                ->form([
+                    Forms\Components\Repeater::make('categories')
+                        ->label('Your Categories')
+                        ->addActionLabel('+ Add New Category')
+                        ->schema([
+                            Forms\Components\Hidden::make('id'),
+
+                            Forms\Components\TextInput::make('name')
+                                ->label('Category Name')
+                                ->required()
+                                ->maxLength(100)
+                                ->disabled(fn() => (auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null)
+                                ->dehydrated(true), // disabled ho tab bhi value form data mein bheji jaaye
+
+                            Forms\Components\Toggle::make('is_active')
+                                ->label('Active')
+                                ->default(true),
+                        ])
+                        ->columns(2)
+                        ->itemLabel(fn(array $state): ?string => $state['name'] ?? null)
+                        ->deletable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
+                        ->addable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
+                        ->reorderable(false),
+                ])
+                ->action(function (array $data) {
+                    $user = auth()->user();
+                    // branch_id null hone par kabhi bhi branch_category_status table use nahi karna (warna insert fail hoga)
+                    $isBranchOverride = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
+                    $submittedIds = [];
+
+                    foreach ($data['categories'] as $catData) {
+                        if (!empty($catData['id'])) {
+                            $submittedIds[] = $catData['id'];
+                            $category = Category::withoutGlobalScopes()->find($catData['id']);
+                            if (!$category) continue;
+
+                            if ($isBranchOverride) {
+                                DB::table('branch_category_status')->updateOrInsert(
+                                    ['category_id' => $category->id, 'branch_id' => $user->branch_id],
+                                    ['is_active' => $catData['is_active'], 'updated_at' => now()]
+                                );
+                            } else {
+                                $category->update([
+                                    'name' => $catData['name'] ?? $category->name,
+                                    'is_active' => $catData['is_active'] ?? $category->is_active,
+                                ]);
+                            }
+                        } elseif (!$isBranchOverride) {
+                            // New category added via repeater
+                            Category::create([
+                                'restaurant_id' => $user->restaurant_id,
+                                'branch_id' => $user->branch_id,
+                                'name' => $catData['name'] ?? '',
+                                'is_active' => $catData['is_active'] ?? true,
+                            ]);
+                        }
+                    }
+
+                    // Delete categories removed from the repeater (owner only, branch overrides never delete)
+                    if (!$isBranchOverride) {
+                        $existingIds = Category::withoutGlobalScopes()
+                            ->where('restaurant_id', $user->restaurant_id)
+                            ->pluck('id')->toArray();
+                        $toDelete = array_diff($existingIds, $submittedIds);
+                        if (!empty($toDelete)) {
+                            Category::whereIn('id', $toDelete)->delete();
+                        }
+                    }
+
+                    Notification::make()->title('Categories updated successfully')->success()->send();
+                }),
+
             // 1. BULK ADD CATEGORY ACTION
             Actions\Action::make('addCategory')
                 ->label('Add Categories')

@@ -118,7 +118,12 @@ class MenuDashboardStats extends BaseWidget
         $alpineLogic = 'x-data="{ loading: false, init() { const observer = new MutationObserver(() => { if (document.querySelector(\'.fi-modal\')) { this.loading = false; } }); observer.observe(document.body, { childList: true, subtree: true }); } }"';
 
         $addCategoryBtn = "<button type='button' $alpineLogic x-on:click=\"loading = true; document.querySelector('.hidden-add-category').click()\" :disabled='loading' class='sa-action-btn btn-orange'>$loaderIcon <span x-text=\"loading ? 'Loading...' : '+ Add Category'\"></span></button>";
-        $manageCatBtn = "<button type='button' $alpineLogic x-on:click=\"loading = true; document.querySelector('.hidden-manage-category').click()\" :disabled='loading' class='sa-action-btn btn-outline' style='margin-left: 6px;'>$loaderIcon <span x-text=\"loading ? '...' : 'Manage Categories'\"></span></button>";
+
+        // ✅ Manage Categories ab ek real Filament modal open karta hai (glass effect Add Category jaisa),
+        // kyunki ManageMenus.php mein 'manageCategories' Action registered hai jiska
+        // extraAttributes class 'hidden-manage-category' hai.
+        $manageCatBtn = "<button type='button' $alpineLogic x-on:click=\"loading = true; document.querySelector('.hidden-manage-category').click()\" :disabled='loading' class='sa-action-btn btn-outline' style='margin-left: 6px;'>$loaderIcon <span x-text=\"loading ? 'Loading...' : 'Manage Categories'\"></span></button>";
+
         $addItemBtn = "<button type='button' $alpineLogic x-on:click=\"loading = true; document.querySelector('.hidden-add-item').click()\" :disabled='loading' class='sa-action-btn btn-blue'>$loaderIcon <span x-text=\"loading ? 'Loading...' : '+ Add Item'\"></span></button>";
 
         $htmlCategories = "
