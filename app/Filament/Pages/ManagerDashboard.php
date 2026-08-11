@@ -52,6 +52,9 @@ class ManagerDashboard extends Page
     public $taxPercentage = 0;
     public $extraCharges = 0;
 
+    // 🌟 ALL-IN-ONE Feature Property 🌟
+    public $activeAlerts = []; 
+
     public function mount(): void
     {
         $this->checkLowStockAlerts();
@@ -106,13 +109,48 @@ class ManagerDashboard extends Page
             "echo-private:restaurant.{$restaurantId},.OrderCancelled" => '$refresh',
             "echo-private:restaurant.{$restaurantId},.GuestJoinRequested" => '$refresh',
             "echo-private:restaurant.{$restaurantId}.alerts,.TableStatusUpdated" => '$refresh',
-            "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => 'notifyWaiterCalled',
+            "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => 'notifyWaiterCalled', 
             "echo-private:restaurant.{$restaurantId}.alerts,.BillRequested" => 'notifyBillRequested',
             "echo-private:restaurant.{$restaurantId}.alerts,.PaymentMethodSelected" => 'notifyPaymentMethod',
             "echo-private:restaurant.{$restaurantId},.NewParcelOrder" => 'handleNewOrder',
             "echo-private:restaurant.{$restaurantId},.NewOrderPlaced" => 'handleNewOrder',
         ];
     }
+
+    // 🌟 ALL-IN-ONE Feature Functions 🌟
+    public function notifyWaiterCalled($event): void
+    {
+        $num = $event['table_number'] ?? '?';
+        $customer = $event['customer_name'] ?? 'A customer';
+        
+        $this->activeAlerts[] = [
+            'id' => uniqid(),
+            'table_number' => $num,
+            'customer_name' => $customer,
+            'time' => now()->format('h:i A')
+        ];
+
+        Notification::make()->title("Assistance Requested: {$num}")->body("{$customer} requires assistance.")->warning()->send();
+        $this->dispatch('trigger-browser-notification', title: "🔔 Waiter Called!", body: "Table {$num} needs assistance.");
+        $this->dispatch('$refresh');
+    }
+
+    public function resolveAlert($alertId)
+    {
+        $this->activeAlerts = array_filter($this->activeAlerts, fn($alert) => $alert['id'] !== $alertId);
+    }
+
+    public function changeTableStatus($tableId, $status)
+    {
+        $table = RestaurantTable::find($tableId);
+        if ($table) {
+            $table->update(['status' => $status]);
+            event(new \App\Events\TableStatusUpdated($table->id, $status, $table->restaurant_id));
+            Notification::make()->title("Table marked as " . ucfirst($status))->success()->send();
+            $this->closeReceiptModal();
+        }
+    }
+    // 🌟 END ALL-IN-ONE Feature Functions 🌟
 
     public function handleNewOrder($event)
     {
@@ -123,19 +161,20 @@ class ManagerDashboard extends Page
             return;
 
         $serviceType = $order['service_type'] ?? 'dine_in';
+        $orderId = $order['id'] ?? '?';
 
         if ($serviceType === 'parcel') {
             $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
-            $this->dispatch('trigger-browser-notification', title: "🛍️ Action Required: New Parcel Order", body: "A new order was just placed at {$counterName}. Please confirm it.");
-            Notification::make()->title("New Parcel Order: {$counterName}")->body("Action required.")->warning()->persistent()->send();
+            $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$orderId}", body: "Placed at {$counterName}. Please confirm it.");
+            Notification::make()->title("New Parcel Order #{$orderId}")->body("Location: {$counterName}")->warning()->send();
         } elseif ($serviceType === 'room_service') {
             $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
-            $this->dispatch('trigger-browser-notification', title: "🚪 Action Required: New Room Order", body: "Room {$roomNum} just placed a new order. Please confirm it.");
-            Notification::make()->title("New Room Order: {$roomNum}")->body("Action required.")->warning()->persistent()->send();
+            $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$orderId}", body: "Room {$roomNum} placed a new order. Please confirm it.");
+            Notification::make()->title("New Room Order #{$orderId}")->body("Room: {$roomNum}")->warning()->send();
         } else {
             $tableNum = $order['table_number'] ?? $order['restaurant_table_id'] ?? 'Unknown';
-            $this->dispatch('trigger-browser-notification', title: "🛎️ Action Required: New Table Order", body: "Table {$tableNum} just placed a new order. Please confirm it.");
-            Notification::make()->title("New Table Order: {$tableNum}")->body("Action required.")->warning()->persistent()->send();
+            $this->dispatch('trigger-browser-notification', title: "🛎️ New Table Order #{$orderId}", body: "Table {$tableNum} placed a new order. Please confirm it.");
+            Notification::make()->title("New Table Order #{$orderId}")->body("Table: {$tableNum}")->warning()->send();
         }
     }
 
@@ -149,14 +188,6 @@ class ManagerDashboard extends Page
         if ($status === 'placed') {
             $this->handleNewOrder($event);
         }
-    }
-
-    public function notifyWaiterCalled($event): void
-    {
-        $num = $event['table_number'] ?? '?';
-        $customer = $event['customer_name'] ?? 'A customer';
-        Notification::make()->title("Assistance Requested: {$num}")->body("{$customer} requires assistance.")->warning()->send();
-        $this->dispatch('$refresh');
     }
 
     public function notifyBillRequested($event): void
@@ -674,7 +705,6 @@ class ManagerDashboard extends Page
             }
         }
 
-        // 👇 NEW: Generate UPI QR Code SVG if payment method is not purely Cash
         $qrHtml = '';
         if ($pendingPayment->payment_method !== 'cash' && !empty($upiId)) {
             $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($restaurantName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
@@ -725,7 +755,6 @@ class ManagerDashboard extends Page
             <div style='text-align:center; margin-top:20px; font-size:12px; font-weight:bold;'>*** THANK YOU FOR DINING WITH US! ***</div>
         </body></html>";
 
-        // JSON encode handles escaping of raw SVG tags perfectly for JS interpolation.
         $escapedHtml = json_encode($html);
         
         $this->js("
@@ -1140,8 +1169,31 @@ class ManagerDashboard extends Page
 
             $order->update(['status' => $wasPartial ? 'partial_accepted' : 'accepted']);
             KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => 0]);
+            
+            // 🌟 NAYA: ACCEPT NOTIFICATION 🌟
+            Notification::make()
+                ->title($wasPartial ? "Order #{$orderId} Partially Accepted ⚠️" : "Order #{$orderId} Accepted ✅")
+                ->body($wasPartial ? 'Some items were out of stock.' : 'Order ready for preparation.')
+                ->success()
+                ->send();
+
         } else {
+            // ALL-IN-ONE Feature Fix: Keep KitchenQueue in sync for direct status updates
             $order->update(['status' => $status]);
+            if (in_array($status, ['preparing', 'ready', 'served'])) {
+                KitchenQueue::where('order_id', $order->id)->update(['current_status' => $status]);
+            }
+
+            // 🌟 NAYA: LIVE STATUS NOTIFICATIONS 🌟
+            if ($status === 'preparing') {
+                Notification::make()->title("Order #{$orderId} is Preparing 🍳")->success()->send();
+            } elseif ($status === 'ready') {
+                Notification::make()->title("Order #{$orderId} is Ready 🛎️")->success()->send();
+            } elseif ($status === 'served') {
+                Notification::make()->title("Order #{$orderId} Delivered ✔️")->success()->send();
+            } elseif ($status === 'rejected') {
+                Notification::make()->title("Order #{$orderId} Rejected ❌")->danger()->send();
+            }
         }
 
         OrderStatusLog::create(['order_id' => $order->id, 'from_status' => $oldStatus, 'to_status' => $order->fresh()->status, 'changed_by' => $user->id]);
@@ -1158,22 +1210,25 @@ class ManagerDashboard extends Page
 
         $data['upiId'] = $branchId ? (\App\Models\Branch::find($branchId)->upi_id ?? '') : ($user->restaurant->upi_id ?? '');
 
-        // if (empty($data['upiId'])) {
-        //     $data['upiId'] = 'merchant@upi';
-        // }
+        // 🌟 ALL-IN-ONE Check 🌟
+        $isAllInOne = $user->restaurant->is_all_in_one_cafe ?? false;
+        $data['isAllInOne'] = $isAllInOne;
 
         $data['restaurantName'] = $user->restaurant->name ?? 'Restaurant';
 
+        // 🌟 NAYA: Agar All In One hai, toh sari statuses ('placed' se leke 'ready' tak) le aao single strip ke liye
+        $activeStatuses = $isAllInOne ? ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'] : ['placed'];
+
         $incomingTableOrders = Order::where('restaurant_id', $restaurantId)->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))
-            ->where('status', 'placed')->where(fn($q) => $q->where('service_type', 'dine_in')->orWhereNull('service_type'))
+            ->whereIn('status', $activeStatuses)->where(fn($q) => $q->where('service_type', 'dine_in')->orWhereNull('service_type'))
             ->with(['items.menuItem.category', 'restaurantTable'])->orderBy('created_at', 'asc')->get();
 
         $incomingParcelOrders = Order::where('restaurant_id', $restaurantId)->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))
-            ->where('service_type', 'parcel')->where('status', 'placed')
+            ->where('service_type', 'parcel')->whereIn('status', $activeStatuses)
             ->with(['items.menuItem', 'parcelQrSession.parcelQrCode'])->orderBy('created_at', 'asc')->get();
 
         $incomingRoomOrders = Order::where('restaurant_id', $restaurantId)->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))
-            ->where('status', 'placed')->where('service_type', 'room_service')
+            ->where('service_type', 'room_service')->whereIn('status', $activeStatuses)
             ->with(['items.menuItem.category', 'roomSession.room'])->orderBy('created_at', 'asc')->get();
 
         $data['incomingTableOrders'] = $incomingTableOrders;

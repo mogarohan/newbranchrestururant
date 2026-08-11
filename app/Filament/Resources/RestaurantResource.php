@@ -154,8 +154,15 @@ class RestaurantResource extends Resource
                         ->label('Enable Attendance & Payroll')
                         ->helperText('Allow this restaurant to manage staff attendance, shifts, and auto-payroll.')
                         ->default(false),
-                ])
+
+                    // 🌟 NAYA TOGGLE ALL-IN-ONE CAFE KE LIYE 🌟
+                    Forms\Components\Toggle::make('is_all_in_one_cafe')
+                        ->label('Enable All-In-One Dashboard (QSR)')
+                        ->helperText('For small cafes: Manager screen handles Kitchen (Chef) & Serving (Waiter) directly.')
+                        ->default(false),
+                    ])
                 ->columns(2),
+
 
             Forms\Components\Section::make('Create Restaurant Admin')
                 ->description('These credentials will be used by the restaurant admin to log in.')
@@ -302,6 +309,13 @@ class RestaurantResource extends Resource
                 // 🌟 NAYA: Super Admin list mein dekh sakega kisko permission mili hai 🌟
                 Tables\Columns\IconColumn::make('has_attendance')
                     ->label('ATTENDANCE')
+                    ->boolean()
+                    ->sortable()
+                    ->alignCenter(),
+                
+                // Table ke columns array me `has_attendance` ke theek baad ye add karo:
+                Tables\Columns\IconColumn::make('is_all_in_one_cafe')
+                    ->label('ALL-IN-ONE')
                     ->boolean()
                     ->sortable()
                     ->alignCenter(),

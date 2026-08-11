@@ -133,7 +133,7 @@ class ManageMenus extends ManageRecords
                         $query->whereNull('branch_id');
                     }
 
-                    $categories = $query->orderBy('name')->get();
+                    $categories = $query->orderBy('sort_order')->orderBy('name')->get();
 
                     return [
                         'categories' => $categories->map(function ($cat) use ($user, $isBranchOverride) {
@@ -177,7 +177,7 @@ class ManageMenus extends ManageRecords
                         ->itemLabel(fn(array $state): ?string => $state['name'] ?? null)
                         ->deletable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
                         ->addable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
-                        ->reorderable(false),
+                        ->reorderable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null)),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
@@ -185,7 +185,7 @@ class ManageMenus extends ManageRecords
                     $isBranchOverride = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
                     $submittedIds = [];
 
-                    foreach ($data['categories'] as $catData) {
+                    foreach ($data['categories'] as $index => $catData) {
                         if (!empty($catData['id'])) {
                             $submittedIds[] = $catData['id'];
                             $category = Category::withoutGlobalScopes()->find($catData['id']);
@@ -200,6 +200,7 @@ class ManageMenus extends ManageRecords
                                 $category->update([
                                     'name' => $catData['name'] ?? $category->name,
                                     'is_active' => $catData['is_active'] ?? $category->is_active,
+                                    'sort_order' => $index, // ✅ drag-drop se jo naya position bana wahi save
                                 ]);
                             }
                         } elseif (!$isBranchOverride) {
@@ -209,6 +210,7 @@ class ManageMenus extends ManageRecords
                                 'branch_id' => $user->branch_id,
                                 'name' => $catData['name'] ?? '',
                                 'is_active' => $catData['is_active'] ?? true,
+                                'sort_order' => $index, // ✅ naya category bhi apni position pe save hoga
                             ]);
                         }
                     }
@@ -289,7 +291,9 @@ class ManageMenus extends ManageRecords
                                     if ($user->branch_id) {
                                         $q->orWhere('branch_id', $user->branch_id);
                                     }
-                                });
+                                })
+                                ->orderBy('sort_order')
+                                ->orderBy('name');
                             return $query->pluck('name', 'id');
                         })
                         ->searchable()

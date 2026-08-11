@@ -240,6 +240,8 @@ class MenuResource extends Resource
                                 $q->whereNull('branch_id');
                                 if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
                             })
+                            ->orderBy('sort_order')
+                            ->orderBy('name')
                             ->pluck('name', 'id')->toArray();
                     })->searchable(),
                 
@@ -327,7 +329,10 @@ class MenuResource extends Resource
                                     ->where(function($q) use ($user) {
                                         $q->whereNull('branch_id');
                                         if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
-                                    })->pluck('name', 'id');
+                                    })
+                                    ->orderBy('sort_order')
+                                    ->orderBy('name')
+                                    ->pluck('name', 'id');
                             }),
                         
                         Forms\Components\TextInput::make('name')

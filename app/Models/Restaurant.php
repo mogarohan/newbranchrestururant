@@ -31,6 +31,7 @@ class Restaurant extends Model
         'rooms_limit',
         'has_inventory',
         'has_detailed_inventory',
+        'is_all_in_one_cafe',
     ];
 
     /**

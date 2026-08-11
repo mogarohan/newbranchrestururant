@@ -275,6 +275,24 @@
                 background: rgba(0, 0, 0, 0.2);
                 border-radius: 10px;
             }
+
+            /* 🌟 ANIMATIONS FOR ALL-IN-ONE 🌟 */
+            @keyframes prepPulseBorder {
+                0% { box-shadow: 0 0 0 0 rgba(254, 154, 84, 0.4); }
+                70% { box-shadow: 0 0 0 6px rgba(254, 154, 84, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(254, 154, 84, 0); }
+            }
+            .animate-pulse-border {
+                animation: prepPulseBorder 1.5s infinite;
+                border-color: var(--ann-orange) !important;
+            }
+            .animate-spin {
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                from { transform: rotate(0deg); }
+                to { transform: rotate(360deg); }
+            }
         </style>
 
         <div class="custom-page-bg"></div>
@@ -283,8 +301,7 @@
             {{-- TOP TOGGLE MENU --}}
             @if($hasRoomsFacility)
                 <div style="display: flex; justify-content: center; margin-bottom: 1.5rem;">
-                    <div
-                        style="background: #ffffff; border-radius: 50px; padding: 4px; display: flex; gap: 8px; border: 1px solid var(--ann-border); box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                    <div style="background: #ffffff; border-radius: 50px; padding: 4px; display: flex; gap: 8px; border: 1px solid var(--ann-border); box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                         <button wire:click="switchTab('tables')"
                             style="padding: 8px 24px; border-radius: 50px; font-weight: bold; font-size: 14px; border:none; cursor: pointer; {{ $currentTab == 'tables' ? 'background: var(--ann-dark-blue); color: white;' : 'background: transparent; color: var(--ann-text-secondary);' }}">Tables
                             & Parcels</button>
@@ -295,42 +312,103 @@
                 </div>
             @endif
 
-            {{-- INCOMING TABLE ORDERS STRIP --}}
+            {{-- 🌟 ALL-IN-ONE CAFE ALERTS 🌟 --}}
+            @if(($isAllInOne ?? false) && count($activeAlerts) > 0)
+                <div class="urgent-strip" style="border-color: var(--ann-red); background: var(--ann-red-light); margin-bottom: 1.5rem;">
+                    <h2 style="color: var(--ann-red); font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase;">
+                        <x-heroicon-s-bell-alert style="width: 20px; height: 20px;" class="animate-bounce" /> Customer Assistance Required ({{ count($activeAlerts) }})
+                    </h2>
+                    <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 8px;" class="pos-scroll">
+                        @foreach($activeAlerts as $alert)
+                        <div class="urgent-card" style="min-width: 280px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;">
+                            <div>
+                                <span style="font-size: 10px; font-weight: bold; background: var(--ann-red); color: white; padding: 2px 6px; border-radius: 4px;">WAITER CALL</span>
+                                <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 2px 0; font-size: 16px;">
+                                    Table {{ $alert['table_number'] }}
+                                </p>
+                                <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; font-weight: bold;">
+                                    👤 {{ $alert['customer_name'] }} • ⏰ {{ $alert['time'] }}
+                                </p>
+                            </div>
+                            <button wire:click="resolveAlert('{{ $alert['id'] }}')" style="background: var(--ann-success); border: none; width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);">
+                                <x-heroicon-s-check style="width: 24px; height: 24px; color: white;" />
+                            </button>
+                        </div>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
+
+            {{-- DYNAMIC ACTIVE TABLE ORDERS STRIP --}}
             @if($incomingTableOrders->count() > 0)
-                <div class="urgent-strip">
+                <div class="urgent-strip" style="background: transparent; border: 1px dashed var(--ann-border);">
                     <h2
-                        style="color: var(--ann-red); font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase;">
-                        <x-heroicon-s-bell-alert style="width: 20px; height: 20px;" class="animate-bounce" /> Table Orders
-                        Required ({{ $incomingTableOrders->count() }})
+                        style="color: var(--ann-dark-blue); font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase;">
+                        <x-heroicon-s-clipboard-document-list style="width: 20px; height: 20px;" /> Active Table Orders ({{ $incomingTableOrders->count() }})
                     </h2>
                     <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 8px;" class="pos-scroll">
                         @foreach($incomingTableOrders as $order)
-                            <div class="urgent-card"
-                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column;">
+                            @php
+                                $oStatus = $order->status;
+                                $isAnimating = false;
+                                if ($oStatus === 'ready') {
+                                    $cBorder = 'var(--ann-success)';
+                                    $cLabel = '🛎️ READY';
+                                } elseif ($oStatus === 'preparing') {
+                                    $cBorder = 'var(--ann-orange)';
+                                    $cLabel = 'PREPARING';
+                                    $isAnimating = true;
+                                } elseif (in_array($oStatus, ['accepted', 'partial_accepted'])) {
+                                    $cBorder = 'var(--ann-blue)';
+                                    $cLabel = '📋 ACCEPTED';
+                                } else {
+                                    $cBorder = 'var(--ann-red)';
+                                    $cLabel = '🚨 NEW ORDER';
+                                }
+                            @endphp
+                            <div class="urgent-card {{ $isAnimating ? 'animate-pulse-border' : '' }}"
+                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; border-top-color: {{ $cBorder }}; background: white; transition: all 0.3s;">
                                 <div
-                                    style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--ann-border); padding-bottom: 8px; margin-bottom: 8px;">
+                                    style="display: flex; justify-content: space-between; border-bottom: 1px dashed {{ $cBorder }}; padding-bottom: 8px; margin-bottom: 8px;">
                                     <div>
-                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin:0;">Table
-                                            {{ $order->restaurantTable->table_number ?? '?' }}</p>
-                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">
-                                            {{ $order->customer_name }} • #{{ $order->id }}</p>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: bold; background: {{ $cBorder }}; color: white; padding: 2px 6px; border-radius: 4px;">
+                                            @if($isAnimating)
+                                                <svg class="animate-spin" style="width:12px; height:12px; color:white;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            @endif
+                                            {{ $cLabel }}
+                                        </span>
+                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">Table {{ $order->restaurantTable->table_number ?? '?' }}</p>
+                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
                                     </div>
-                                    <p style="font-weight: 900; color: var(--ann-success); margin:0;">
-                                        ₹{{ number_format($order->total_amount, 0) }}</p>
+                                    <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
                                 <div style="flex-grow: 1; margin-bottom: 12px;">
                                     @foreach($order->items as $item)
-                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px;">
-                                            <strong style="color: var(--ann-dark-blue);">{{ $item->quantity }}x</strong>
-                                            {{ $item->menuItem->name ?? $item->item_name }}</p>
+                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px; {{ $oStatus === 'ready' ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">
+                                            <strong style="color: {{ $cBorder }};">{{ $item->quantity }}x</strong> {{ $item->menuItem->name ?? $item->item_name }}
+                                        </p>
                                     @endforeach
                                 </div>
-                                <div style="display: flex; gap: 8px; margin-top: auto;">
-                                    <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary"
-                                        style="flex: 1; padding: 8px; border-radius: 8px;">Accept</button>
-                                    <button wire:click="updateStatus({{ $order->id }}, 'rejected')"
-                                        onclick="confirm('Reject this order?') || event.stopImmediatePropagation()"
-                                        class="btn-secondary" style="padding: 8px 16px; border-radius: 8px;">Reject</button>
+                                <div style="margin-top: auto;">
+                                    @if($oStatus === 'placed')
+                                        <div style="display: flex; gap: 8px;">
+                                            <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary" style="flex: 1; padding: 8px; border-radius: 8px;">Accept</button>
+                                            <button wire:click="updateStatus({{ $order->id }}, 'rejected')" onclick="confirm('Reject this order?') || event.stopImmediatePropagation()" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px;">Reject</button>
+                                        </div>
+                                    @elseif(in_array($oStatus, ['accepted', 'partial_accepted']))
+                                        <button wire:click="updateStatus({{ $order->id }}, 'preparing')" style="width: 100%; background: var(--ann-orange); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-fire style="width: 18px; height: 18px;" /> START PREPARING
+                                        </button>
+                                    @elseif($oStatus === 'preparing')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'ready')" style="width: 100%; background: var(--ann-success); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-check-circle style="width: 18px; height: 18px;" /> MARK READY
+                                        </button>
+                                    @elseif($oStatus === 'ready')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'served')" style="width: 100%; background: var(--ann-blue); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-arrow-right-circle style="width: 18px; height: 18px;" /> SERVE CUSTOMER
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -338,42 +416,75 @@
                 </div>
             @endif
 
-            {{-- INCOMING ROOM ORDERS STRIP --}}
+            {{-- DYNAMIC ACTIVE ROOM ORDERS STRIP --}}
             @if($incomingRoomOrders->count() > 0)
-                <div class="room-strip">
+                <div class="room-strip" style="background: transparent; border: 1px dashed var(--ann-blue);">
                     <h2
                         style="color: var(--ann-dark-blue); font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase;">
-                        <x-heroicon-s-bell-alert style="width: 20px; height: 20px;" class="animate-bounce" /> Room Orders
-                        Required ({{ $incomingRoomOrders->count() }})
+                        <x-heroicon-s-clipboard-document-list style="width: 20px; height: 20px;" /> Active Room Orders ({{ $incomingRoomOrders->count() }})
                     </h2>
                     <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 8px;" class="pos-scroll">
                         @foreach($incomingRoomOrders as $order)
-                            <div class="room-card"
-                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column;">
+                            @php
+                                $oStatus = $order->status;
+                                $isAnimating = false;
+                                if ($oStatus === 'ready') {
+                                    $cBorder = 'var(--ann-success)';
+                                    $cLabel = '🛎️ READY';
+                                } elseif ($oStatus === 'preparing') {
+                                    $cBorder = 'var(--ann-orange)';
+                                    $cLabel = 'PREPARING';
+                                    $isAnimating = true;
+                                } elseif (in_array($oStatus, ['accepted', 'partial_accepted'])) {
+                                    $cBorder = 'var(--ann-blue)';
+                                    $cLabel = '📋 ACCEPTED';
+                                } else {
+                                    $cBorder = 'var(--ann-red)';
+                                    $cLabel = '🚨 NEW ORDER';
+                                }
+                            @endphp
+                            <div class="room-card {{ $isAnimating ? 'animate-pulse-border' : '' }}"
+                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; border-top-color: {{ $cBorder }}; background: white; transition: all 0.3s;">
                                 <div
-                                    style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--ann-border); padding-bottom: 8px; margin-bottom: 8px;">
+                                    style="display: flex; justify-content: space-between; border-bottom: 1px dashed {{ $cBorder }}; padding-bottom: 8px; margin-bottom: 8px;">
                                     <div>
-                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin:0;">Room
-                                            {{ $order->roomSession->room->room_number ?? '?' }}</p>
-                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">
-                                            {{ $order->customer_name }} • #{{ $order->id }}</p>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: bold; background: {{ $cBorder }}; color: white; padding: 2px 6px; border-radius: 4px;">
+                                            @if($isAnimating)
+                                                <svg class="animate-spin" style="width:12px; height:12px; color:white;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            @endif
+                                            {{ $cLabel }}
+                                        </span>
+                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">Room {{ $order->roomSession->room->room_number ?? '?' }}</p>
+                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
                                     </div>
-                                    <p style="font-weight: 900; color: var(--ann-success); margin:0;">
-                                        ₹{{ number_format($order->total_amount, 0) }}</p>
+                                    <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
                                 <div style="flex-grow: 1; margin-bottom: 12px;">
                                     @foreach($order->items as $item)
-                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px;">
-                                            <strong style="color: var(--ann-dark-blue);">{{ $item->quantity }}x</strong>
-                                            {{ $item->menuItem->name ?? $item->item_name }}</p>
+                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px; {{ $oStatus === 'ready' ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">
+                                            <strong style="color: {{ $cBorder }};">{{ $item->quantity }}x</strong> {{ $item->menuItem->name ?? $item->item_name }}
+                                        </p>
                                     @endforeach
                                 </div>
-                                <div style="display: flex; gap: 8px; margin-top: auto;">
-                                    <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary"
-                                        style="flex: 1; padding: 8px; border-radius: 8px; background: var(--ann-blue);">Accept</button>
-                                    <button wire:click="updateStatus({{ $order->id }}, 'rejected')"
-                                        onclick="confirm('Reject this order?') || event.stopImmediatePropagation()"
-                                        class="btn-secondary" style="padding: 8px 16px; border-radius: 8px;">Reject</button>
+                                <div style="margin-top: auto;">
+                                    @if($oStatus === 'placed')
+                                        <div style="display: flex; gap: 8px;">
+                                            <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary" style="flex: 1; padding: 8px; border-radius: 8px; background: var(--ann-blue);">Accept</button>
+                                            <button wire:click="updateStatus({{ $order->id }}, 'rejected')" onclick="confirm('Reject this order?') || event.stopImmediatePropagation()" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px;">Reject</button>
+                                        </div>
+                                    @elseif(in_array($oStatus, ['accepted', 'partial_accepted']))
+                                        <button wire:click="updateStatus({{ $order->id }}, 'preparing')" style="width: 100%; background: var(--ann-orange); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-fire style="width: 18px; height: 18px;" /> START PREPARING
+                                        </button>
+                                    @elseif($oStatus === 'preparing')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'ready')" style="width: 100%; background: var(--ann-success); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-check-circle style="width: 18px; height: 18px;" /> MARK READY
+                                        </button>
+                                    @elseif($oStatus === 'ready')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'served')" style="width: 100%; background: var(--ann-blue); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-arrow-right-circle style="width: 18px; height: 18px;" /> SERVE CUSTOMER
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -381,46 +492,75 @@
                 </div>
             @endif
 
-            {{-- INCOMING PARCEL STRIP --}}
+            {{-- DYNAMIC ACTIVE PARCEL STRIP --}}
             @if(isset($parcelOrders) && $parcelOrders->count() > 0)
-                <div class="parcel-strip">
+                <div class="parcel-strip" style="background: transparent; border: 1px dashed var(--ann-orange);">
                     <h2
                         style="color: var(--ann-orange); font-weight: 900; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; font-size: 14px; text-transform: uppercase;">
-                        <x-heroicon-s-shopping-bag style="width: 20px; height: 20px;" /> Active Parcels
-                        ({{ $parcelOrders->count() }})
+                        <x-heroicon-s-shopping-bag style="width: 20px; height: 20px;" /> Active Parcels ({{ $parcelOrders->count() }})
                     </h2>
                     <div style="display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 8px;" class="pos-scroll">
                         @foreach($parcelOrders as $order)
-                            <div class="parcel-card"
-                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column;">
+                            @php
+                                $oStatus = $order->status;
+                                $isAnimating = false;
+                                if ($oStatus === 'ready') {
+                                    $cBorder = 'var(--ann-success)';
+                                    $cLabel = '🛎️ READY';
+                                } elseif ($oStatus === 'preparing') {
+                                    $cBorder = 'var(--ann-orange)';
+                                    $cLabel = 'PREPARING';
+                                    $isAnimating = true;
+                                } elseif (in_array($oStatus, ['accepted', 'partial_accepted'])) {
+                                    $cBorder = 'var(--ann-blue)';
+                                    $cLabel = '📋 ACCEPTED';
+                                } else {
+                                    $cBorder = 'var(--ann-red)';
+                                    $cLabel = '🚨 NEW ORDER';
+                                }
+                            @endphp
+                            <div class="parcel-card {{ $isAnimating ? 'animate-pulse-border' : '' }}"
+                                style="min-width: 280px; flex-shrink: 0; display: flex; flex-direction: column; border-left-color: {{ $cBorder }}; background: white; transition: all 0.3s;">
                                 <div
-                                    style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--ann-border); padding-bottom: 8px; margin-bottom: 8px;">
+                                    style="display: flex; justify-content: space-between; border-bottom: 1px dashed {{ $cBorder }}; padding-bottom: 8px; margin-bottom: 8px;">
                                     <div>
-                                        <span
-                                            style="font-size: 10px; font-weight: bold; background: var(--ann-orange-light); color: var(--ann-orange); padding: 2px 6px; border-radius: 4px;">🛍️
-                                            {{ $order->parcelQrSession?->parcelQrCode?->name ?? 'PARCEL' }}</span>
-                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin:0; margin-top: 6px;">
-                                            {{ $order->customer_name }}</p>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: bold; background: {{ $cBorder }}; color: white; padding: 2px 6px; border-radius: 4px;">
+                                            @if($isAnimating)
+                                                <svg class="animate-spin" style="width:12px; height:12px; color:white;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            @endif
+                                            {{ $cLabel }}
+                                        </span>
+                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">{{ $order->parcelQrSession?->parcelQrCode?->name ?? 'PARCEL' }}</p>
+                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
                                     </div>
-                                    <div style="text-align: right;">
-                                        <p style="font-weight: 900; color: var(--ann-success); margin:0;">
-                                            ₹{{ number_format($order->total_amount, 0) }}</p>
-                                    </div>
+                                    <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
                                 <div style="flex-grow: 1; margin-bottom: 12px;">
                                     @foreach($order->items as $item)
-                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px;">
-                                            <strong style="color: var(--ann-orange);">{{ $item->quantity }}x</strong>
-                                            {{ $item->item_name }}</p>
+                                        <p style="font-size: 14px; color: var(--ann-text-primary); margin:0; margin-bottom:2px; {{ $oStatus === 'ready' ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">
+                                            <strong style="color: {{ $cBorder }};">{{ $item->quantity }}x</strong> {{ $item->item_name }}
+                                        </p>
                                     @endforeach
                                 </div>
-                                <div style="display: flex; gap: 8px; margin-top: auto;">
-                                    <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary"
-                                        style="flex: 1; padding: 8px; border-radius: 8px; background: var(--ann-orange);">Accept</button>
-                                    <button wire:click="updateStatus({{ $order->id }}, 'rejected')"
-                                        onclick="confirm('Reject this order?') || event.stopImmediatePropagation()"
-                                        class="btn-secondary"
-                                        style="padding: 8px 16px; border-radius: 8px; border-color: var(--ann-red); color: var(--ann-red);">Reject</button>
+                                <div style="margin-top: auto;">
+                                    @if($oStatus === 'placed')
+                                        <div style="display: flex; gap: 8px;">
+                                            <button wire:click="updateStatus({{ $order->id }}, 'accepted')" class="btn-primary" style="flex: 1; padding: 8px; border-radius: 8px; background: var(--ann-orange);">Accept</button>
+                                            <button wire:click="updateStatus({{ $order->id }}, 'rejected')" onclick="confirm('Reject this order?') || event.stopImmediatePropagation()" class="btn-secondary" style="padding: 8px 16px; border-radius: 8px; border-color: var(--ann-red); color: var(--ann-red);">Reject</button>
+                                        </div>
+                                    @elseif(in_array($oStatus, ['accepted', 'partial_accepted']))
+                                        <button wire:click="updateStatus({{ $order->id }}, 'preparing')" style="width: 100%; background: var(--ann-orange); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-fire style="width: 18px; height: 18px;" /> START PREPARING
+                                        </button>
+                                    @elseif($oStatus === 'preparing')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'ready')" style="width: 100%; background: var(--ann-success); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-check-circle style="width: 18px; height: 18px;" /> MARK READY
+                                        </button>
+                                    @elseif($oStatus === 'ready')
+                                        <button wire:click="updateStatus({{ $order->id }}, 'served')" style="width: 100%; background: var(--ann-blue); color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 6px; cursor: pointer;">
+                                            <x-heroicon-s-arrow-right-circle style="width: 18px; height: 18px;" /> SERVE CUSTOMER
+                                        </button>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -760,6 +900,16 @@
                                                 <x-heroicon-s-sparkles style="width: 20px; height: 20px;" /> Clean Entire Table
                                             </button>
                                         @endif
+                                        
+                                        {{-- 🌟 ALL-IN-ONE QUICK TABLE STATUS 🌟 --}}
+                                        @if(($isAllInOne ?? false) && $selectedTableId)
+                                            <span style="display: block; font-size: 10px; font-weight: bold; color: var(--ann-text-secondary); text-transform: uppercase; margin: 16px 0 8px 0;">Table Status (Quick Actions)</span>
+                                            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                                                <button wire:click.stop="changeTableStatus({{ $selectedTableId }}, 'available')" style="flex: 1; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid #10b981; background: #d1fae5; color: #10b981; cursor: pointer;">Available</button>
+                                                <button wire:click.stop="changeTableStatus({{ $selectedTableId }}, 'occupied')" style="flex: 1; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid var(--ann-red); background: var(--ann-red-light); color: var(--ann-red); cursor: pointer;">Occupied</button>
+                                                <button wire:click.stop="changeTableStatus({{ $selectedTableId }}, 'cleaning')" style="flex: 1; padding: 8px; font-size: 12px; font-weight: bold; border-radius: 8px; border: 1px solid var(--ann-orange); background: var(--ann-orange-light); color: var(--ann-orange); cursor: pointer;">Cleaning</button>
+                                            </div>
+                                        @endif
                                     </div>
                                 @endif
 
@@ -871,7 +1021,6 @@
                                                         style="display: block; font-size: 10px; font-weight: bold; color: var(--ann-text-secondary); text-transform: uppercase; margin-bottom: 4px;">Customer
                                                         Selected</span>
                                                     
-                                                    {{-- 👇 FIXED: QR Code hamesha dekhashe jya sudhi payment clear na thay 👇 --}}
                                                     @if($pendingPayment->payment_method === 'cash')
                                                         <span
                                                             style="color: var(--ann-blue); font-weight: 900; font-size: 20px; margin:0; text-transform: uppercase; display: block;">PAY AT COUNTER (CASH)</span>
@@ -934,7 +1083,7 @@
 
         <x-filament-actions::modals />
 
-        {{-- Browser Notification Script --}}
+        {{-- Browser Notification Script (WITH SOUND) --}}
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -946,6 +1095,12 @@
                         const notification = new Notification(data.title, { body: data.body, requireInteraction: true });
                         notification.onclick = function (event) { event.preventDefault(); window.focus(); notification.close(); };
                     }
+                    
+                    // 🔔 Play Notification Sound
+                    try {
+                        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+                        audio.play().catch(e => console.log("Audio play blocked by browser policy"));
+                    } catch(err) {}
                 });
             });
         </script>
