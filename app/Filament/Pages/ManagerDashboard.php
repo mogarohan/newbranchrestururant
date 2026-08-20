@@ -133,8 +133,8 @@ class ManagerDashboard extends Page
         Notification::make()->title("Assistance Requested: {$num}")->body("{$customer} requires assistance.")->warning()->send();
         $this->dispatch('trigger-browser-notification', title: "🔔 Waiter Called!", body: "Table {$num} needs assistance.");
         
-        // 🌟 GUJARATI VOICE ALERT 🌟
-        $this->dispatch('speak-notification', text: "Table number {$num} par waiter ni jarur che.");
+        // 🌟 ENGLISH VOICE ALERT 🌟
+        $this->dispatch('speak-notification', text: "Table number {$num} needs assistance.");
 
         $this->dispatch('$refresh');
     }
@@ -166,18 +166,18 @@ class ManagerDashboard extends Page
 
         $serviceType = $order['service_type'] ?? 'dine_in';
         $orderId = $order['id'] ?? '?';
-        $speechText = ""; // Variable for Gujarati Voice Alert
+        $speechText = ""; // Variable for Voice Alert
 
         if ($serviceType === 'parcel') {
             $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
             $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$orderId}", body: "Placed at {$counterName}. Please confirm it.");
             Notification::make()->title("New Parcel Order #{$orderId}")->body("Location: {$counterName}")->warning()->send();
-            $speechText = "Parcel counter {$counterName} thi navo order aavyo che.";
+            $speechText = "New order received at Parcel counter {$counterName}.";
         } elseif ($serviceType === 'room_service') {
             $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
             $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$orderId}", body: "Room {$roomNum} placed a new order. Please confirm it.");
             Notification::make()->title("New Room Order #{$orderId}")->body("Room: {$roomNum}")->warning()->send();
-            $speechText = "Room number {$roomNum} thi navo order aavyo che.";
+            $speechText = "New order received from Room number {$roomNum}.";
         } else {
             // 🌟 FIX: Get ACTUAL Table Number, not Table ID 🌟
             $tableNum = $order['table_number'] ?? null;
@@ -192,10 +192,10 @@ class ManagerDashboard extends Page
 
             $this->dispatch('trigger-browser-notification', title: "🛎️ New Table Order #{$orderId}", body: "Table {$tableNum} placed a new order. Please confirm it.");
             Notification::make()->title("New Table Order #{$orderId}")->body("Table: {$tableNum}")->warning()->send();
-            $speechText = "Table number {$tableNum} thi navo order aavyo che.";
+            $speechText = "New order received from Table number {$tableNum}.";
         }
 
-        // 🌟 GUJARATI VOICE ALERT 🌟
+        // 🌟 ENGLISH VOICE ALERT 🌟
         $this->dispatch('speak-notification', text: $speechText);
     }
 
@@ -221,8 +221,8 @@ class ManagerDashboard extends Page
             Notification::make()->title("Bill Requested: {$tableNum}")->body("{$customer} has requested their final bill.")->warning()->persistent()->send();
             $this->dispatch('trigger-browser-notification', title: "💰 Bill Requested", body: "{$tableNum} ({$customer}) requested their bill.");
             
-            // 🌟 GUJARATI VOICE ALERT 🌟
-            $this->dispatch('speak-notification', text: "Table number {$tableNum} thi bill ni request aavi che.");
+            // 🌟 ENGLISH VOICE ALERT 🌟
+            $this->dispatch('speak-notification', text: "Bill requested at Table number {$tableNum}.");
 
             Cache::put($cacheKey, true, now()->addSeconds(30));
         }
