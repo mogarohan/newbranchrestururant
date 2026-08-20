@@ -1083,24 +1083,52 @@
 
         <x-filament-actions::modals />
 
-        {{-- Browser Notification Script (WITH SOUND) --}}
+        {{-- 🌟 NAYA: BROWSER NOTIFICATION AND GUJARATI TTS SCRIPT 🌟 --}}
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
                     Notification.requestPermission();
                 }
+                
+                // Existing Visual Notification
                 window.addEventListener('trigger-browser-notification', function (e) {
                     const data = e.detail;
                     if ("Notification" in window && Notification.permission === "granted") {
                         const notification = new Notification(data.title, { body: data.body, requireInteraction: true });
                         notification.onclick = function (event) { event.preventDefault(); window.focus(); notification.close(); };
                     }
-                    
-                    // 🔔 Play Notification Sound
-                    try {
-                        const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-                        audio.play().catch(e => console.log("Audio play blocked by browser policy"));
-                    } catch(err) {}
+                });
+
+                // NEW: Dynamic Text To Speech (Gujarati / Hindi)
+                window.addEventListener('speak-notification', function (e) {
+                    if ('speechSynthesis' in window) {
+                        // Get the text from Livewire 3 event detail
+                        const text = e.detail.text || (e.detail[0] ? e.detail[0].text : '');
+                        if(!text) return;
+
+                        // Cancel any currently speaking audio
+                        window.speechSynthesis.cancel();
+                        
+                        let msg = new SpeechSynthesisUtterance(text);
+                        
+                        // Try to find a Gujarati or Indian voice for natural pronunciation
+                        let voices = window.speechSynthesis.getVoices();
+                        let indianVoice = voices.find(voice => 
+                            voice.lang.includes('gu-IN') || 
+                            voice.lang.includes('hi-IN') || 
+                            voice.lang.includes('en-IN')
+                        );
+                        
+                        if (indianVoice) {
+                            msg.voice = indianVoice;
+                        }
+                        
+                        msg.rate = 0.9; // Clear speed
+                        msg.pitch = 1;
+                        msg.volume = 1;
+
+                        window.speechSynthesis.speak(msg);
+                    }
                 });
             });
         </script>

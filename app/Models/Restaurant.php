@@ -30,6 +30,7 @@ class Restaurant extends Model
         'is_rooms_facility',
         'rooms_limit',
         'has_inventory',
+        'has_attendance',
         'has_detailed_inventory',
         'is_all_in_one_cafe',
     ];
@@ -100,5 +101,10 @@ class Restaurant extends Model
     public function inventoryTransactions(): HasMany
     {
         return $this->hasMany(InventoryTransaction::class);
+    }
+
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class);
     }
 }
