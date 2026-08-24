@@ -83,6 +83,7 @@ class InvoiceService
                     'invoice_sequence'=> $nextSequence,
                     'invoice_prefix'  => $prefix,
                     'invoice_number'  => $invoiceNumber,
+                    'bill_number'     => $payment->bill_number, // 🌟 NAYA: Passing Temporary Bill Number to Invoice
                     'invoice_date'    => now()->toDateString(),
                     'gstin'           => $restaurant->gst_no ?? null, 
                     'place_of_supply' => $restaurant->address ?? null, 

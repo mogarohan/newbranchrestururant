@@ -10,7 +10,7 @@ class Invoice extends Model
 {
     protected $fillable = [
         'restaurant_id', 'branch_id', 'qr_session_id','room_session_id', 'parcel_qr_session_id', 'payment_id',
-        'invoice_sequence', 'invoice_prefix', 'invoice_number', 'invoice_date',
+        'invoice_sequence', 'invoice_prefix', 'invoice_number', 'bill_number', 'invoice_date',
         'gstin', 'place_of_supply', 'customer_name', 
         'subtotal', 'tax_amount', 'discount_amount', 'extra_charges', 
         'grand_total', 'items_snapshot'

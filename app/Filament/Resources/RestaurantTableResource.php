@@ -144,9 +144,13 @@ class RestaurantTableResource extends Resource
                             Tables\Columns\TextColumn::make('table_number')
                                 ->label('Table Details')
                                 ->formatStateUsing(function ($state, $record) {
+                                    // 🌟 Clean "T-" and "Table-" from state to show beautifully
+                                    $cleanState = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $state);
+                                    $finalState = is_numeric(trim($cleanState)) ? sprintf('%02d', trim($cleanState)) : trim($cleanState);
+
                                     return new HtmlString("
                                         <div style='display: flex; flex-direction: column;'>
-                                            <span style='font-size: 1.4rem; font-weight: 900; color: #2a4795;'>{$state}</span>
+                                            <span style='font-size: 1.4rem; font-weight: 900; color: #2a4795;'>Table-{$finalState}</span>
                                             <span style='font-size: 0.7rem; font-weight: 800; color: #f16b3f; background: rgba(241, 107, 63, 0.1); padding: 3px 8px; border-radius: 99px; width: fit-content; border: 1px solid rgba(241, 107, 63, 0.3); margin-top: 4px;'>
                                                 👥 Capacity: {$record->seating_capacity}
                                             </span>
@@ -297,7 +301,8 @@ class RestaurantTableResource extends Resource
                         for ($i = 1; $i <= $data['total_tables']; $i++) {
                             $nextNumber = $lastNumber + $i;
 
-                            $formattedTableNumber = 'T-' . sprintf('%02d', $nextNumber);
+                            // 🌟 ONLY 01, 02 (WITHOUT 'T-') SAVED IN DB
+                            $formattedTableNumber = sprintf('%02d', $nextNumber);
 
                             $table = \App\Models\RestaurantTable::create([
                                 'restaurant_id' => $restaurant->id,
@@ -316,7 +321,7 @@ class RestaurantTableResource extends Resource
                     }),
 
                 Tables\Actions\Action::make('download_pdf_qr')
-                    ->label('Download QRs as PDF')
+                    ->label('Edit layout & Download QRs as PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->color('info')
                     ->outlined()
@@ -440,7 +445,7 @@ class RestaurantTableResource extends Resource
                                                                 </div>
                                                                 
                                                                 <div style='margin-top: 8px; font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 0.5px;'>YOUR LOCATION</div>
-                                                                <div style='font-family: Times, serif; font-size: 28px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Table T-01</div>
+                                                                <div style='font-family: Times, serif; font-size: 28px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Table 01</div>
                                                             </div>
                                                         </div>
                                                     ");
@@ -571,6 +576,10 @@ class RestaurantTableResource extends Resource
                                         $qrBase64 = 'data:image/svg+xml;base64,' . base64_encode($svgData);
                                     }
 
+                                    // 🌟 Clean up the table number for PDF Print
+                                    $cleanNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $table->table_number);
+                                    $finalNum = is_numeric(trim($cleanNum)) ? sprintf('%02d', trim($cleanNum)) : trim($cleanNum);
+
                                     $html .= '<td class="quadrant"><div class="card"><div class="content-wrapper">
                                         ' . $logoHtml . '
                                         <div class="title">' . $restaurantName . '</div>
@@ -578,7 +587,7 @@ class RestaurantTableResource extends Resource
                                         <div class="orange-line"></div><div class="subtitle">EXQUISITE DINING EXPERIENCE</div>
                                         <table class="qr-bracket-table"><tr><td class="br-tl"></td><td></td><td></td></tr><tr><td></td><td><img src="' . $qrBase64 . '" class="qr-img" /></td><td></td></tr><tr><td></td><td></td><td class="br-br"></td></tr></table>
                                         <div class="btn-wrapper"><div class="scan-pill">SCAN TO MENU</div></div>
-                                        <div class="loc-label">YOUR LOCATION</div><div class="table-number">Table ' . $table->table_number . '</div>
+                                        <div class="loc-label">YOUR LOCATION</div><div class="table-number">Table ' . $finalNum . '</div>
                                         </div></div></td>';
                                 }
 

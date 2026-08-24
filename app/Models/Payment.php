@@ -13,6 +13,7 @@ class Payment extends Model
         'branch_id',
         'amount',
         'amount_paise',        // ← add
+        'bill_number',
         'payment_method',
         'status',
         'transaction_reference',

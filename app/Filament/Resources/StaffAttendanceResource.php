@@ -25,11 +25,8 @@ class StaffAttendanceResource extends Resource
     protected static ?string $pluralLabel = 'Attendance & Reports';
 
     /* -----------------------------------------------------------------
-     | 🌟 SECURITY HELPER 0: Menu Visibility
+     | 🌟 SECURITY HELPER 0: Menu Visibility (SaaS Logic)
      |-----------------------------------------------------------------*/
-    /* -----------------------------------------------------------------
-       | 🌟 SECURITY HELPER 0: Menu Visibility (SaaS Logic)
-       |-----------------------------------------------------------------*/
     public static function canAccess(): bool
     {
         $user = auth()->user();
@@ -49,6 +46,7 @@ class StaffAttendanceResource extends Resource
         // 3. Agar permission mili hai, toh sirf in 3 logo ko access do
         return $user->isRestaurantAdmin() || $user->isBranchAdmin() || $user->isManager();
     }
+
     /* -----------------------------------------------------------------
      | 🌟 SECURITY HELPER 1: Kaun Salary/Payroll Data Dekh Sakta Hai
      |-----------------------------------------------------------------*/
@@ -134,6 +132,7 @@ class StaffAttendanceResource extends Resource
                         'present' => 'P - Present',
                         'absent' => 'A - Absent',
                         'half_day' => 'H - Half Day',
+                        'holiday' => 'O - Holiday / Weekly Off', // 🌟 NEW: Holiday / Weekly Off Option Added
                     ])
                     ->selectablePlaceholder(false)
                     ->extraAttributes(['style' => 'min-width: 140px; font-weight: 700;'])
@@ -236,6 +235,20 @@ class StaffAttendanceResource extends Resource
                             $records->each(function ($record) {
                                 if (self::canMarkAttendance($record)) {
                                     $record->update(['status' => 'absent']);
+                                }
+                            });
+                        })
+                        ->deselectRecordsAfterCompletion(),
+                    
+                    // 🌟 NEW: Bulk Action to mark holiday easily
+                    Tables\Actions\BulkAction::make('mark_all_holiday')
+                        ->label('Mark Selected as Holiday')
+                        ->icon('heroicon-o-calendar-days')
+                        ->color('info')
+                        ->action(function (Collection $records) {
+                            $records->each(function ($record) {
+                                if (self::canMarkAttendance($record)) {
+                                    $record->update(['status' => 'holiday']);
                                 }
                             });
                         })

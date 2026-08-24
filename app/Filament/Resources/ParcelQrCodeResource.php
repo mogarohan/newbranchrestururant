@@ -126,10 +126,20 @@ class ParcelQrCodeResource extends Resource
     }
 
     public static function getEloquentQuery(): Builder
-    {
-        return parent::getEloquentQuery()
-            ->withoutGlobalScopes([
-                SoftDeletingScope::class,
-            ]);
+{
+    $user = auth()->user();
+
+    $query = parent::getEloquentQuery()
+        ->where('restaurant_id', $user->restaurant_id);
+
+    if ($user->branch_id !== null) {
+        // Branch-level user
+        $query->where('branch_id', $user->branch_id);
+    } else {
+        // Restaurant-level user
+        $query->whereNull('branch_id');
     }
+
+    return $query;
+}
 }

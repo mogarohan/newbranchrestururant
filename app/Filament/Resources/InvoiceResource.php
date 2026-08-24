@@ -41,7 +41,7 @@ class InvoiceResource extends Resource
     {
         return auth()->check()
             && auth()->user()->restaurant_id
-            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin','restauranrt_admin']);
+            && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin','restaurant_admin']);
     }
     // 🔒 STRICTLY IMMUTABLE RESOURCE
     public static function canCreate(): bool { return false; }
@@ -58,6 +58,14 @@ class InvoiceResource extends Resource
                     ->sortable()
                     ->weight('bold')
                     ->color('primary'),
+                    
+                // 🌟 NAYA: Added Bill Number column to Table
+                Tables\Columns\TextColumn::make('bill_number')
+                    ->label('Bill #')
+                    ->searchable()
+                    ->sortable()
+                    ->color('gray'),
+
                 Tables\Columns\TextColumn::make('invoice_date')
                     ->date('d M Y')
                     ->sortable(),
@@ -205,6 +213,7 @@ class InvoiceResource extends Resource
                     <tr>
                         <td style='width: 50%;'>
                             <p><strong>Invoice No:</strong> {$invoice->invoice_number}</p>
+                            <p><strong>Ref Bill No:</strong> {$invoice->bill_number}</p> <!-- 🌟 NAYA: Showing Bill No on PDF -->
                             <p><strong>Date:</strong> {$invoice->invoice_date->format('d M Y')}</p>
                         </td>
                         <td style='width: 50%; text-align: right;'>

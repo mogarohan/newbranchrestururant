@@ -462,7 +462,7 @@
                     </div>
                 </div>
                 <div>
-                    <span class="sa-stat-label">Total Diners</span>
+                    <span class="sa-stat-label">Total Customers</span>
                     <span class="sa-stat-value">{{ $totalCustomers }}</span>
                     <span class="sa-stat-desc">+ {{ $todayCustomers }} joined today</span>
                 </div>

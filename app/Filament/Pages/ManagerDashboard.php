@@ -117,24 +117,36 @@ class ManagerDashboard extends Page
         ];
     }
 
+    // 🌟 FORMAT HELPER FOR CONSISTENT "Table-01" ALL OVER 🌟
+    private function formatTableNumber($tableNum): string
+    {
+        if (!$tableNum) return 'Table-Unknown';
+        // "T-01" k "Table 01" badhu automatically "Table-01" ma convert thay jase
+        $cleanNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
+        return 'Table-' . trim($cleanNum);
+    }
+
     // 🌟 ALL-IN-ONE Feature Functions 🌟
     public function notifyWaiterCalled($event): void
     {
-        $num = $event['table_number'] ?? '?';
+        $rawNum = $event['table_number'] ?? '?';
+        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
         $customer = $event['customer_name'] ?? 'A customer';
         
+        $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $rawNum);
+        $numSpeech = is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : ltrim($cleanSpeechNum, '0');
+
         $this->activeAlerts[] = [
             'id' => uniqid(),
-            'table_number' => $num,
+            'table_number' => $displayNum, // Now visual is always Table-01
             'customer_name' => $customer,
             'time' => now()->format('h:i A')
         ];
 
-        Notification::make()->title("Assistance Requested: {$num}")->body("{$customer} requires assistance.")->warning()->send();
-        $this->dispatch('trigger-browser-notification', title: "🔔 Waiter Called!", body: "Table {$num} needs assistance.");
+        Notification::make()->title("Assistance Requested: {$displayNum}")->body("{$customer} requires assistance.")->warning()->send();
+        $this->dispatch('trigger-browser-notification', title: "🔔 Waiter Called!", body: "{$displayNum} needs assistance.");
         
-        // 🌟 ENGLISH VOICE ALERT 🌟
-        $this->dispatch('speak-notification', text: "Table number {$num} needs assistance.");
+        $this->dispatch('speak-notification', text: "Table number {$numSpeech} needs assistance.");
 
         $this->dispatch('$refresh');
     }
@@ -166,36 +178,45 @@ class ManagerDashboard extends Page
 
         $serviceType = $order['service_type'] ?? 'dine_in';
         $orderId = $order['id'] ?? '?';
-        $speechText = ""; // Variable for Voice Alert
+        $speechText = ""; 
+        
+        $customerName = $order['customer_name'] ?? 'Customer';
 
         if ($serviceType === 'parcel') {
             $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
-            $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$orderId}", body: "Placed at {$counterName}. Please confirm it.");
-            Notification::make()->title("New Parcel Order #{$orderId}")->body("Location: {$counterName}")->warning()->send();
-            $speechText = "New order received at Parcel counter {$counterName}.";
+            $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$orderId}", body: "Placed by {$customerName} at {$counterName}. Please confirm it.");
+            Notification::make()->title("New Parcel Order #{$orderId}")->body("Customer: {$customerName} | Location: {$counterName}")->warning()->send();
+            
+            $speechText = "New parcel order received for {$customerName}.";
+            
         } elseif ($serviceType === 'room_service') {
             $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
+            $roomNumSpeech = is_numeric($roomNum) ? (int)$roomNum : ltrim($roomNum, '0');
+            
             $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$orderId}", body: "Room {$roomNum} placed a new order. Please confirm it.");
             Notification::make()->title("New Room Order #{$orderId}")->body("Room: {$roomNum}")->warning()->send();
-            $speechText = "New order received from Room number {$roomNum}.";
+            
+            $speechText = "New order received from Room number {$roomNumSpeech}.";
         } else {
-            // 🌟 FIX: Get ACTUAL Table Number, not Table ID 🌟
             $tableNum = $order['table_number'] ?? null;
             
             if (!$tableNum && isset($order['restaurant_table_id'])) {
-                // Fetch actual table number from database if missing
                 $table = \App\Models\RestaurantTable::find($order['restaurant_table_id']);
                 $tableNum = $table ? $table->table_number : 'Unknown';
             }
             
             $tableNum = $tableNum ?? 'Unknown';
+            $displayNum = $this->formatTableNumber($tableNum); // EX: Table-01
+            
+            $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
+            $tableNumSpeech = is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : ltrim($cleanSpeechNum, '0');
 
-            $this->dispatch('trigger-browser-notification', title: "🛎️ New Table Order #{$orderId}", body: "Table {$tableNum} placed a new order. Please confirm it.");
-            Notification::make()->title("New Table Order #{$orderId}")->body("Table: {$tableNum}")->warning()->send();
-            $speechText = "New order received from Table number {$tableNum}.";
+            $this->dispatch('trigger-browser-notification', title: "🛎️ New Order #{$orderId}", body: "{$displayNum} placed a new order. Please confirm it.");
+            Notification::make()->title("New Order #{$orderId}")->body("Location: {$displayNum}")->warning()->send();
+            
+            $speechText = "New order received from Table number {$tableNumSpeech}.";
         }
 
-        // 🌟 ENGLISH VOICE ALERT 🌟
         $this->dispatch('speak-notification', text: $speechText);
     }
 
@@ -213,16 +234,19 @@ class ManagerDashboard extends Page
 
     public function notifyBillRequested($event): void
     {
-        $tableNum = $event['table_number'] ?? '?';
+        $rawNum = $event['table_number'] ?? '?';
+        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
         $customer = $event['customer_name'] ?? 'A customer';
-        $cacheKey = "bill_requested_alert_{$tableNum}";
+        $cacheKey = "bill_requested_alert_{$rawNum}";
+        
+        $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $rawNum);
+        $tableNumSpeech = is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : ltrim($cleanSpeechNum, '0');
 
         if (!Cache::has($cacheKey)) {
-            Notification::make()->title("Bill Requested: {$tableNum}")->body("{$customer} has requested their final bill.")->warning()->persistent()->send();
-            $this->dispatch('trigger-browser-notification', title: "💰 Bill Requested", body: "{$tableNum} ({$customer}) requested their bill.");
+            Notification::make()->title("Bill Requested: {$displayNum}")->body("{$customer} has requested their final bill.")->warning()->persistent()->send();
+            $this->dispatch('trigger-browser-notification', title: "💰 Bill Requested", body: "{$displayNum} ({$customer}) requested their bill.");
             
-            // 🌟 ENGLISH VOICE ALERT 🌟
-            $this->dispatch('speak-notification', text: "Bill requested at Table number {$tableNum}.");
+            $this->dispatch('speak-notification', text: "Bill requested at Table number {$tableNumSpeech}.");
 
             Cache::put($cacheKey, true, now()->addSeconds(30));
         }
@@ -230,10 +254,11 @@ class ManagerDashboard extends Page
 
     public function notifyPaymentMethod($event): void
     {
-        $tableNum = $event['table_number'] ?? '?';
+        $rawNum = $event['table_number'] ?? '?';
+        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
         $method = strtoupper($event['method'] ?? 'CASH');
 
-        Notification::make()->title("Payment Update: {$tableNum}")->body("Customer selected {$method} for payment.")->info()->send();
+        Notification::make()->title("Payment Update: {$displayNum}")->body("Customer selected {$method} for payment.")->info()->send();
         $this->dispatch('$refresh');
     }
 
@@ -419,6 +444,24 @@ class ManagerDashboard extends Page
             });
     }
 
+    // 🌟 HELPER TO GENERATE UNIQUE BILL NUMBER
+    private function generateBillNumber(): string
+    {
+        $lastPayment = Payment::where('restaurant_id', auth()->user()->restaurant_id)
+            ->whereDate('created_at', now()->toDateString())
+            ->whereNotNull('bill_number')
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $nextSeq = 1;
+        if ($lastPayment && preg_match('/-(\d+)$/', $lastPayment->bill_number, $matches)) {
+            $nextSeq = (int) $matches[1] + 1;
+        }
+
+        // Format: B-240826-0001 (B-DDMMYY-XXXX)
+        return 'B-' . now()->format('dmy') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+    }
+
     public function settleRoomBill()
     {
         if (!$this->selectedRoomId || !$this->selectedSessionId)
@@ -438,12 +481,16 @@ class ManagerDashboard extends Page
 
         try {
             DB::transaction(function () use ($latestOrderId, $subtotal, $amountDue) {
+                $existingPayment = Payment::where('order_id', $latestOrderId)->first();
+                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber();
+
                 Payment::updateOrCreate(['order_id' => $latestOrderId], [
                     'restaurant_id' => auth()->user()->restaurant_id,
                     'subtotal' => $subtotal,
                     'amount' => $amountDue,
                     'status' => 'paid',
                     'payment_method' => 'room_charge',
+                    'bill_number' => $billNumber,
                     'paid_at' => now(),
                 ]);
                 Order::where('room_session_id', $this->selectedSessionId)->update(['payment_status' => 'paid']);
@@ -550,20 +597,20 @@ class ManagerDashboard extends Page
                                                 {$guestHtml}
                                                 <div style='border-top: 3px solid {$accentColor}; width: 35px; margin: 8px auto;'></div>
                                                 <div style='font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 1px;'>EXQUISITE ROOM SERVICE</div>
-                                                
+
                                                 <div style='display: flex; justify-content: center; align-items: center; margin-top: 15px;'>
                                                     <div style='border-top: 3px solid {$accentColor}; border-left: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(-55px, -55px);'></div>
                                                     <div style='border-bottom: 3px solid {$accentColor}; border-right: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(55px, 55px);'></div>
-                                                    
+
                                                     <div style='background: white; padding: 6px; border-radius: 8px; border: 2px solid #8B5CF6; z-index: 10;'>
                                                         <img src='https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=LivePreview' style='width: 100px; height: 100px; display: block;' />
                                                     </div>
                                                 </div>
-                                                
+
                                                 <div style='margin-top: 15px;'>
                                                     <span style='background-color: {$pillBgColor}; color: white; padding: 6px 20px; border-radius: 15px; font-size: 10px; font-weight: bold; letter-spacing: 1px;'>SCAN TO ORDER</span>
                                                 </div>
-                                                
+
                                                 <div style='margin-top: 12px; font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 0.5px;'>GUEST ROOM</div>
                                                 <div style='font-family: Times, serif; font-size: 26px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Room 101</div>
                                             </div>
@@ -590,7 +637,6 @@ class ManagerDashboard extends Page
                 $accentColor = $data['accent_color'] ?? '#E47A33';
                 $pillBgColor = $data['pill_bg_color'] ?? '#B85C4A';
 
-                // Base64 Background
                 $cardBackgroundStyle = '';
                 if ($bgType === 'image') {
                     $bgImagePath = public_path('images/b.png');
@@ -607,7 +653,6 @@ class ManagerDashboard extends Page
                     $cardBackgroundStyle = 'background-color: ' . $bgColor . ';';
                 }
 
-                // Base64 Logo
                 $logoBase64 = '';
                 if ($restaurant && $restaurant->logo_path) {
                     $logoFullPath = Storage::disk('public')->path($restaurant->logo_path);
@@ -617,11 +662,9 @@ class ManagerDashboard extends Page
                     }
                 }
 
-                // Base64 QR
                 $qrPath = storage_path('app/public/' . $room->qr_path);
                 $qrBase64 = file_exists($qrPath) ? 'data:image/svg+xml;base64,' . base64_encode(file_get_contents($qrPath)) : '';
 
-                // Build HTML
                 $restName = strtoupper($restaurant->name ?? 'HOTEL');
                 $logoHtml = $logoBase64 ? '<img src="' . $logoBase64 . '" style="max-width: 55px; max-height: 55px; object-fit: contain; margin-bottom: 5px;" />' : '';
                 $guestHtml = '<div style="font-size: 12px; color: ' . $addressColor . '; margin: 4px 15px; line-height: 1.2; font-weight: bold;">Welcome, ' . htmlspecialchars($room->guest_name) . '</div>';
@@ -702,10 +745,13 @@ class ManagerDashboard extends Page
         $restaurant = auth()->user()->restaurant;
 
         $locationName = 'Counter';
-        if ($this->selectedParcelCounterId)
+        if ($this->selectedParcelCounterId) {
             $locationName = ParcelQrCode::find($this->selectedParcelCounterId)->name ?? 'Parcel';
-        elseif ($this->selectedTableId)
-            $locationName = 'T-' . RestaurantTable::find($this->selectedTableId)->table_number;
+        } elseif ($this->selectedTableId) {
+            // 🌟 Applying our FORMAT TABLE HELPER HERE for Bill Print 🌟
+            $rawNum = RestaurantTable::find($this->selectedTableId)->table_number ?? '';
+            $locationName = $this->formatTableNumber($rawNum); // Results in Table-01
+        }
 
         $gstIn = $restaurant->gst_no ?? '-';
         $phone = $restaurant->phone ?? '012345678910';
@@ -753,7 +799,7 @@ class ManagerDashboard extends Page
             </div>
             <hr style='border-top:1px dashed #000; margin:10px 0;'/>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;'>
-                <span>Bill No: #{$pendingPayment->id}</span>
+                <span>Bill No: {$pendingPayment->bill_number}</span>
                 <span>Date: " . now()->format('d/m/Y') . "</span>
             </div>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;'>
@@ -774,14 +820,14 @@ class ManagerDashboard extends Page
                 <div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>
                 <div style='font-size: 18px; margin-top: 5px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>
             </div>
-            
-            {$qrHtml} <!-- 👇 INJECTED QR CODE HERE -->
+
+            {$qrHtml}
 
             <div style='text-align:center; margin-top:20px; font-size:12px; font-weight:bold;'>*** THANK YOU FOR DINING WITH US! ***</div>
         </body></html>";
 
         $escapedHtml = json_encode($html);
-        
+
         $this->js("
             const printWindow = window.open('', '_blank', 'width=400,height=600');
             printWindow.document.write({$escapedHtml});
@@ -825,6 +871,10 @@ class ManagerDashboard extends Page
 
         try {
             DB::transaction(function () use ($latestOrderId, $subtotal, $taxAmt, $extra, $amountDue, $billStatus, $transactionRef, $session) {
+
+                $existingPayment = Payment::where('order_id', $latestOrderId)->first();
+                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber();
+
                 $payment = Payment::updateOrCreate(
                     ['order_id' => $latestOrderId],
                     [
@@ -838,6 +888,7 @@ class ManagerDashboard extends Page
                         'status' => $billStatus,
                         'payment_method' => $billStatus === 'paid' ? 'online' : 'pending',
                         'transaction_reference' => $transactionRef,
+                        'bill_number' => $billNumber,
                         'paid_at' => $billStatus === 'paid' ? now() : null,
                     ]
                 );
@@ -1092,7 +1143,10 @@ class ManagerDashboard extends Page
         }
 
         $table->update(['status' => $table->status === 'reserved' ? 'available' : 'reserved']);
-        Notification::make()->title("Table {$table->table_number} status updated")->success()->send();
+        
+        $displayNum = $this->formatTableNumber($table->table_number);
+        Notification::make()->title("{$displayNum} status updated")->success()->send();
+        
         $this->closeReceiptModal();
     }
 
@@ -1109,7 +1163,10 @@ class ManagerDashboard extends Page
 
         $table->update(['status' => 'available']);
         event(new \App\Events\TableStatusUpdated($table->id, 'available', $table->restaurant_id));
-        Notification::make()->title("Table {$table->table_number} Cleaned")->success()->send();
+        
+        $displayNum = $this->formatTableNumber($table->table_number);
+        Notification::make()->title("{$displayNum} Cleaned")->success()->send();
+        
         $this->closeReceiptModal();
     }
 
@@ -1194,8 +1251,7 @@ class ManagerDashboard extends Page
 
             $order->update(['status' => $wasPartial ? 'partial_accepted' : 'accepted']);
             KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => 0]);
-            
-            // 🌟 NAYA: ACCEPT NOTIFICATION 🌟
+
             Notification::make()
                 ->title($wasPartial ? "Order #{$orderId} Partially Accepted ⚠️" : "Order #{$orderId} Accepted ✅")
                 ->body($wasPartial ? 'Some items were out of stock.' : 'Order ready for preparation.')
@@ -1203,13 +1259,11 @@ class ManagerDashboard extends Page
                 ->send();
 
         } else {
-            // ALL-IN-ONE Feature Fix: Keep KitchenQueue in sync for direct status updates
             $order->update(['status' => $status]);
             if (in_array($status, ['preparing', 'ready', 'served'])) {
                 KitchenQueue::where('order_id', $order->id)->update(['current_status' => $status]);
             }
 
-            // 🌟 NAYA: LIVE STATUS NOTIFICATIONS 🌟
             if ($status === 'preparing') {
                 Notification::make()->title("Order #{$orderId} is Preparing 🍳")->success()->send();
             } elseif ($status === 'ready') {
@@ -1235,13 +1289,11 @@ class ManagerDashboard extends Page
 
         $data['upiId'] = $branchId ? (\App\Models\Branch::find($branchId)->upi_id ?? '') : ($user->restaurant->upi_id ?? '');
 
-        // 🌟 ALL-IN-ONE Check 🌟
         $isAllInOne = $user->restaurant->is_all_in_one_cafe ?? false;
         $data['isAllInOne'] = $isAllInOne;
 
         $data['restaurantName'] = $user->restaurant->name ?? 'Restaurant';
 
-        // 🌟 NAYA: Agar All In One hai, toh sari statuses ('placed' se leke 'ready' tak) le aao single strip ke liye
         $activeStatuses = $isAllInOne ? ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'] : ['placed'];
 
         $incomingTableOrders = Order::where('restaurant_id', $restaurantId)->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))

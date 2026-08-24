@@ -34,6 +34,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('5rem')
             ->brandName('AnnSathi')
             ->darkMode(false)
+            ->sidebarCollapsibleOnDesktop()
             ->colors([
                 'primary' => Color::hex('#f16b3f'),
                 'gray' => Color::Slate,
