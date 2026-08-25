@@ -381,7 +381,7 @@
                                             {{ $cLabel }}
                                         </span>
                                         <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">Table-{{ $finalOrderNum }}</p>
-                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
+                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->daily_order_number ?? $order->id }}</p>
                                     </div>
                                     <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
@@ -456,8 +456,9 @@
                                             @endif
                                             {{ $cLabel }}
                                         </span>
+                                        {{-- 🌟 NAYA: ROOM NO. AND CUSTOMER NAME BOTH BOLD 🌟 --}}
                                         <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">Room {{ $order->roomSession->room->room_number ?? '?' }}</p>
-                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
+                                        <p style="font-weight: 900; font-size: 13px; color: var(--ann-text-primary); margin:0; margin-top:2px;">{{ $order->customer_name }} <span style="font-weight: bold; color: var(--ann-text-secondary); font-size: 12px;">• #{{ $order->daily_order_number ?? $order->id }}</span></p>
                                     </div>
                                     <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
@@ -532,8 +533,9 @@
                                             @endif
                                             {{ $cLabel }}
                                         </span>
-                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">{{ $order->parcelQrSession?->parcelQrCode?->name ?? 'PARCEL' }}</p>
-                                        <p style="font-size: 12px; color: var(--ann-text-secondary); margin:0; margin-top:2px;">{{ $order->customer_name }} • #{{ $order->id }}</p>
+                                        {{-- 🌟 NAYA: CUSTOMER NAME UPAR BOLD, COUNTER NICHE SECONDARY 🌟 --}}
+                                        <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">{{ $order->customer_name }}</p>
+                                        <p style="font-size: 12px; color: var(--ann-text-secondary); font-weight: bold; margin:0; margin-top:2px;">{{ $order->parcelQrSession?->parcelQrCode?->name ?? 'PARCEL' }} • #{{ $order->daily_order_number ?? $order->id }}</p>
                                     </div>
                                     <p style="font-weight: 900; color: {{ $cBorder }}; margin:0;">₹{{ number_format($order->total_amount, 0) }}</p>
                                 </div>
@@ -753,7 +755,8 @@
                                     @foreach($activeDinersList as $diner)
                                         <div wire:click="selectCustomerSession({{ $diner->id }})" class="customer-pill {{ $selectedSessionId === $diner->id ? 'active' : '' }}">
                                             <span class="customer-pill-name" style="color: {{ $selectedSessionId === $diner->id ? 'var(--ann-dark-blue)' : 'var(--ann-text-primary)' }}; font-weight:bold; display:block;">{{ $diner->customer_name }}</span>
-                                            <span class="customer-pill-sub" style="color: var(--ann-text-secondary); font-size:11px; display:block;">Arrived {{ $diner->created_at->diffForHumans() }}</span>
+                                            {{-- 🌟 FIX: LOCAL TIMEZONE 🌟 --}}
+                                            <span class="customer-pill-sub" style="color: var(--ann-text-secondary); font-size:11px; display:block;">Arrived {{ $diner->created_at->timezone('Asia/Kolkata')->diffForHumans() }}</span>
                                         </div>
                                     @endforeach
                                 @endif
@@ -796,13 +799,24 @@
                                                         {{ $label }}</h4>
                                                     <div style="display: flex; flex-direction: column; gap: 8px;">
                                                         @foreach($groupedOrders[$statusKey] as $order)
-                                                            @php $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
-                                                            $isPaid = $order->payment_status === 'paid'; @endphp
-                                                            <div style="background: white; padding: 12px; border-radius: 12px; border: 1px solid var(--ann-border); box-shadow: 0 1px 2px rgba(0,0,0,0.05); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
-                                                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--ann-border); padding-bottom: 8px; margin-bottom: 8px;">
+                                                            @php 
+                                                                $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
+                                                                $isPaid = $order->payment_status === 'paid'; 
+                                                                
+                                                                // 🌟 MODAL HISTORY BORDERS MAP 🌟
+                                                                if ($statusKey === 'ready') { $hBorder = 'var(--ann-blue)'; } 
+                                                                elseif ($statusKey === 'preparing') { $hBorder = 'var(--ann-success)'; } 
+                                                                elseif (in_array($statusKey, ['accepted', 'partial_accepted'])) { $hBorder = 'var(--ann-orange)'; } 
+                                                                elseif ($statusKey === 'placed') { $hBorder = 'var(--ann-dark-blue)'; } 
+                                                                else { $hBorder = 'var(--ann-border)'; }
+                                                            @endphp
+                                                            <div style="background: white; padding: 12px; border-radius: 12px; border: 1.5px solid {{ $isCancelled ? 'var(--ann-border)' : $hBorder }}; box-shadow: 0 1px 2px rgba(0,0,0,0.05); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
+                                                                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed {{ $isCancelled ? 'var(--ann-border)' : $hBorder }}; padding-bottom: 8px; margin-bottom: 8px;">
                                                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                                                        <span style="font-size: 12px; font-weight: bold; color: var(--ann-text-secondary);">Order #{{ $order->id }}</span>
-                                                                        @if($isPaid) <span style="font-size: 10px; font-weight: bold; background: #d1fae5; color: var(--ann-success); padding: 2px 6px; border-radius: 4px;">PAID</span>
+                                                                        {{-- 🌟 NAYA: Order # with LOCAL TIMEZONE 🌟 --}}
+                                                                        <span style="font-size: 12px; font-weight: bold; color: var(--ann-text-primary);">Order #{{ $order->daily_order_number ?? $order->id }}</span>
+                                                                        <span style="font-size: 10px; color: var(--ann-text-secondary);">• {{ $order->created_at->timezone('Asia/Kolkata')->format('h:i A') }}</span>
+                                                                        @if($isPaid) <span style="font-size: 10px; font-weight: bold; background: #d1fae5; color: var(--ann-success); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">PAID</span>
                                                                         @endif
                                                                     </div>
                                                                     @if(!$isCancelled && !$pendingPayment && !$isPaid)
@@ -815,7 +829,7 @@
                                                                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 4px;">
                                                                         <span style="font-weight: 600; color: var(--ann-text-primary); {{ $isOos ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">
                                                                             @if($isOos) <span style="color: var(--ann-red); font-weight: bold; font-size: 12px; margin-right: 4px;">[OOS]</span>
-                                                                            @else <span style="color: var(--ann-blue); font-weight: 900; margin-right: 4px;">{{ $displayQty }}x</span>
+                                                                            @else <span style="color: {{ $isCancelled ? 'var(--ann-text-secondary)' : $hBorder }}; font-weight: 900; margin-right: 4px;">{{ $displayQty }}x</span>
                                                                             @endif
                                                                             {{ $item->item_name }}
                                                                         </span>
@@ -888,6 +902,11 @@
                                             <span style="color: #064e3b; font-weight: 900; font-size: 14px;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
                                         </div>
                                         <p style="color: #059669; font-size: 12px; margin:0; margin-top: 12px;">Customer can now download PDF.</p>
+                                        
+                                        {{-- 🌟 NAYA: PAID THAYA PACHI PAN PRINT PHYSICAL BILL BUTTON 🌟 --}}
+                                        <button wire:click="printPendingBill" style="width: 100%; background: #059669; color: white; margin-top: 16px; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 8px; cursor: pointer;">
+                                            <x-heroicon-s-printer style="width: 20px; height: 20px;" /> Print Physical Invoice
+                                        </button>
                                     </div>
                                 @else
                                     <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
@@ -983,12 +1002,6 @@
                                         @endif
                                     @endif
                                 @endif
-                            @else
-                                <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--ann-text-secondary);">
-                                    <x-heroicon-o-currency-rupee style="width: 64px; height: 64px; margin-bottom: 8px; opacity: 0.5;" />
-                                    <p style="font-weight: bold; font-size: 14px; margin:0;">
-                                        {{ $selectedRoomId ? 'Guest not checked in' : 'Select a customer to view billing' }}</p>
-                                </div>
                             @endif
                         </div>
                     </div>

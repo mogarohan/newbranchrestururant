@@ -140,7 +140,7 @@ class ManagerDashboard extends Page
             'id' => uniqid(),
             'table_number' => $displayNum, // Now visual is always Table-01
             'customer_name' => $customer,
-            'time' => now()->format('h:i A')
+            'time' => now()->timezone('Asia/Kolkata')->format('h:i A') // 🌟 FIX: LOCAL TIMEZONE FOR NOTIFICATION 🌟
         ];
 
         Notification::make()->title("Assistance Requested: {$displayNum}")->body("{$customer} requires assistance.")->warning()->send();
@@ -178,25 +178,27 @@ class ManagerDashboard extends Page
 
         $serviceType = $order['service_type'] ?? 'dine_in';
         $orderId = $order['id'] ?? '?';
+        $displayOrderId = $order['daily_order_number'] ?? $orderId;
         $speechText = ""; 
         
         $customerName = $order['customer_name'] ?? 'Customer';
 
         if ($serviceType === 'parcel') {
-            $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Parcel Counter';
-            $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$orderId}", body: "Placed by {$customerName} at {$counterName}. Please confirm it.");
-            Notification::make()->title("New Parcel Order #{$orderId}")->body("Customer: {$customerName} | Location: {$counterName}")->warning()->send();
+            // 🌟 PARCEL MA FAKT CUSTOMER NAME BOLSE 🌟
+            $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$displayOrderId}", body: "Customer: {$customerName} placed an order.");
+            Notification::make()->title("New Parcel Order #{$displayOrderId}")->body("Customer: {$customerName}")->warning()->send();
             
             $speechText = "New parcel order received for {$customerName}.";
             
         } elseif ($serviceType === 'room_service') {
+            // 🌟 ROOM MA ROOM NUMBER AND CUSTOMER NAME BOLSE 🌟
             $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
             $roomNumSpeech = is_numeric($roomNum) ? (int)$roomNum : ltrim($roomNum, '0');
             
-            $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$orderId}", body: "Room {$roomNum} placed a new order. Please confirm it.");
-            Notification::make()->title("New Room Order #{$orderId}")->body("Room: {$roomNum}")->warning()->send();
+            $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$displayOrderId}", body: "Room {$roomNum} - {$customerName} placed an order.");
+            Notification::make()->title("New Room Order #{$displayOrderId}")->body("Room: {$roomNum} | Guest: {$customerName}")->warning()->send();
             
-            $speechText = "New order received from Room number {$roomNumSpeech}.";
+            $speechText = "New order received from Room number {$roomNumSpeech} by {$customerName}.";
         } else {
             $tableNum = $order['table_number'] ?? null;
             
@@ -211,8 +213,8 @@ class ManagerDashboard extends Page
             $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
             $tableNumSpeech = is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : ltrim($cleanSpeechNum, '0');
 
-            $this->dispatch('trigger-browser-notification', title: "🛎️ New Order #{$orderId}", body: "{$displayNum} placed a new order. Please confirm it.");
-            Notification::make()->title("New Order #{$orderId}")->body("Location: {$displayNum}")->warning()->send();
+            $this->dispatch('trigger-browser-notification', title: "🛎️ New Order #{$displayOrderId}", body: "{$displayNum} placed a new order. Please confirm it.");
+            Notification::make()->title("New Order #{$displayOrderId}")->body("Location: {$displayNum}")->warning()->send();
             
             $speechText = "New order received from Table number {$tableNumSpeech}.";
         }
@@ -355,7 +357,7 @@ class ManagerDashboard extends Page
                 TextInput::make('guest_name')->label('Guest Full Name')->required(),
                 DateTimePicker::make('check_out_at')
                     ->label('Expected Checkout')
-                    ->default(now()->addDays(1)->setTime(11, 0))
+                    ->default(now()->timezone('Asia/Kolkata')->addDays(1)->setTime(11, 0)) // 🌟 FIX: LOCAL TIMEZONE 🌟
                     ->required(),
             ])
             ->action(function (array $data, array $arguments) {
@@ -448,7 +450,7 @@ class ManagerDashboard extends Page
     private function generateBillNumber(): string
     {
         $lastPayment = Payment::where('restaurant_id', auth()->user()->restaurant_id)
-            ->whereDate('created_at', now()->toDateString())
+            ->whereDate('created_at', now()->timezone('Asia/Kolkata')->toDateString()) // 🌟 FIX: LOCAL TIMEZONE 🌟
             ->whereNotNull('bill_number')
             ->orderBy('id', 'desc')
             ->first();
@@ -458,8 +460,8 @@ class ManagerDashboard extends Page
             $nextSeq = (int) $matches[1] + 1;
         }
 
-        // Format: B-240826-0001 (B-DDMMYY-XXXX)
-        return 'B-' . now()->format('dmy') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+        // 🌟 FIX: LOCAL TIMEZONE 🌟
+        return 'B-' . now()->timezone('Asia/Kolkata')->format('dmy') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
     }
 
     public function settleRoomBill()
@@ -748,9 +750,8 @@ class ManagerDashboard extends Page
         if ($this->selectedParcelCounterId) {
             $locationName = ParcelQrCode::find($this->selectedParcelCounterId)->name ?? 'Parcel';
         } elseif ($this->selectedTableId) {
-            // 🌟 Applying our FORMAT TABLE HELPER HERE for Bill Print 🌟
             $rawNum = RestaurantTable::find($this->selectedTableId)->table_number ?? '';
-            $locationName = $this->formatTableNumber($rawNum); // Results in Table-01
+            $locationName = $this->formatTableNumber($rawNum);
         }
 
         $gstIn = $restaurant->gst_no ?? '-';
@@ -788,6 +789,7 @@ class ManagerDashboard extends Page
             </div>";
         }
 
+        // 🌟 FIX: LOCAL TIMEZONE IN PRINTED BILL 🌟
         $html = "
         <html><head><style>@page { margin: 0; size: 80mm auto; } body { margin: 5px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; } table { width: 100%; border-collapse: collapse; }</style></head>
         <body>
@@ -800,7 +802,7 @@ class ManagerDashboard extends Page
             <hr style='border-top:1px dashed #000; margin:10px 0;'/>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;'>
                 <span>Bill No: {$pendingPayment->bill_number}</span>
-                <span>Date: " . now()->format('d/m/Y') . "</span>
+                <span>Date: " . now()->timezone('Asia/Kolkata')->format('d/m/Y h:i A') . "</span>
             </div>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;'>
                 <span>Name: {$session->customer_name}</span>
@@ -1056,7 +1058,10 @@ class ManagerDashboard extends Page
 
                 KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => 0]);
                 OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
-                Notification::make()->title('Order placed.')->success()->send();
+                
+                $order->refresh();
+                $displayId = $order->daily_order_number ?? $order->id;
+                Notification::make()->title("Order #{$displayId} placed.")->success()->send();
             });
     }
 
@@ -1064,7 +1069,14 @@ class ManagerDashboard extends Page
     {
         return Action::make('editOrderAction')
             ->label('Edit Order')
-            ->modalHeading(fn(array $arguments) => 'Edit Order #' . ($arguments['orderId'] ?? ''))
+            ->modalHeading(function (array $arguments) {
+                if (isset($arguments['orderId'])) {
+                    $order = \App\Models\Order::find($arguments['orderId']);
+                    $displayId = $order->daily_order_number ?? $order->id ?? '';
+                    return 'Edit Order #' . $displayId; // 🌟 NAYA: Modal Title ma Daily Order Number
+                }
+                return 'Edit Order';
+            })
             ->modalWidth(MaxWidth::TwoExtraLarge)
             ->form([
                 Repeater::make('items')->schema([
@@ -1128,7 +1140,9 @@ class ManagerDashboard extends Page
                 $order->update(['total_amount' => $totalAmount, 'confirmed_total' => $totalAmount]);
 
                 OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
-                Notification::make()->title('Order updated.')->success()->send();
+                
+                $displayId = $order->daily_order_number ?? $order->id;
+                Notification::make()->title("Order #{$displayId} updated.")->success()->send();
             });
     }
 
@@ -1191,6 +1205,8 @@ class ManagerDashboard extends Page
     {
         $user = auth()->user();
         $order = Order::with('items')->where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
+        $displayId = $order->daily_order_number ?? $order->id; // 🌟 NAYA: Alert ma navo number dekhasa 🌟
+        
         $oldStatus = $order->status;
         $stockNotes = [];
         $wasPartial = false;
@@ -1253,7 +1269,7 @@ class ManagerDashboard extends Page
             KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => 0]);
 
             Notification::make()
-                ->title($wasPartial ? "Order #{$orderId} Partially Accepted ⚠️" : "Order #{$orderId} Accepted ✅")
+                ->title($wasPartial ? "Order #{$displayId} Partially Accepted ⚠️" : "Order #{$displayId} Accepted ✅")
                 ->body($wasPartial ? 'Some items were out of stock.' : 'Order ready for preparation.')
                 ->success()
                 ->send();
@@ -1265,13 +1281,13 @@ class ManagerDashboard extends Page
             }
 
             if ($status === 'preparing') {
-                Notification::make()->title("Order #{$orderId} is Preparing 🍳")->success()->send();
+                Notification::make()->title("Order #{$displayId} is Preparing 🍳")->success()->send();
             } elseif ($status === 'ready') {
-                Notification::make()->title("Order #{$orderId} is Ready 🛎️")->success()->send();
+                Notification::make()->title("Order #{$displayId} is Ready 🛎️")->success()->send();
             } elseif ($status === 'served') {
-                Notification::make()->title("Order #{$orderId} Delivered ✔️")->success()->send();
+                Notification::make()->title("Order #{$displayId} Delivered ✔️")->success()->send();
             } elseif ($status === 'rejected') {
-                Notification::make()->title("Order #{$orderId} Rejected ❌")->danger()->send();
+                Notification::make()->title("Order #{$displayId} Rejected ❌")->danger()->send();
             }
         }
 
