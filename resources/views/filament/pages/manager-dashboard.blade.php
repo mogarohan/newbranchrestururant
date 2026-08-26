@@ -456,7 +456,6 @@
                                             @endif
                                             {{ $cLabel }}
                                         </span>
-                                        {{-- 🌟 NAYA: ROOM NO. AND CUSTOMER NAME BOTH BOLD 🌟 --}}
                                         <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">Room {{ $order->roomSession->room->room_number ?? '?' }}</p>
                                         <p style="font-weight: 900; font-size: 13px; color: var(--ann-text-primary); margin:0; margin-top:2px;">{{ $order->customer_name }} <span style="font-weight: bold; color: var(--ann-text-secondary); font-size: 12px;">• #{{ $order->daily_order_number ?? $order->id }}</span></p>
                                     </div>
@@ -533,7 +532,6 @@
                                             @endif
                                             {{ $cLabel }}
                                         </span>
-                                        {{-- 🌟 NAYA: CUSTOMER NAME UPAR BOLD, COUNTER NICHE SECONDARY 🌟 --}}
                                         <p style="font-weight: 900; color: var(--ann-text-primary); margin: 6px 0 0 0;">{{ $order->customer_name }}</p>
                                         <p style="font-size: 12px; color: var(--ann-text-secondary); font-weight: bold; margin:0; margin-top:2px;">{{ $order->parcelQrSession?->parcelQrCode?->name ?? 'PARCEL' }} • #{{ $order->daily_order_number ?? $order->id }}</p>
                                     </div>
@@ -755,7 +753,6 @@
                                     @foreach($activeDinersList as $diner)
                                         <div wire:click="selectCustomerSession({{ $diner->id }})" class="customer-pill {{ $selectedSessionId === $diner->id ? 'active' : '' }}">
                                             <span class="customer-pill-name" style="color: {{ $selectedSessionId === $diner->id ? 'var(--ann-dark-blue)' : 'var(--ann-text-primary)' }}; font-weight:bold; display:block;">{{ $diner->customer_name }}</span>
-                                            {{-- 🌟 FIX: LOCAL TIMEZONE 🌟 --}}
                                             <span class="customer-pill-sub" style="color: var(--ann-text-secondary); font-size:11px; display:block;">Arrived {{ $diner->created_at->timezone('Asia/Kolkata')->diffForHumans() }}</span>
                                         </div>
                                     @endforeach
@@ -787,14 +784,15 @@
                                     <p style="text-align: center; color: var(--ann-text-secondary); font-style: italic; margin-top: 32px;">No orders placed yet.</p>
                                 @else
                                     <div style="display: flex; flex-direction: column; gap: 16px;">
-                                        @foreach(['placed' => 'Pending', 'accepted' => 'Accepted', 'partial_accepted' => 'Accepted', 'preparing' => 'Cooking', 'ready' => 'Ready to Serve', 'served' => 'Served', 'cancelled' => 'Cancelled', 'rejected' => 'Cancelled'] as $statusKey => $label)
+                                        @foreach(['placed' => 'Pending', 'accepted' => 'Accepted', 'partial_accepted' => 'Accepted', 'preparing' => 'Cooking', 'ready' => 'Ready to Serve', 'served' => 'Served', 'completed' => 'Completed', 'cancelled' => 'Cancelled', 'rejected' => 'Cancelled'] as $statusKey => $label)
                                             @if(isset($groupedOrders[$statusKey]) && $groupedOrders[$statusKey]->count() > 0)
                                                 <div>
                                                     <h4 style="font-size: 10px; font-weight: bold; margin:0; text-transform: uppercase; border-bottom: 1px solid var(--ann-border); padding-bottom: 4px; margin-bottom: 12px; color: {{ 
                                                         $statusKey === 'placed' ? 'var(--ann-dark-blue)' : 
                                                         (in_array($statusKey, ['accepted', 'partial_accepted']) ? 'var(--ann-orange)' : 
                                                         ($statusKey === 'preparing' ? 'var(--ann-success)' : 
-                                                        ($statusKey === 'ready' ? 'var(--ann-blue)' : 'var(--ann-text-secondary)')))
+                                                        ($statusKey === 'ready' ? 'var(--ann-blue)' : 
+                                                        ($statusKey === 'completed' ? '#10b981' : 'var(--ann-text-secondary)')))) 
                                                     }}">
                                                         {{ $label }}</h4>
                                                     <div style="display: flex; flex-direction: column; gap: 8px;">
@@ -803,29 +801,26 @@
                                                                 $isCancelled = in_array($statusKey, ['cancelled', 'rejected']);
                                                                 $isPaid = $order->payment_status === 'paid'; 
                                                                 
-                                                                // 🌟 MODAL HISTORY BORDERS MAP 🌟
                                                                 if ($statusKey === 'ready') { $hBorder = 'var(--ann-blue)'; } 
                                                                 elseif ($statusKey === 'preparing') { $hBorder = 'var(--ann-success)'; } 
                                                                 elseif (in_array($statusKey, ['accepted', 'partial_accepted'])) { $hBorder = 'var(--ann-orange)'; } 
                                                                 elseif ($statusKey === 'placed') { $hBorder = 'var(--ann-dark-blue)'; } 
+                                                                elseif ($statusKey === 'completed') { $hBorder = '#10b981'; } 
                                                                 else { $hBorder = 'var(--ann-border)'; }
                                                             @endphp
                                                             <div style="background: white; padding: 12px; border-radius: 12px; border: 1.5px solid {{ $isCancelled ? 'var(--ann-border)' : $hBorder }}; box-shadow: 0 1px 2px rgba(0,0,0,0.05); {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
                                                                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed {{ $isCancelled ? 'var(--ann-border)' : $hBorder }}; padding-bottom: 8px; margin-bottom: 8px;">
                                                                     <div style="display: flex; align-items: center; gap: 8px;">
-                                                                        {{-- 🌟 NAYA: Order # with LOCAL TIMEZONE 🌟 --}}
                                                                         <span style="font-size: 12px; font-weight: bold; color: var(--ann-text-primary);">Order #{{ $order->daily_order_number ?? $order->id }}</span>
                                                                         <span style="font-size: 10px; color: var(--ann-text-secondary);">• {{ $order->created_at->timezone('Asia/Kolkata')->format('h:i A') }}</span>
-                                                                        @if($isPaid) <span style="font-size: 10px; font-weight: bold; background: #d1fae5; color: var(--ann-success); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">PAID</span>
-                                                                        @endif
+                                                                        @if($isPaid) <span style="font-size: 10px; font-weight: bold; background: #d1fae5; color: var(--ann-success); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">PAID</span> @endif
                                                                     </div>
                                                                     @if(!$isCancelled && !$pendingPayment && !$isPaid)
                                                                         <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" style="font-size: 10px; font-weight: bold; border: 1px solid var(--ann-border); padding: 4px 8px; border-radius: 4px; color: var(--ann-text-secondary); background: transparent; cursor: pointer;">EDIT</button>
                                                                     @endif
                                                                 </div>
                                                                 @foreach($order->items as $item)
-                                                                    @php $displayQty = $item->confirmed_qty ?? $item->quantity;
-                                                                    $isOos = $displayQty === 0; @endphp
+                                                                    @php $displayQty = $item->confirmed_qty ?? $item->quantity; $isOos = $displayQty === 0; @endphp
                                                                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 4px;">
                                                                         <span style="font-weight: 600; color: var(--ann-text-primary); {{ $isOos ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">
                                                                             @if($isOos) <span style="color: var(--ann-red); font-weight: bold; font-size: 12px; margin-right: 4px;">[OOS]</span>
@@ -869,7 +864,6 @@
                                             </button>
                                         @endif
                                         
-                                        {{-- 🌟 ALL-IN-ONE QUICK TABLE STATUS 🌟 --}}
                                         @if(($isAllInOne ?? false) && $selectedTableId)
                                             <span style="display: block; font-size: 10px; font-weight: bold; color: var(--ann-text-secondary); text-transform: uppercase; margin: 16px 0 8px 0;">Table Status (Quick Actions)</span>
                                             <div style="display: flex; gap: 8px; margin-bottom: 16px;">
@@ -885,15 +879,20 @@
                                 <span style="display: block; font-size: 10px; font-weight: bold; color: var(--ann-text-secondary); text-transform: uppercase; margin-bottom: 12px;">Bill Generation</span>
 
                                 @php
-                                    $validOrders = $tableOrders->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
-                                    $subtotal = $validOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
-                                    $amountAlreadyPaid = $validOrders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                                    $validOrders = $tableOrders->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served', 'completed']);
+                                    $unpaidValidOrders = $validOrders->where('payment_status', '!=', 'paid');
+                                    
+                                    $subtotal = $unpaidValidOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                                    
                                     $taxable = max(0, $subtotal - (float) $discountAmount);
                                     $liveTax = $taxable * ((float) $taxPercentage / 100);
-                                    $liveTotal = max(0, ($taxable + $liveTax + (float) $extraCharges) - $amountAlreadyPaid);
+                                    $liveTotal = max(0, $taxable + $liveTax + (float) $extraCharges);
+                                    
+                                    // IF SUBTOTAL IS 0, IT MEANS EVERYTHING IS PAID.
                                 @endphp
 
-                                @if($pendingPayment && $pendingPayment->status === 'paid')
+                                {{-- 🌟 FIX: SHOW BILL SETTLED AND PRINT INVOICE FOR ALL MODES 🌟 --}}
+                                @if($subtotal == 0 && $pendingPayment && $pendingPayment->status === 'paid')
                                     <div style="background: #d1fae5; border: 1px solid var(--ann-success); padding: 16px; border-radius: 16px; text-align: center;">
                                         <x-heroicon-s-check-circle style="width: 40px; height: 40px; color: var(--ann-success); margin: 0 auto 8px auto;" />
                                         <h4 style="color: #047857; font-weight: 900; font-size: 18px; margin:0; text-transform: uppercase; letter-spacing: 1px;">Bill Settled</h4>
@@ -901,9 +900,8 @@
                                             <span style="color: #065f46; font-weight: bold; font-size: 14px;">Amount Paid:</span>
                                             <span style="color: #064e3b; font-weight: 900; font-size: 14px;">₹{{ number_format($pendingPayment->amount, 2) }}</span>
                                         </div>
-                                        <p style="color: #059669; font-size: 12px; margin:0; margin-top: 12px;">Customer can now download PDF.</p>
+                                        <p style="color: #059669; font-size: 12px; margin:0; margin-top: 12px;">Tax invoice auto-generated.</p>
                                         
-                                        {{-- 🌟 NAYA: PAID THAYA PACHI PAN PRINT PHYSICAL BILL BUTTON 🌟 --}}
                                         <button wire:click="printPendingBill" style="width: 100%; background: #059669; color: white; margin-top: 16px; padding: 12px; border-radius: 8px; border: none; font-weight: bold; font-size: 14px; display: flex; justify-content: center; align-items: center; gap: 8px; cursor: pointer;">
                                             <x-heroicon-s-printer style="width: 20px; height: 20px;" /> Print Physical Invoice
                                         </button>
@@ -913,15 +911,8 @@
                                         <span style="color: var(--ann-text-secondary); font-weight: bold; font-size: 14px;">Orders Total</span>
                                         <span style="color: var(--ann-text-primary); font-weight: 900; font-size: 18px;">₹{{ number_format($subtotal, 2) }}</span>
                                     </div>
-                                    @if($amountAlreadyPaid > 0)
-                                        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;">
-                                            <span style="color: var(--ann-success); font-weight: bold; font-size: 14px;">Already Paid</span>
-                                            <span style="color: var(--ann-success); font-weight: 900; font-size: 16px;">- ₹{{ number_format($amountAlreadyPaid, 2) }}</span>
-                                        </div>
-                                    @endif
 
-                                    {{-- Standard Table/Parcel Billing Modifiers --}}
-                                    @if(!$selectedRoomId && !$pendingPayment && $subtotal > 0)
+                                    @if(!$pendingPayment && $subtotal > 0)
                                         <div style="display: flex; gap: 8px; margin-bottom: 16px;">
                                             <div style="flex: 1;">
                                                 <label style="font-size: 10px; font-weight: bold; color: var(--ann-text-secondary); text-transform: uppercase;">Discount (₹)</label>
@@ -951,12 +942,10 @@
 
                                     @if($subtotal > 0)
                                         @if($selectedRoomId)
-                                            {{-- Room Settlement Button --}}
                                             <button wire:click="settleRoomBill" class="btn-primary" style="width: 100%; background: var(--ann-success); padding: 16px; border-radius: 12px; font-size: 16px; margin:0;">
-                                                Settle Food Bill to Room
+                                                Settle Room Bill & Generate Invoice
                                             </button>
                                         @else
-                                            {{-- Standard POS Flow --}}
                                             @if(!$pendingPayment)
                                                 <button wire:click="sendBillToCustomer" class="btn-primary" style="width: 100%; padding: 16px; border-radius: 12px; font-size: 16px; display: flex; justify-content: center; align-items: center; gap: 8px; margin:0;">
                                                     <x-heroicon-s-paper-airplane style="width: 20px; height: 20px;" /> Generate Final Bill
@@ -974,7 +963,6 @@
                                                             <span style="color: var(--ann-orange); font-weight: 900; font-size: 18px; margin:0; display: block;" class="animate-pulse">Waiting for Customer...</span>
                                                         @endif
 
-                                                        {{-- UPI QR CODE FOR MODAL RIGHT COLUMN --}}
                                                         @if(!empty($upiId))
                                                             <div style="margin-top: 12px; background: white; padding: 8px; border-radius: 8px; text-align: center; border: 2px dashed var(--ann-success);">
                                                                 <p style="font-size: 11px; font-weight: 900; color: var(--ann-success); margin: 0 0 8px 0;">
@@ -1011,14 +999,12 @@
 
         <x-filament-actions::modals />
 
-        {{-- 🌟 NAYA: BROWSER NOTIFICATION AND GUJARATI TTS SCRIPT 🌟 --}}
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
                     Notification.requestPermission();
                 }
                 
-                // Existing Visual Notification
                 window.addEventListener('trigger-browser-notification', function (e) {
                     const data = e.detail;
                     if ("Notification" in window && Notification.permission === "granted") {
@@ -1027,34 +1013,24 @@
                     }
                 });
 
-                // NEW: Dynamic Text To Speech (Gujarati / Hindi)
                 window.addEventListener('speak-notification', function (e) {
                     if ('speechSynthesis' in window) {
-                        // Get the text from Livewire 3 event detail
                         const text = e.detail.text || (e.detail[0] ? e.detail[0].text : '');
                         if(!text) return;
-
-                        // Cancel any currently speaking audio
                         window.speechSynthesis.cancel();
-                        
                         let msg = new SpeechSynthesisUtterance(text);
-                        
-                        // Try to find a Gujarati or Indian voice for natural pronunciation
                         let voices = window.speechSynthesis.getVoices();
                         let indianVoice = voices.find(voice => 
                             voice.lang.includes('gu-IN') || 
                             voice.lang.includes('hi-IN') || 
                             voice.lang.includes('en-IN')
                         );
-                        
                         if (indianVoice) {
                             msg.voice = indianVoice;
                         }
-                        
-                        msg.rate = 0.9; // Clear speed
+                        msg.rate = 0.9;
                         msg.pitch = 1;
                         msg.volume = 1;
-
                         window.speechSynthesis.speak(msg);
                     }
                 });

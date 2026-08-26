@@ -52,7 +52,6 @@ class ManagerDashboard extends Page
     public $taxPercentage = 0;
     public $extraCharges = 0;
 
-    // 🌟 ALL-IN-ONE Feature Property 🌟
     public $activeAlerts = []; 
 
     public function mount(): void
@@ -117,20 +116,17 @@ class ManagerDashboard extends Page
         ];
     }
 
-    // 🌟 FORMAT HELPER FOR CONSISTENT "Table-01" ALL OVER 🌟
     private function formatTableNumber($tableNum): string
     {
         if (!$tableNum) return 'Table-Unknown';
-        // "T-01" k "Table 01" badhu automatically "Table-01" ma convert thay jase
         $cleanNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
         return 'Table-' . trim($cleanNum);
     }
 
-    // 🌟 ALL-IN-ONE Feature Functions 🌟
     public function notifyWaiterCalled($event): void
     {
         $rawNum = $event['table_number'] ?? '?';
-        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
+        $displayNum = $this->formatTableNumber($rawNum); 
         $customer = $event['customer_name'] ?? 'A customer';
         
         $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $rawNum);
@@ -138,16 +134,14 @@ class ManagerDashboard extends Page
 
         $this->activeAlerts[] = [
             'id' => uniqid(),
-            'table_number' => $displayNum, // Now visual is always Table-01
+            'table_number' => $displayNum, 
             'customer_name' => $customer,
-            'time' => now()->timezone('Asia/Kolkata')->format('h:i A') // 🌟 FIX: LOCAL TIMEZONE FOR NOTIFICATION 🌟
+            'time' => now()->timezone('Asia/Kolkata')->format('h:i A')
         ];
 
         Notification::make()->title("Assistance Requested: {$displayNum}")->body("{$customer} requires assistance.")->warning()->send();
         $this->dispatch('trigger-browser-notification', title: "🔔 Waiter Called!", body: "{$displayNum} needs assistance.");
-        
         $this->dispatch('speak-notification', text: "Table number {$numSpeech} needs assistance.");
-
         $this->dispatch('$refresh');
     }
 
@@ -166,56 +160,44 @@ class ManagerDashboard extends Page
             $this->closeReceiptModal();
         }
     }
-    // 🌟 END ALL-IN-ONE Feature Functions 🌟
 
     public function handleNewOrder($event)
     {
         $this->dispatch('$refresh');
 
         $order = $event['order'] ?? null;
-        if (!$order)
-            return;
+        if (!$order) return;
 
         $serviceType = $order['service_type'] ?? 'dine_in';
         $orderId = $order['id'] ?? '?';
         $displayOrderId = $order['daily_order_number'] ?? $orderId;
         $speechText = ""; 
-        
         $customerName = $order['customer_name'] ?? 'Customer';
 
         if ($serviceType === 'parcel') {
-            // 🌟 PARCEL MA FAKT CUSTOMER NAME BOLSE 🌟
             $this->dispatch('trigger-browser-notification', title: "🛍️ New Parcel Order #{$displayOrderId}", body: "Customer: {$customerName} placed an order.");
             Notification::make()->title("New Parcel Order #{$displayOrderId}")->body("Customer: {$customerName}")->warning()->send();
-            
             $speechText = "New parcel order received for {$customerName}.";
-            
         } elseif ($serviceType === 'room_service') {
-            // 🌟 ROOM MA ROOM NUMBER AND CUSTOMER NAME BOLSE 🌟
             $roomNum = $order['room_session']['room']['room_number'] ?? 'Unknown';
             $roomNumSpeech = is_numeric($roomNum) ? (int)$roomNum : ltrim($roomNum, '0');
-            
             $this->dispatch('trigger-browser-notification', title: "🚪 New Room Order #{$displayOrderId}", body: "Room {$roomNum} - {$customerName} placed an order.");
             Notification::make()->title("New Room Order #{$displayOrderId}")->body("Room: {$roomNum} | Guest: {$customerName}")->warning()->send();
-            
             $speechText = "New order received from Room number {$roomNumSpeech} by {$customerName}.";
         } else {
             $tableNum = $order['table_number'] ?? null;
-            
             if (!$tableNum && isset($order['restaurant_table_id'])) {
                 $table = \App\Models\RestaurantTable::find($order['restaurant_table_id']);
                 $tableNum = $table ? $table->table_number : 'Unknown';
             }
-            
             $tableNum = $tableNum ?? 'Unknown';
-            $displayNum = $this->formatTableNumber($tableNum); // EX: Table-01
+            $displayNum = $this->formatTableNumber($tableNum); 
             
             $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
             $tableNumSpeech = is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : ltrim($cleanSpeechNum, '0');
 
             $this->dispatch('trigger-browser-notification', title: "🛎️ New Order #{$displayOrderId}", body: "{$displayNum} placed a new order. Please confirm it.");
             Notification::make()->title("New Order #{$displayOrderId}")->body("Location: {$displayNum}")->warning()->send();
-            
             $speechText = "New order received from Table number {$tableNumSpeech}.";
         }
 
@@ -225,10 +207,8 @@ class ManagerDashboard extends Page
     public function handleOrderStatusUpdated($event)
     {
         $this->dispatch('$refresh');
-
         $order = $event['order'] ?? null;
         $status = $order['status'] ?? null;
-
         if ($status === 'placed') {
             $this->handleNewOrder($event);
         }
@@ -237,7 +217,7 @@ class ManagerDashboard extends Page
     public function notifyBillRequested($event): void
     {
         $rawNum = $event['table_number'] ?? '?';
-        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
+        $displayNum = $this->formatTableNumber($rawNum); 
         $customer = $event['customer_name'] ?? 'A customer';
         $cacheKey = "bill_requested_alert_{$rawNum}";
         
@@ -247,9 +227,7 @@ class ManagerDashboard extends Page
         if (!Cache::has($cacheKey)) {
             Notification::make()->title("Bill Requested: {$displayNum}")->body("{$customer} has requested their final bill.")->warning()->persistent()->send();
             $this->dispatch('trigger-browser-notification', title: "💰 Bill Requested", body: "{$displayNum} ({$customer}) requested their bill.");
-            
             $this->dispatch('speak-notification', text: "Bill requested at Table number {$tableNumSpeech}.");
-
             Cache::put($cacheKey, true, now()->addSeconds(30));
         }
     }
@@ -257,7 +235,7 @@ class ManagerDashboard extends Page
     public function notifyPaymentMethod($event): void
     {
         $rawNum = $event['table_number'] ?? '?';
-        $displayNum = $this->formatTableNumber($rawNum); // EX: Table-01
+        $displayNum = $this->formatTableNumber($rawNum); 
         $method = strtoupper($event['method'] ?? 'CASH');
 
         Notification::make()->title("Payment Update: {$displayNum}")->body("Customer selected {$method} for payment.")->info()->send();
@@ -283,11 +261,8 @@ class ManagerDashboard extends Page
             $this->closeReceiptModal();
             $this->selectedTableId = $tableId;
             $firstDiner = QrSession::where('restaurant_table_id', $tableId)
-                ->where('is_active', true)
-                ->where('is_primary', true)
-                ->orderBy('created_at', 'asc')
-                ->first();
-
+                ->where('is_active', true)->where('is_primary', true)
+                ->orderBy('created_at', 'asc')->first();
             if ($firstDiner) {
                 $this->selectedSessionId = $firstDiner->id;
             }
@@ -301,12 +276,8 @@ class ManagerDashboard extends Page
         } else {
             $this->closeReceiptModal();
             $this->selectedParcelCounterId = $counterId;
-
             $firstDiner = ParcelQrSession::where('parcel_qr_code_id', $counterId)
-                ->where('status', 'active')
-                ->orderBy('created_at', 'asc')
-                ->first();
-
+                ->where('status', 'active')->orderBy('created_at', 'asc')->first();
             if ($firstDiner) {
                 $this->selectedSessionId = $firstDiner->id;
             }
@@ -337,8 +308,7 @@ class ManagerDashboard extends Page
 
     protected function getActiveSession()
     {
-        if (!$this->selectedSessionId)
-            return null;
+        if (!$this->selectedSessionId) return null;
 
         if ($this->selectedParcelCounterId) {
             return ParcelQrSession::find($this->selectedSessionId);
@@ -357,13 +327,12 @@ class ManagerDashboard extends Page
                 TextInput::make('guest_name')->label('Guest Full Name')->required(),
                 DateTimePicker::make('check_out_at')
                     ->label('Expected Checkout')
-                    ->default(now()->timezone('Asia/Kolkata')->addDays(1)->setTime(11, 0)) // 🌟 FIX: LOCAL TIMEZONE 🌟
+                    ->default(now()->timezone('Asia/Kolkata')->addDays(1)->setTime(11, 0))
                     ->required(),
             ])
             ->action(function (array $data, array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if (!$room)
-                    return;
+                if (!$room) return;
 
                 $token = Str::uuid()->toString();
                 $restaurantSlug = Str::slug($room->restaurant->name);
@@ -383,7 +352,7 @@ class ManagerDashboard extends Page
                     'room_id' => $room->id,
                     'guest_name' => $data['guest_name'],
                     'session_token' => $token,
-                    'check_in_at' => now(),
+                    'check_in_at' => now()->timezone('Asia/Kolkata'),
                     'check_out_at' => $data['check_out_at'],
                     'status' => 'active',
                 ]);
@@ -391,7 +360,7 @@ class ManagerDashboard extends Page
                 $room->update([
                     'status' => 'occupied',
                     'guest_name' => $data['guest_name'],
-                    'check_in_at' => now(),
+                    'check_in_at' => now()->timezone('Asia/Kolkata'),
                     'check_out_at' => $data['check_out_at'],
                     'active_room_session_id' => $session->id,
                     'qr_token' => $token,
@@ -403,35 +372,85 @@ class ManagerDashboard extends Page
             });
     }
 
+    // 🌟 FIX: GUARANTEED CHECKOUT INVOICE GENERATION 🌟
     public function checkoutAction(): Action
     {
         return Action::make('checkoutAction')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalHeading('Checkout Guest & Settle Bill')
+            ->modalDescription('Are you sure you want to checkout this guest? This will automatically consolidate all their orders and generate a final Tax Invoice.')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if (!$room)
-                    return;
+                if (!$room) return;
 
-                if ($room->qr_path) {
-                    Storage::disk('public')->delete($room->qr_path);
-                }
+                DB::transaction(function () use ($room) {
+                    if ($room->activeSession) {
+                        $session = $room->activeSession;
+                        
+                        // 🌟 FETCH ALL ORDERS FOR THIS SESSION TO CREATE A CONSOLIDATED CHECKOUT INVOICE 🌟
+                        $allOrders = Order::with('items.menuItem')
+                            ->where('room_session_id', $session->id)
+                            ->whereNotIn('status', ['cancelled', 'rejected'])
+                            ->get();
+                            
+                        $subtotal = $allOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                        $taxable = max(0, $subtotal - (float) $this->discountAmount);
+                        $taxAmt = $taxable * ((float) $this->taxPercentage / 100);
+                        $extra = (float) $this->extraCharges;
+                        $grandTotal = max(0, round($taxable + $taxAmt + $extra, 2));
+                        
+                        // Use the latest order ID for the payment relation, or null if no orders
+                        $latestOrderId = $allOrders->pluck('id')->last();
+                        
+                        // Enforce R- Prefix
+                        $billNumber = $this->generateBillNumber(true); 
 
-                if ($room->activeSession) {
-                    $room->activeSession->update(['status' => 'checked_out']);
-                    event(new \App\Events\SessionEnded($room->activeSession->session_token, $room->id));
-                }
+                        // 🌟 CREATE A MASTER PAYMENT RECORD FOR CHECKOUT 🌟
+                        $payment = Payment::create([
+                            'order_id' => $latestOrderId, // Can be null if room had 0 orders, still generates invoice
+                            'restaurant_id' => auth()->user()->restaurant_id,
+                            'branch_id' => auth()->user()->branch_id,
+                            'subtotal' => $subtotal,
+                            'discount_amount' => (float) $this->discountAmount,
+                            'tax_amount' => $taxAmt,
+                            'extra_charges' => $extra,
+                            'amount' => $grandTotal,
+                            'status' => 'paid',
+                            'payment_method' => 'room_charge',
+                            'bill_number' => $billNumber,
+                            'paid_at' => now()->timezone('Asia/Kolkata'),
+                        ]);
+                        
+                        if ($allOrders->isNotEmpty()) {
+                            Order::whereIn('id', $allOrders->pluck('id'))
+                                ->update(['payment_status' => 'paid', 'status' => 'completed']);
+                        }
+                            
+                        $session->update(['is_billed' => true, 'status' => 'checked_out']);
+                        
+                        // Generate the Final Invoice!
+                        \App\Services\Orders\InvoiceService::generateInvoice($session, $payment, $allOrders);
 
-                $room->update([
-                    'status' => 'cleaning',
-                    'guest_name' => null,
-                    'check_in_at' => null,
-                    'check_out_at' => null,
-                    'active_room_session_id' => null,
-                    'qr_token' => null,
-                    'qr_path' => null,
-                ]);
+                        event(new \App\Events\SessionEnded($session->session_token, $room->id));
+                    }
+
+                    if ($room->qr_path) Storage::disk('public')->delete($room->qr_path);
+
+                    $room->update([
+                        'status' => 'cleaning',
+                        'guest_name' => null,
+                        'check_in_at' => null,
+                        'check_out_at' => null,
+                        'active_room_session_id' => null,
+                        'qr_token' => null,
+                        'qr_path' => null,
+                    ]);
+                });
 
                 $this->closeReceiptModal();
-                Notification::make()->title('Checkout complete. Stay QR has been disabled.')->success()->send();
+                $this->discountAmount = 0; $this->taxPercentage = 0; $this->extraCharges = 0;
+                Notification::make()->title('Checkout complete & Final Invoice Generated.')->success()->send();
             });
     }
 
@@ -440,18 +459,18 @@ class ManagerDashboard extends Page
         return Action::make('markCleanAction')
             ->action(function (array $arguments) {
                 $room = Room::find($arguments['room_id']);
-                if ($room)
-                    $room->update(['status' => 'available']);
+                if ($room) $room->update(['status' => 'available']);
                 Notification::make()->title('Room available for next guest.')->success()->send();
             });
     }
 
-    // 🌟 HELPER TO GENERATE UNIQUE BILL NUMBER
-    private function generateBillNumber(): string
+    private function generateBillNumber(bool $isRoom = false): string
     {
+        $prefix = $isRoom ? 'R-' : 'B-';
+
         $lastPayment = Payment::where('restaurant_id', auth()->user()->restaurant_id)
-            ->whereDate('created_at', now()->timezone('Asia/Kolkata')->toDateString()) // 🌟 FIX: LOCAL TIMEZONE 🌟
-            ->whereNotNull('bill_number')
+            ->whereDate('created_at', now()->timezone('Asia/Kolkata')->toDateString())
+            ->where('bill_number', 'like', "{$prefix}%")
             ->orderBy('id', 'desc')
             ->first();
 
@@ -460,45 +479,60 @@ class ManagerDashboard extends Page
             $nextSeq = (int) $matches[1] + 1;
         }
 
-        // 🌟 FIX: LOCAL TIMEZONE 🌟
-        return 'B-' . now()->timezone('Asia/Kolkata')->format('dmy') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
+        return $prefix . now()->timezone('Asia/Kolkata')->format('dmy') . '-' . str_pad($nextSeq, 4, '0', STR_PAD_LEFT);
     }
 
     public function settleRoomBill()
     {
-        if (!$this->selectedRoomId || !$this->selectedSessionId)
-            return;
+        if (!$this->selectedRoomId || !$this->selectedSessionId) return;
 
-        $orders = Order::where('room_session_id', $this->selectedSessionId)->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])->get();
-        if ($orders->isEmpty())
+        $unpaidOrders = Order::where('room_session_id', $this->selectedSessionId)
+            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->where('payment_status', '!=', 'paid')
+            ->get();
+            
+        if ($unpaidOrders->isEmpty()) {
+            Notification::make()->title('No pending amounts to settle.')->warning()->send();
             return;
+        }
 
-        $subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
-        $amountPaid = $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
-        $amountDue = max(0, $subtotal - $amountPaid);
-        $latestOrderId = $orders->pluck('id')->last();
-
-        if ($amountDue <= 0)
-            return;
+        $subtotal = $unpaidOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+        $taxable = max(0, $subtotal - (float) $this->discountAmount);
+        $taxAmt = $taxable * ((float) $this->taxPercentage / 100);
+        $extra = (float) $this->extraCharges;
+        $amountDue = max(0, round($taxable + $taxAmt + $extra, 2));
+        
+        $latestOrderId = $unpaidOrders->pluck('id')->last();
 
         try {
-            DB::transaction(function () use ($latestOrderId, $subtotal, $amountDue) {
+            DB::transaction(function () use ($latestOrderId, $subtotal, $taxAmt, $extra, $amountDue, $unpaidOrders) {
                 $existingPayment = Payment::where('order_id', $latestOrderId)->first();
-                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber();
+                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber(true); 
 
-                Payment::updateOrCreate(['order_id' => $latestOrderId], [
+                $payment = Payment::updateOrCreate(['order_id' => $latestOrderId], [
                     'restaurant_id' => auth()->user()->restaurant_id,
+                    'branch_id' => auth()->user()->branch_id,
                     'subtotal' => $subtotal,
+                    'discount_amount' => (float) $this->discountAmount,
+                    'tax_amount' => $taxAmt,
+                    'extra_charges' => $extra,
                     'amount' => $amountDue,
                     'status' => 'paid',
                     'payment_method' => 'room_charge',
                     'bill_number' => $billNumber,
-                    'paid_at' => now(),
+                    'paid_at' => now()->timezone('Asia/Kolkata'),
                 ]);
-                Order::where('room_session_id', $this->selectedSessionId)->update(['payment_status' => 'paid']);
-                RoomSession::where('id', $this->selectedSessionId)->update(['is_billed' => true]);
+                
+                Order::whereIn('id', $unpaidOrders->pluck('id'))
+                    ->update(['payment_status' => 'paid', 'status' => 'completed']);
+                    
+                $session = RoomSession::find($this->selectedSessionId);
+                $session->update(['is_billed' => true]);
+                
+                \App\Services\Orders\InvoiceService::generateInvoice($session, $payment, $unpaidOrders);
             });
-            Notification::make()->title('Room Service Bill Settled.')->success()->send();
+            Notification::make()->title('Room Service Bill Settled & Invoice Generated.')->success()->send();
+            $this->discountAmount = 0; $this->taxPercentage = 0; $this->extraCharges = 0;
         } catch (\Exception $e) {
             Notification::make()->title('Error settling bill')->body($e->getMessage())->danger()->send();
         }
@@ -556,7 +590,6 @@ class ManagerDashboard extends Page
                                     ->label('Live Design Preview')
                                     ->content(function (\Filament\Forms\Get $get) {
                                         $restaurant = auth()->user()->restaurant;
-
                                         $bgType = $get('bg_type') ?? 'image';
                                         $bgImage = $get('bg_image');
                                         $bgColor = $get('bg_color') ?? '#E2F0CB';
@@ -603,16 +636,13 @@ class ManagerDashboard extends Page
                                                 <div style='display: flex; justify-content: center; align-items: center; margin-top: 15px;'>
                                                     <div style='border-top: 3px solid {$accentColor}; border-left: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(-55px, -55px);'></div>
                                                     <div style='border-bottom: 3px solid {$accentColor}; border-right: 3px solid {$accentColor}; width: 20px; height: 20px; position: absolute; transform: translate(55px, 55px);'></div>
-
                                                     <div style='background: white; padding: 6px; border-radius: 8px; border: 2px solid #8B5CF6; z-index: 10;'>
                                                         <img src='https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=LivePreview' style='width: 100px; height: 100px; display: block;' />
                                                     </div>
                                                 </div>
-
                                                 <div style='margin-top: 15px;'>
                                                     <span style='background-color: {$pillBgColor}; color: white; padding: 6px 20px; border-radius: 15px; font-size: 10px; font-weight: bold; letter-spacing: 1px;'>SCAN TO ORDER</span>
                                                 </div>
-
                                                 <div style='margin-top: 12px; font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 0.5px;'>GUEST ROOM</div>
                                                 <div style='font-family: Times, serif; font-size: 26px; font-style: italic; font-weight: bold; color: {$tableColor}; margin-top: 2px;'>Room 101</div>
                                             </div>
@@ -622,12 +652,10 @@ class ManagerDashboard extends Page
                     ]),
             ])
             ->action(function (array $data) {
-                if (!$this->selectedRoomId)
-                    return;
+                if (!$this->selectedRoomId) return;
                 $room = Room::with('restaurant')->find($this->selectedRoomId);
-                if (!$room || !$room->qr_path)
-                    return;
-
+                if (!$room || !$room->qr_path) return;
+                
                 $restaurant = $room->restaurant;
                 $bgType = $data['bg_type'] ?? 'image';
                 $bgColor = $data['bg_color'] ?? '#E2F0CB';
@@ -741,8 +769,7 @@ class ManagerDashboard extends Page
         }
 
         $session = $this->getActiveSession();
-        if (!$session)
-            return;
+        if (!$session) return;
 
         $restaurant = auth()->user()->restaurant;
 
@@ -752,33 +779,52 @@ class ManagerDashboard extends Page
         } elseif ($this->selectedTableId) {
             $rawNum = RestaurantTable::find($this->selectedTableId)->table_number ?? '';
             $locationName = $this->formatTableNumber($rawNum);
+        } elseif ($this->selectedRoomId) { 
+            $roomNum = Room::find($this->selectedRoomId)->room_number ?? '';
+            $locationName = "Room " . $roomNum;
         }
 
         $gstIn = $restaurant->gst_no ?? '-';
         $phone = $restaurant->phone ?? '012345678910';
         $address = $restaurant->address ?? '-';
 
-        $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
-
         $itemsHtml = '';
-        foreach ($orders as $order) {
-            foreach ($order->items as $item) {
-                $displayQty = $item->confirmed_qty ?? $item->quantity;
-                if ($displayQty <= 0)
-                    continue;
-                $rate = $item->unit_price;
-                $amount = $rate * $displayQty;
-                $itemsHtml .= "<tr>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$item->item_name}</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center;'>{$displayQty}</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($rate, 2) . "</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($amount, 2) . "</td>
-                </tr>";
+        
+        if ($pendingPayment->status === 'paid') {
+            $invoice = \App\Models\Invoice::where('payment_id', $pendingPayment->id)->first();
+            if ($invoice) {
+                foreach ($invoice->items_snapshot as $item) {
+                    $displayQty = $item['qty'];
+                    $rate = $item['unit_price'];
+                    $amount = $item['total'];
+                    $itemsHtml .= "<tr>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$item['name']}</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center;'>{$displayQty}</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($rate, 2) . "</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($amount, 2) . "</td>
+                    </tr>";
+                }
+            }
+        } else {
+            $orders = $viewData['tableOrders']->whereNotIn('status', ['cancelled', 'rejected'])->where('payment_status', '!=', 'paid');
+            foreach ($orders as $order) {
+                foreach ($order->items as $item) {
+                    $displayQty = $item->confirmed_qty ?? $item->quantity;
+                    if ($displayQty <= 0) continue;
+                    $rate = $item->unit_price;
+                    $amount = $rate * $displayQty;
+                    $itemsHtml .= "<tr>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$item->item_name}</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center;'>{$displayQty}</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($rate, 2) . "</td>
+                        <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($amount, 2) . "</td>
+                    </tr>";
+                }
             }
         }
 
         $qrHtml = '';
-        if ($pendingPayment->payment_method !== 'cash' && !empty($upiId)) {
+        if ($pendingPayment->payment_method !== 'cash' && $pendingPayment->payment_method !== 'room_charge' && !empty($upiId)) {
             $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($restaurantName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
             $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size(120)->margin(0)->generate($upiUrl);
 
@@ -789,7 +835,20 @@ class ManagerDashboard extends Page
             </div>";
         }
 
-        // 🌟 FIX: LOCAL TIMEZONE IN PRINTED BILL 🌟
+        $totalsHtml = "<div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>";
+        if ($pendingPayment->discount_amount > 0) {
+            $totalsHtml .= "<div style='color: #ef4444;'>Discount: -₹" . number_format($pendingPayment->discount_amount, 2) . "</div>";
+        }
+        if ($pendingPayment->tax_amount > 0) {
+            $totalsHtml .= "<div>Tax: ₹" . number_format($pendingPayment->tax_amount, 2) . "</div>";
+        }
+        if ($pendingPayment->extra_charges > 0) {
+            $totalsHtml .= "<div>Extra: ₹" . number_format($pendingPayment->extra_charges, 2) . "</div>";
+        }
+        $totalsHtml .= "<div style='font-size: 18px; margin-top: 5px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>";
+
+        $customerName = $session->customer_name ?? $session->guest_name ?? 'Guest';
+
         $html = "
         <html><head><style>@page { margin: 0; size: 80mm auto; } body { margin: 5px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; } table { width: 100%; border-collapse: collapse; }</style></head>
         <body>
@@ -805,7 +864,7 @@ class ManagerDashboard extends Page
                 <span>Date: " . now()->timezone('Asia/Kolkata')->format('d/m/Y h:i A') . "</span>
             </div>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;'>
-                <span>Name: {$session->customer_name}</span>
+                <span>Name: {$customerName}</span>
                 <span>Mode: " . strtoupper($pendingPayment->payment_method) . "</span>
             </div>
             <div style='font-size: 13px; font-weight: bold; margin-top: 5px;'>LOCATION: {$locationName}</div>
@@ -819,8 +878,7 @@ class ManagerDashboard extends Page
                 <tbody>{$itemsHtml}</tbody>
             </table>
             <div style='text-align:right; margin-top: 10px; font-size: 14px; font-weight: bold;'>
-                <div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>
-                <div style='font-size: 18px; margin-top: 5px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>
+                {$totalsHtml}
             </div>
 
             {$qrHtml}
@@ -842,40 +900,40 @@ class ManagerDashboard extends Page
     {
         $viewData = $this->getViewData();
 
-        if (!$this->selectedSessionId)
-            return;
+        if (!$this->selectedSessionId) return;
 
-        $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : 'qr_session_id';
-        if (\App\Models\Invoice::where($sessionCol, $this->selectedSessionId)->exists()) {
-            Notification::make()->title('Invoice already generated for this session.')->warning()->send();
+        $isRoom = (bool) $this->selectedRoomId;
+        $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : ($isRoom ? 'room_session_id' : 'qr_session_id');
+
+        $session = $this->getActiveSession();
+        if (!$session) return;
+
+        $orders = $viewData['tableOrders']->whereNotIn('status', ['cancelled', 'rejected']);
+        $unpaidOrders = $orders->where('payment_status', '!=', 'paid');
+        
+        if ($unpaidOrders->isEmpty()) {
+            Notification::make()->title('All orders are already paid.')->warning()->send();
             return;
         }
 
-        $session = $this->getActiveSession();
-        if (!$session)
-            return;
-
-        $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
-        if ($orders->isEmpty())
-            return;
-
-        $subtotal = $orders->sum(fn($order) => $order->confirmed_total ?? $order->total_amount);
-        $amountAlreadyPaid = $orders->where('payment_status', 'paid')->sum(fn($order) => $order->confirmed_total ?? $order->total_amount);
-
+        $subtotal = $unpaidOrders->sum(fn($order) => $order->confirmed_total ?? $order->total_amount);
+        
         $taxable = max(0, $subtotal - (float) $this->discountAmount);
         $taxAmt = $taxable * ((float) $this->taxPercentage / 100);
         $extra = (float) $this->extraCharges;
-        $invoiceGrandTotal = $taxable + $taxAmt + $extra;
-        $amountDue = max(0, round($invoiceGrandTotal - $amountAlreadyPaid, 2));
-        $billStatus = $amountDue > 0 ? 'pending' : 'paid';
-        $latestOrderId = $orders->pluck('id')->last();
+        $amountDue = max(0, round($taxable + $taxAmt + $extra, 2));
+        
+        $billStatus = ($isRoom || $amountDue <= 0) ? 'paid' : 'pending';
+        $paymentMethod = $isRoom ? 'room_charge' : ($billStatus === 'paid' ? 'online' : 'pending');
+
+        $latestOrderId = $unpaidOrders->pluck('id')->last();
         $transactionRef = 'ORD' . $latestOrderId . '_' . Str::random(10);
 
         try {
-            DB::transaction(function () use ($latestOrderId, $subtotal, $taxAmt, $extra, $amountDue, $billStatus, $transactionRef, $session) {
+            DB::transaction(function () use ($sessionCol, $isRoom, $unpaidOrders, $latestOrderId, $subtotal, $taxAmt, $extra, $amountDue, $billStatus, $paymentMethod, $transactionRef, $session) {
 
                 $existingPayment = Payment::where('order_id', $latestOrderId)->first();
-                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber();
+                $billNumber = $existingPayment->bill_number ?? $this->generateBillNumber($isRoom);
 
                 $payment = Payment::updateOrCreate(
                     ['order_id' => $latestOrderId],
@@ -888,10 +946,10 @@ class ManagerDashboard extends Page
                         'extra_charges' => $extra,
                         'amount' => $amountDue,
                         'status' => $billStatus,
-                        'payment_method' => $billStatus === 'paid' ? 'online' : 'pending',
+                        'payment_method' => $paymentMethod,
                         'transaction_reference' => $transactionRef,
                         'bill_number' => $billNumber,
-                        'paid_at' => $billStatus === 'paid' ? now() : null,
+                        'paid_at' => $billStatus === 'paid' ? now()->timezone('Asia/Kolkata') : null, 
                     ]
                 );
 
@@ -900,8 +958,16 @@ class ManagerDashboard extends Page
                 $paymentPayload = array_merge($payment->toArray(), ['upi_id' => $upiId, 'merchant_category_code' => '5812']);
 
                 if ($billStatus === 'paid') {
-                    $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $payment);
-                    $session->update(['status' => 'completed']);
+                    Order::whereIn('id', $unpaidOrders->pluck('id'))->update(['status' => 'completed', 'payment_status' => 'paid']);
+                    
+                    $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $payment, $unpaidOrders);
+                    
+                    if ($isRoom) {
+                        $session->update(['is_billed' => true]);
+                    } else {
+                        $session->update(['status' => 'completed']);
+                    }
+                    
                     $paymentPayload['invoice_number'] = $invoice->invoice_number;
                 }
 
@@ -909,10 +975,10 @@ class ManagerDashboard extends Page
             });
 
             if ($billStatus === 'paid') {
-                Notification::make()->title('Bill Auto-Settled & Invoice Generated')->success()->send();
-                $this->closeReceiptModal();
+                Notification::make()->title('Bill Auto-Settled & Invoice Generated!')->success()->send();
+                $this->discountAmount = 0; $this->taxPercentage = 0; $this->extraCharges = 0;
             } else {
-                Notification::make()->title('Final Bill Sent!')->success()->send();
+                Notification::make()->title('Final Bill Sent to Customer!')->success()->send();
             }
         } catch (\Exception $e) {
             Notification::make()->title('Error generating bill')->body($e->getMessage())->danger()->send();
@@ -924,30 +990,38 @@ class ManagerDashboard extends Page
         $viewData = $this->getViewData();
         $pendingPayment = $viewData['pendingPayment'];
 
-        if (!$pendingPayment || !$this->selectedSessionId)
-            return;
+        if (!$pendingPayment || !$this->selectedSessionId) return;
 
-        $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : 'qr_session_id';
-        if (\App\Models\Invoice::where($sessionCol, $this->selectedSessionId)->exists()) {
-            Notification::make()->title('Invoice already generated.')->warning()->send();
-            $this->closeReceiptModal();
-            return;
-        }
+        $isRoom = (bool) $this->selectedRoomId;
+        $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : ($isRoom ? 'room_session_id' : 'qr_session_id');
 
         $session = $this->getActiveSession();
-        if (!$session)
-            return;
+        if (!$session) return;
 
         try {
-            DB::transaction(function () use ($pendingPayment, $session, &$paymentPayload) {
+            DB::transaction(function () use ($sessionCol, $isRoom, $pendingPayment, $session, &$paymentPayload) {
+                
+                $unpaidOrders = Order::where($sessionCol, $this->selectedSessionId)
+                    ->whereNotIn('status', ['cancelled', 'rejected'])
+                    ->where('payment_status', '!=', 'paid')
+                    ->get();
+                    
                 $pendingPayment->update([
                     'status' => 'paid',
-                    'paid_at' => now(),
+                    'paid_at' => now()->timezone('Asia/Kolkata'),
                     'payment_method' => $pendingPayment->payment_method === 'pending' ? 'cash' : $pendingPayment->payment_method,
                 ]);
 
-                $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $pendingPayment);
-                $session->update(['status' => 'completed']);
+                Order::whereIn('id', $unpaidOrders->pluck('id'))
+                    ->update(['status' => 'completed', 'payment_status' => 'paid']);
+
+                $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $pendingPayment, $unpaidOrders);
+                
+                if ($isRoom) {
+                    $session->update(['is_billed' => true]);
+                } else {
+                    $session->update(['status' => 'completed']);
+                }
 
                 $upiId = auth()->user()->branch_id ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
 
@@ -960,7 +1034,7 @@ class ManagerDashboard extends Page
 
             event(new \App\Events\BillGenerated($this->selectedSessionId, $paymentPayload));
             Notification::make()->title('Payment Confirmed & Invoice Generated')->success()->send();
-            $this->closeReceiptModal();
+            $this->discountAmount = 0; $this->taxPercentage = 0; $this->extraCharges = 0;
         } catch (\Exception $e) {
             Notification::make()->title('Invoice Generation Failed')->body($e->getMessage())->danger()->send();
         }
@@ -1008,8 +1082,7 @@ class ManagerDashboard extends Page
                     Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
                 }
 
-                if (empty($validatedItems))
-                    return;
+                if (empty($validatedItems)) return;
 
                 $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
 
@@ -1028,7 +1101,7 @@ class ManagerDashboard extends Page
                     'total_amount' => $totalAmount,
                     'confirmed_total' => $totalAmount,
                     'status' => 'accepted',
-                    'payment_status' => 'paid',
+                    'payment_status' => 'pending', 
                 ]);
 
                 $order = Order::create($orderData);
@@ -1073,7 +1146,7 @@ class ManagerDashboard extends Page
                 if (isset($arguments['orderId'])) {
                     $order = \App\Models\Order::find($arguments['orderId']);
                     $displayId = $order->daily_order_number ?? $order->id ?? '';
-                    return 'Edit Order #' . $displayId; // 🌟 NAYA: Modal Title ma Daily Order Number
+                    return 'Edit Order #' . $displayId; 
                 }
                 return 'Edit Order';
             })
@@ -1089,14 +1162,12 @@ class ManagerDashboard extends Page
             ])
             ->fillForm(function (array $arguments) {
                 $order = Order::with('items')->find($arguments['orderId']);
-                if (!$order)
-                    return [];
+                if (!$order) return [];
                 return ['items' => $order->items->map(fn($item) => ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes])->toArray()];
             })
             ->action(function (array $data, array $arguments) {
                 $order = Order::find($arguments['orderId']);
-                if (!$order)
-                    return;
+                if (!$order) return;
 
                 $totalAmount = 0;
                 $existingItemIds = [];
@@ -1188,11 +1259,10 @@ class ManagerDashboard extends Page
     {
         $user = auth()->user();
         $session = ParcelQrSession::where('restaurant_id', $user->restaurant_id)->find($sessionId);
-        if (!$session)
-            return;
+        if (!$session) return;
 
         $session->update(['status' => 'completed', 'is_active' => false]);
-        Order::where('parcel_qr_session_id', $session->id)->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'])->update(['status' => 'served']);
+        Order::where('parcel_qr_session_id', $session->id)->whereNotIn('status', ['cancelled', 'rejected'])->update(['status' => 'completed']);
         event(new \App\Events\SessionEnded($session->id, null));
 
         Notification::make()->title("Parcel Session Completed & Cleared")->success()->send();
@@ -1205,7 +1275,7 @@ class ManagerDashboard extends Page
     {
         $user = auth()->user();
         $order = Order::with('items')->where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
-        $displayId = $order->daily_order_number ?? $order->id; // 🌟 NAYA: Alert ma navo number dekhasa 🌟
+        $displayId = $order->daily_order_number ?? $order->id; 
         
         $oldStatus = $order->status;
         $stockNotes = [];
@@ -1215,8 +1285,7 @@ class ManagerDashboard extends Page
             DB::transaction(function () use ($order, &$wasPartial, &$stockNotes) {
                 $newTotal = 0;
                 foreach ($order->items as $orderItem) {
-                    if (!$orderItem->menu_item_id)
-                        continue;
+                    if (!$orderItem->menu_item_id) continue;
                     $menuItem = MenuItem::where('id', $orderItem->menu_item_id)->lockForUpdate()->first();
 
                     if (!$menuItem || !$menuItem->track_stock || $menuItem->stock_quantity === null) {
@@ -1331,16 +1400,15 @@ class ManagerDashboard extends Page
 
         if ($this->currentTab === 'tables') {
             $tablesQuery = RestaurantTable::where('restaurant_id', $restaurantId);
-            if ($branchId)
-                $tablesQuery->where('branch_id', $branchId);
-            else
-                $tablesQuery->whereNull('branch_id');
+            if ($branchId) $tablesQuery->where('branch_id', $branchId); else $tablesQuery->whereNull('branch_id');
 
             $data['tables'] = $tablesQuery->with(['qrSessions' => fn($q) => $q->where('is_active', true)])
                 ->withCount(['qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true)])->get()
                 ->map(function ($table) {
                     $activeSessionIds = $table->qrSessions->pluck('id')->toArray();
-                    $orders = Order::whereIn('qr_session_id', $activeSessionIds)->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served'])->get();
+                    
+                    $orders = Order::whereIn('qr_session_id', $activeSessionIds)->whereNotIn('status', ['cancelled', 'rejected'])->get();
+                    
                     $table->live_subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
                     $table->live_due = max(0, $table->live_subtotal - $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount));
                     $table->live_orders_count = $orders->count();
@@ -1349,16 +1417,13 @@ class ManagerDashboard extends Page
                 })->sortByDesc(fn($t) => $t->active_sessions_count > 0 ? 2 : ((($t->status ?? '') === 'reserved') ? 1 : 0))->values();
 
             $parcelQuery = ParcelQrCode::where('restaurant_id', $restaurantId)->where('is_active', true);
-            if ($branchId)
-                $parcelQuery->where('branch_id', $branchId);
-            else
-                $parcelQuery->whereNull('branch_id');
+            if ($branchId) $parcelQuery->where('branch_id', $branchId); else $parcelQuery->whereNull('branch_id');
 
             $data['parcelCounters'] = $parcelQuery->with(['sessions' => fn($q) => $q->where('status', 'active')])
                 ->withCount(['sessions as active_sessions_count' => fn($q) => $q->where('status', 'active')])->get()
                 ->map(function ($counter) {
                     $activeSessionIds = $counter->sessions->pluck('id')->toArray();
-                    $orders = Order::whereIn('parcel_qr_session_id', $activeSessionIds)->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'])->get();
+                    $orders = Order::whereIn('parcel_qr_session_id', $activeSessionIds)->whereNotIn('status', ['cancelled', 'rejected'])->get();
                     $counter->live_subtotal = $orders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
                     $counter->live_due = max(0, $counter->live_subtotal - $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount));
                     $counter->live_orders_count = $orders->count();
@@ -1372,14 +1437,11 @@ class ManagerDashboard extends Page
             $data['activeSessions'] = $data['tables']->sum('active_sessions_count') + $data['parcelCounters']->sum('active_sessions_count');
         } else {
             $roomsQuery = Room::where('restaurant_id', $restaurantId);
-            if ($branchId)
-                $roomsQuery->where('branch_id', $branchId);
-            else
-                $roomsQuery->whereNull('branch_id');
+            if ($branchId) $roomsQuery->where('branch_id', $branchId); else $roomsQuery->whereNull('branch_id');
 
             $data['rooms'] = $roomsQuery->with('activeSession')->get()->map(function ($room) {
                 if ($room->activeSession) {
-                    $orders = Order::where('room_session_id', $room->activeSession->id)->whereIn('status', ['placed', 'accepted', 'preparing', 'ready', 'served'])->get();
+                    $orders = Order::where('room_session_id', $room->activeSession->id)->whereNotIn('status', ['cancelled', 'rejected'])->get();
                     $room->live_due = max(0, $orders->sum('total_amount') - $orders->where('payment_status', 'paid')->sum('total_amount'));
                     $room->live_orders_count = $orders->count();
                     $room->pending_payment = Payment::whereIn('order_id', $orders->pluck('id'))->where('status', 'pending')->latest()->first();
@@ -1402,19 +1464,28 @@ class ManagerDashboard extends Page
             if ($this->selectedSessionId) {
                 $groupIds = QrSession::where('host_session_id', $this->selectedSessionId)->orWhere('id', $this->selectedSessionId)->pluck('id')->toArray();
                 $data['tableOrders'] = Order::with('items.menuItem.category')->whereIn('qr_session_id', $groupIds)->orderBy('created_at', 'desc')->get();
-                $data['pendingPayment'] = Payment::whereIn('order_id', $data['tableOrders']->pluck('id'))->whereIn('status', ['pending', 'paid'])->latest()->first();
             }
         } elseif ($this->selectedParcelCounterId) {
             $data['selectedEntityData'] = ParcelQrCode::find($this->selectedParcelCounterId);
             $data['activeDinersList'] = ParcelQrSession::where('parcel_qr_code_id', $this->selectedParcelCounterId)->where('status', 'active')->get();
             if ($this->selectedSessionId) {
                 $data['tableOrders'] = Order::with('items.menuItem.category')->where('parcel_qr_session_id', $this->selectedSessionId)->orderBy('created_at', 'desc')->get();
-                $data['pendingPayment'] = Payment::whereIn('order_id', $data['tableOrders']->pluck('id'))->whereIn('status', ['pending', 'paid'])->latest()->first();
             }
         } elseif ($this->selectedRoomId) {
             $data['selectedEntityData'] = Room::with('activeSession')->find($this->selectedRoomId);
             if ($this->selectedSessionId) {
                 $data['tableOrders'] = Order::with('items.menuItem.category')->where('room_session_id', $this->selectedSessionId)->orderBy('created_at', 'desc')->get();
+            }
+        }
+
+        if ($this->selectedSessionId && isset($data['tableOrders'])) {
+            $validOrdersForPayment = $data['tableOrders']->whereNotIn('status', ['cancelled', 'rejected']);
+            $unpaidOrders = $validOrdersForPayment->where('payment_status', '!=', 'paid');
+            
+            if ($unpaidOrders->count() > 0) {
+                $data['pendingPayment'] = Payment::whereIn('order_id', $unpaidOrders->pluck('id'))->where('status', 'pending')->latest()->first();
+            } else if ($validOrdersForPayment->count() > 0) {
+                $data['pendingPayment'] = Payment::whereIn('order_id', $validOrdersForPayment->pluck('id'))->where('status', 'paid')->latest()->first();
             }
         }
 

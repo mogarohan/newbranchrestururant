@@ -13,8 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\Filter;
 use Filament\Forms\Components\DatePicker;
-use Filament\Support\Colors\Color; 
-use Illuminate\Database\Eloquent\Collection; // 🌟 IMPORT FOR BULK ACTION 🌟
+use Illuminate\Database\Eloquent\Collection;
 
 class OrderResource extends Resource
 {
@@ -23,7 +22,6 @@ class OrderResource extends Resource
     protected static ?string $navigationLabel = 'Order History';
     protected static ?string $navigationGroup = 'Operations';
 
-    /* --- DISABLE EDIT, CREATE, DELETE --- */
     public static function canCreate(): bool { return false; }
     public static function canEdit($record): bool { return false; }
     public static function canDelete($record): bool { return false; }
@@ -39,7 +37,7 @@ class OrderResource extends Resource
     {
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id)
-            ->where('is_hidden', false) // 🌟 NAYA: Khali e j orders dekhadse je hidden nathi 🌟
+            ->where('is_hidden', false)
             ->with([
                 'items.menuItem', 
                 'table', 
@@ -79,10 +77,10 @@ class OrderResource extends Resource
                         }
                     })
                     ->badge()
-                    ->color(fn (Order $record): array => match ($record->service_type) {
-                        'parcel' => Color::Amber,        
-                        'room_service' => Color::Blue,   
-                        default => Color::Emerald,       
+                    ->color(fn (Order $record): string => match ($record->service_type) {
+                        'parcel' => 'warning',       
+                        'room_service' => 'info',    
+                        default => 'success',        
                     })
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->whereHas('table', fn($q) => $q->where('table_number', 'like', "%{$search}%"))
@@ -100,14 +98,12 @@ class OrderResource extends Resource
                     ->badge()
                     ->searchable()
                     ->formatStateUsing(fn(string $state): string => strtoupper($state))
-                    ->color(fn(string $state): array => match (strtolower($state)) {
-                        'placed' => Color::Red,
-                        'accepted', 'partial_accepted' => Color::Orange,
-                        'preparing' => Color::Yellow,
-                        'ready' => Color::Cyan,
-                        'served', 'completed' => Color::Emerald,
-                        'cancelled', 'rejected' => Color::Rose,
-                        default => Color::Gray,
+                    ->color(fn(string $state): string => match (strtolower($state)) {
+                        'placed', 'cancelled', 'rejected' => 'danger', 
+                        'accepted', 'partial_accepted', 'preparing' => 'warning', 
+                        'ready' => 'info', 
+                        'served', 'completed' => 'success', 
+                        default => 'gray', 
                     }),
 
                 Tables\Columns\TextColumn::make('items_summary')
@@ -158,7 +154,6 @@ class OrderResource extends Resource
                     })
             ])
             ->actions([
-                // 🌟 NAYA: Single Order Clear Action 🌟
                 Tables\Actions\Action::make('clear_history')
                     ->label('Clear')
                     ->icon('heroicon-o-eye-slash')
@@ -169,7 +164,6 @@ class OrderResource extends Resource
                     ->action(fn (Order $record) => $record->update(['is_hidden' => true]))
             ])
             ->bulkActions([
-                // 🌟 NAYA: Multiple Orders Bulk Clear Action 🌟
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\BulkAction::make('clear_selected')
                         ->label('Clear Selected')

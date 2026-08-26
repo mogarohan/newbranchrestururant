@@ -4,7 +4,6 @@ namespace App\Services\Orders;
 
 use App\Models\Invoice;
 use App\Models\Payment;
-use App\Models\QrSession;
 use App\Models\Order;
 use App\Models\Restaurant;
 use App\Models\Branch;
@@ -14,22 +13,29 @@ use Exception;
 class InvoiceService
 {
     /**
-     * 🔒 Atomic + Safe + Race-Proof Invoice Generation
+     * 🔒 Atomic + Safe + Race-Proof Invoice Generation for Table, Parcel & Room
      */
-    public static function generateInvoice( $session, Payment $payment)
+    public static function generateInvoice($session, Payment $payment, $specificOrders = null)
     {
-        return DB::transaction(function () use ($session, $payment) {
+        return DB::transaction(function () use ($session, $payment, $specificOrders) {
 
-            // ✅ Prevent duplicate invoice (Idempotency)
-            if (Invoice::where('qr_session_id', $session->id)->exists()) {
-                return Invoice::where('qr_session_id', $session->id)->first();
+            // Determine session type
+            $sessionColumn = 'qr_session_id';
+            if ($session instanceof \App\Models\ParcelQrSession) {
+                $sessionColumn = 'parcel_qr_session_id';
+            } elseif ($session instanceof \App\Models\RoomSession) {
+                $sessionColumn = 'room_session_id';
             }
 
-            // 🛡️ DEFENSIVE FIX: Use raw foreign keys instead of relying on Eloquent relationships
+            // 🌟 FIX: Checked by PAYMENT_ID instead of SESSION to allow Multiple Invoices per Session
+            $existingInvoice = Invoice::where('payment_id', $payment->id)->first();
+            if ($existingInvoice) {
+                return $existingInvoice;
+            }
+
             $restaurantId = $session->restaurant_id ?? $payment->restaurant_id;
             $branchId = $session->branch_id ?? $payment->branch_id;
 
-            // Explicitly find the models to safely access GST and Naming data
             $restaurant = Restaurant::find($restaurantId);
             $branch = $branchId ? Branch::find($branchId) : null;
 
@@ -37,7 +43,6 @@ class InvoiceService
                 throw new Exception("Critical Error: Restaurant data missing for this session.");
             }
 
-            // 🔒 Lock existing invoices of this branch to prevent race conditions
             $lastSequence = Invoice::where('restaurant_id', $restaurantId)
                 ->where('branch_id', $branchId)
                 ->lockForUpdate()
@@ -45,60 +50,57 @@ class InvoiceService
 
             $nextSequence = ($lastSequence ?? 0) + 1;
 
-            // Format: INV-2026-MAIN-000001
-            $year = now()->year;
+            $year = now()->timezone('Asia/Kolkata')->year;
             $branchCode = $branch ? strtoupper(substr($branch->name, 0, 4)) : 'MAIN';
             $prefix = "INV-{$year}-{$branchCode}";
             $invoiceNumber = $prefix . '-' . str_pad($nextSequence, 6, '0', STR_PAD_LEFT);
 
-            // 🛡️ DEFENSIVE FIX: Query orders explicitly in case $session->orders() relationship is missing
-            $orders = Order::with('items.menuItem')
-                ->where('qr_session_id', $session->id)
+            // Fetch explicitly passed unpaid orders, or fallback
+            $orders = $specificOrders ?: Order::with('items.menuItem')
+                ->where($sessionColumn, $session->id)
                 ->whereNotIn('status', ['cancelled', 'rejected'])
                 ->get();
 
-            // 🧾 Snapshot all items (FINAL STATE)
             $items = $orders->flatMap(function ($order) {
                 return $order->items->map(function ($item) {
                     return [
                         'item_id' => $item->menu_item_id,
                         'name' => $item->menuItem->name ?? $item->item_name ?? 'Unknown Item',
-                        'qty' => $item->quantity,
+                        'qty' => $item->confirmed_qty ?? $item->quantity,
                         'unit_price' => $item->unit_price,
-                        //'hsn_code' => $item->menuItem->hsn_code ?? null,
-                        //'tax_rate' => $item->tax_rate ?? 0,
-                        //'tax_amount' => $item->tax_amount ?? 0,
-                        //'discount' => $item->discount_amount ?? 0,
-                        'total' => $item->total_price,
+                        'total' => $item->unit_price * ($item->confirmed_qty ?? $item->quantity),
                     ];
                 });
             });
 
             try {
-                return Invoice::create([
-                    'restaurant_id'   => $restaurantId,
-                    'branch_id'       => $branchId,
-                    'qr_session_id'   => $session->id,
-                    'payment_id'      => $payment->id,
-                    'invoice_sequence'=> $nextSequence,
-                    'invoice_prefix'  => $prefix,
-                    'invoice_number'  => $invoiceNumber,
-                    'bill_number'     => $payment->bill_number, // 🌟 NAYA: Passing Temporary Bill Number to Invoice
-                    'invoice_date'    => now()->toDateString(),
-                    'gstin'           => $restaurant->gst_no ?? null, 
-                    'place_of_supply' => $restaurant->address ?? null, 
-                    'customer_name'   => $session->customer_name ?? 'Customer',
-                    'subtotal'        => $payment->subtotal,
-                    'tax_amount'      => $payment->tax_amount ?? 0,
-                    'discount_amount' => $payment->discount_amount ?? 0,
-                    'extra_charges'   => $payment->extra_charges ?? 0,
-                    'grand_total'     => $payment->amount,
-                    'items_snapshot'  => $items->toArray(),
-                ]);
+                $invoiceData = [
+                    'restaurant_id'    => $restaurantId,
+                    'branch_id'        => $branchId,
+                    'qr_session_id'    => ($sessionColumn === 'qr_session_id') ? $session->id : null,
+                    'parcel_qr_session_id' => ($sessionColumn === 'parcel_qr_session_id') ? $session->id : null,
+                    'room_session_id'  => ($sessionColumn === 'room_session_id') ? $session->id : null,
+                    'payment_id'       => $payment->id,
+                    'invoice_sequence' => $nextSequence,
+                    'invoice_prefix'   => $prefix,
+                    'invoice_number'   => $invoiceNumber,
+                    'bill_number'      => $payment->bill_number,
+                    'invoice_date'     => now()->timezone('Asia/Kolkata')->toDateString(),
+                    'gstin'            => $restaurant->gst_no ?? null,
+                    'place_of_supply'  => $restaurant->address ?? null,
+                    'customer_name'    => $session->customer_name ?? $session->guest_name ?? 'Guest',
+                    'subtotal'         => $payment->subtotal,
+                    'tax_amount'       => $payment->tax_amount ?? 0,
+                    'discount_amount'  => $payment->discount_amount ?? 0,
+                    'extra_charges'    => $payment->extra_charges ?? 0,
+                    'grand_total'      => $payment->amount,
+                    'items_snapshot'   => $items->toArray(),
+                ];
+
+                return Invoice::create($invoiceData);
             } catch (\Illuminate\Database\QueryException $e) {
-                // Secondary fallback for race condition duplicate entry (1062)
                 if ($e->errorInfo[1] == 1062) {
-                    return Invoice::where('qr_session_id', $session->id)->firstOrFail();
+                    return Invoice::where('payment_id', $payment->id)->firstOrFail();
                 }
                 throw $e;
             }
