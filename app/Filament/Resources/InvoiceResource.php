@@ -220,17 +220,7 @@ class InvoiceResource extends Resource
     private static function generatePdf(Invoice $invoice)
     {
         $restaurant = $invoice->restaurant;
-<<<<<<< HEAD
-        $branch = $invoice->branch_id ? ($invoice->branch ?? \App\Models\Branch::find($invoice->branch_id)) : null;
-
-        $brandName = $branch ? $branch->name : ($restaurant->name ?? 'Restaurant');
-        $gstIn = ($branch && $branch->gst_no) ? $branch->gst_no : ($invoice->gstin ?? ($restaurant->gst_no ?? 'N/A'));
-        $pos = ($branch && $branch->address) ? $branch->address : ($invoice->place_of_supply ?? ($restaurant->address ?? 'N/A'));
-        $phone = ($branch && $branch->phone) ? $branch->phone : ($restaurant->phone ?? '');
-
-=======
         
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
         $itemsHtml = '';
         foreach ($invoice->items_snapshot as $item) {
             $hsn = isset($item['hsn_code']) && $item['hsn_code'] ? "<br><small style='color:gray;'>HSN: {$item['hsn_code']}</small>" : '';
@@ -244,67 +234,6 @@ class InvoiceResource extends Resource
             </tr>";
         }
 
-<<<<<<< HEAD
-        $taxable = max(0, (float) $invoice->subtotal - (float) $invoice->discount_amount);
-        $taxPercent = ($taxable > 0 && (float) $invoice->tax_amount > 0) ? round(((float) $invoice->tax_amount / $taxable) * 100, 1) : 0;
-        $halfTax = (float) $invoice->tax_amount / 2;
-        $halfPercent = round($taxPercent / 2, 2);
-
-        $breakdownRows = "
-            <tr>
-                <td style='padding: 8px; text-align: right;'><strong>Subtotal:</strong></td>
-                <td style='padding: 8px; text-align: right;'>₹" . number_format($invoice->subtotal, 2) . "</td>
-            </tr>";
-
-        if ((float) $invoice->discount_amount > 0) {
-            $breakdownRows .= "
-            <tr>
-                <td style='padding: 8px; text-align: right; color: #b91c1c;'><strong>Discount:</strong></td>
-                <td style='padding: 8px; text-align: right; color: #b91c1c;'>-₹" . number_format($invoice->discount_amount, 2) . "</td>
-            </tr>";
-        }
-
-        if ((float) $invoice->tax_amount > 0) {
-            $breakdownRows .= "
-            <tr>
-                <td style='padding: 8px; text-align: right;'><strong>CGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ":</strong></td>
-                <td style='padding: 8px; text-align: right;'>₹" . number_format($halfTax, 2) . "</td>
-            </tr>
-            <tr>
-                <td style='padding: 8px; text-align: right;'><strong>SGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ":</strong></td>
-                <td style='padding: 8px; text-align: right;'>₹" . number_format($halfTax, 2) . "</td>
-            </tr>
-            <tr>
-                <td style='padding: 8px; text-align: right;'><strong>Total Tax (GST " . ($taxPercent > 0 ? "{$taxPercent}%" : "") . "):</strong></td>
-                <td style='padding: 8px; text-align: right;'>₹" . number_format($invoice->tax_amount, 2) . "</td>
-            </tr>";
-        }
-
-        if ((float) $invoice->extra_charges > 0) {
-            $breakdownRows .= "
-            <tr>
-                <td style='padding: 8px; text-align: right;'><strong>Extra Charges:</strong></td>
-                <td style='padding: 8px; text-align: right;'>+₹" . number_format($invoice->extra_charges, 2) . "</td>
-            </tr>";
-        }
-
-        $breakdownRows .= "
-            <tr style='background: #f8f9fa; border-top: 2px solid #000; border-bottom: 2px solid #000;'>
-                <td style='padding: 12px; text-align: right; font-size: 18px;'><strong>GRAND TOTAL:</strong></td>
-                <td style='padding: 12px; text-align: right; font-size: 18px;'><strong>₹" . number_format($invoice->grand_total, 2) . "</strong></td>
-            </tr>";
-
-        $phoneHtml = $phone ? "<p style='margin: 3px 0 0 0; font-size: 13px;'>Phone: {$phone}</p>" : "";
-
-        $html = "
-            <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
-                <div style='text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;'>
-                    <h1 style='margin: 0; font-size: 28px;'>{$brandName}</h1>
-                    <p style='margin: 5px 0 0 0;'>GSTIN: <strong>{$gstIn}</strong> | POS: {$pos}</p>
-                    {$phoneHtml}
-                    <h2 style='color: #555; margin-top: 15px;'>TAX INVOICE</h2>
-                </div>
-=======
         $logoBase64 = '';
         if ($restaurant && $restaurant->logo_path) {
             $logoFullPath = Storage::disk('public')->path($restaurant->logo_path);
@@ -344,7 +273,6 @@ class InvoiceResource extends Resource
                         </td>
                     </tr>
                 </table>
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                 
                 <table style='width: 100%; margin-bottom: 30px;'>
                     <tr>

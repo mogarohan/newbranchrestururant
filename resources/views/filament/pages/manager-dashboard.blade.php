@@ -646,8 +646,6 @@
                         <button wire:click="switchTab('tables')" class="stitch-tab-btn {{ $currentTab == 'tables' ? 'active' : '' }}">Tables & Parcels</button>
                         <button wire:click="switchTab('rooms')" class="stitch-tab-btn {{ $currentTab == 'rooms' ? 'active' : '' }}">Room Service</button>
                     </div>
-<<<<<<< HEAD
-=======
                 </div>
             @endif
 
@@ -989,7 +987,6 @@
                             </div>
                         </div>
                     @endforeach
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                 @endif
 
                 <button wire:click="mountAction('assignGuestAction')" class="stitch-btn-primary">
@@ -1589,8 +1586,6 @@
                                             </button>
                                         @endif
                                     </div>
-<<<<<<< HEAD
-=======
                                     <button wire:click="mountAction('checkoutAction', { room_id: {{ $selectedRoomId }} })" class="btn-primary" style="width: 100%; background: var(--ann-red); padding: 12px; border-radius: 12px; font-size: 14px;">Checkout Guest</button>
                                 @elseif($selectedEntityData->status === 'cleaning')
                                     <button wire:click="mountAction('markCleanAction', { room_id: {{ $selectedRoomId }} })" class="btn-primary" style="width: 100%; background: var(--ann-blue); padding: 12px; border-radius: 12px; font-size: 14px;">Ready for Next Guest</button>
@@ -1613,7 +1608,6 @@
                                 @endif
                             @endif
                         </div>
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
 
                                     {{-- Guest Cards List --}}
                                     @if($activeDinersList->count() === 0)
@@ -1857,75 +1851,6 @@
                                         @endif
                                     </div>
 
-<<<<<<< HEAD
-                                    {{-- Status Stage Banner --}}
-                                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px; margin-bottom: 12px;">
-                                        <div style="display: flex; align-items: center; gap: 8px;">
-                                            <span class="stitch-dot animate-pulse-dot" style="background: #10b981;"></span>
-                                            <span style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #065f46; letter-spacing: 0.5px;">Ready to Serve / In Dining</span>
-                                        </div>
-                                        <span style="font-size: 11px; color: #94a3b8; font-weight: 500;">KOT Synchronized</span>
-                                    </div>
-
-                                    {{-- Order Tickets List --}}
-                                    @if($tableOrders->count() === 0)
-                                        <div style="text-align: center; padding: 36px 16px; background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 14px;">
-                                            <x-heroicon-o-shopping-bag style="width: 36px; height: 36px; color: #cbd5e1; margin: 0 auto 8px auto;" />
-                                            <p style="font-size: 14px; font-weight: 700; color: #0f172a; margin: 0 0 4px 0;">No orders placed yet</p>
-                                            <p style="font-size: 12px; color: #64748b; margin: 0 0 16px 0;">Click below to place the first order on behalf of {{ $currentCustName }}.</p>
-                                            <button wire:click="openPlaceOrder" style="padding: 8px 18px; background: #f97316; color: white; border: none; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer;">
-                                                + Place Order Now
-                                            </button>
-                                        </div>
-                                    @else
-                                        <div style="display: flex; flex-direction: column; gap: 12px;">
-                                            @foreach($tableOrders as $order)
-                                                @php
-                                                    $isCancelled = in_array($order->status, ['cancelled', 'rejected']);
-                                                    $isPaid = $order->payment_status === 'paid';
-                                                @endphp
-                                                <article style="background: #ffffff; border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.03); overflow: hidden; {{ $isCancelled ? 'opacity: 0.5;' : '' }}">
-                                                    <header style="background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; font-size: 12px;">
-                                                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                                            <span style="font-weight: 800; color: #0f172a;">Order #{{ $order->id }}</span>
-                                                            <span style="font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; {{ $order->status === 'served' ? 'background: #d1fae5; color: #065f46;' : ($order->status === 'ready' ? 'background: #dbeafe; color: #1e40af;' : 'background: #f1f5f9; color: #475569;') }}">
-                                                                {{ ucfirst($order->status) }}
-                                                            </span>
-                                                            <span style="font-size: 11px; font-weight: 600; color: #475569; background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">
-                                                                👤 {{ $order->customer_name }}
-                                                            </span>
-                                                            @if($isPaid)
-                                                                <span style="font-size: 10px; font-weight: 800; background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px;">PAID</span>
-                                                            @endif
-                                                            <span style="font-size: 11px; color: #94a3b8;">{{ $order->created_at->diffForHumans(null, true) }} ago</span>
-                                                        </div>
-                                                        <div>
-                                                            @if(!$isCancelled && !$pendingPayment && !$isPaid)
-                                                                <button wire:click="mountAction('editOrderAction', { orderId: {{ $order->id }} })" style="background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: #475569; cursor: pointer;">
-                                                                    Edit
-                                                                </button>
-                                                            @endif
-                                                        </div>
-                                                    </header>
-                                                    <div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;">
-                                                        @foreach($order->items as $item)
-                                                            @php
-                                                                $displayQty = $item->confirmed_qty ?? $item->quantity;
-                                                                $isOos = $displayQty === 0;
-                                                            @endphp
-                                                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding-bottom: 6px; border-bottom: 1px solid #f8fafc;">
-                                                                <div style="display: flex; align-items: center; gap: 10px;">
-                                                                    @if($isOos)
-                                                                        <span style="color: #e11d48; font-weight: 800; font-size: 11px;">[OOS]</span>
-                                                                    @else
-                                                                        <span style="font-weight: 800; color: #c2410c; font-family: monospace; font-size: 13px; width: 22px;">{{ $displayQty }}x</span>
-                                                                    @endif
-                                                                    <div>
-                                                                        <span style="font-weight: 600; color: #1e293b; {{ $isOos ? 'text-decoration: line-through; color: #94a3b8;' : '' }}">{{ $item->item_name }}</span>
-                                                                        @if(!empty($item->notes))
-                                                                            <p style="font-size: 11px; color: #d97706; margin: 2px 0 0 0;">Note: {{ $item->notes }}</p>
-                                                                        @endif
-=======
                                 @if($tableOrders->count() === 0)
                                     <p style="text-align: center; color: var(--ann-text-secondary); font-style: italic; margin-top: 32px;">No orders placed yet.</p>
                                 @else
@@ -1960,12 +1885,8 @@
                                                                         <span style="font-size: 12px; font-weight: bold; color: var(--ann-text-primary);">Order #{{ $order->daily_order_number ?? $order->id }}</span>
                                                                         <span style="font-size: 10px; color: var(--ann-text-secondary);">• {{ $order->created_at->timezone('Asia/Kolkata')->format('h:i A') }}</span>
                                                                         @if($isPaid) <span style="font-size: 10px; font-weight: bold; background: #d1fae5; color: var(--ann-success); padding: 2px 6px; border-radius: 4px; margin-left: 4px;">PAID</span> @endif
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                                                                     </div>
                                                                 </div>
-<<<<<<< HEAD
-                                                                <span style="font-weight: 800; font-family: monospace; color: #0f172a; {{ $isOos ? 'text-decoration: line-through; color: #94a3b8;' : '' }}">₹{{ number_format($item->unit_price * ($isOos ? $item->quantity : $displayQty), 0) }}</span>
-=======
                                                                 @foreach($order->items as $item)
                                                                     @php $displayQty = $item->confirmed_qty ?? $item->quantity; $isOos = $displayQty === 0; @endphp
                                                                     <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 4px;">
@@ -1978,7 +1899,6 @@
                                                                         <span style="font-weight: bold; color: var(--ann-text-primary); {{ $isOos ? 'text-decoration: line-through; color: var(--ann-text-secondary);' : '' }}">₹{{ number_format($item->unit_price * ($isOos ? $item->quantity : $displayQty), 0) }}</span>
                                                                     </div>
                                                                 @endforeach
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                                                             </div>
                                                         @endforeach
                                                     </div>
@@ -2005,63 +1925,6 @@
                         {{-- ======================================================== --}}
                         <aside class="stitch-col-billing stitch-scroll">
                             @if($selectedSessionId)
-<<<<<<< HEAD
-                                @php
-                                    $validOrders = $tableOrders->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
-                                    $subtotal = $validOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
-                                    $amountAlreadyPaid = $validOrders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
-
-                                    if ($pendingPayment) {
-                                        $displaySubtotal = (float) $pendingPayment->subtotal;
-                                        $displayDiscount = (float) $pendingPayment->discount_amount;
-                                        $displayTax = (float) $pendingPayment->tax_amount;
-                                        $displayExtra = (float) $pendingPayment->extra_charges;
-                                        $taxable = max(0, $displaySubtotal - $displayDiscount);
-                                        $displayTaxPercent = ($taxable > 0 && $displayTax > 0) ? round(($displayTax / $taxable) * 100, 1) : 0;
-                                        $displayTotal = (float) $pendingPayment->amount;
-                                    } else {
-                                        $displaySubtotal = (float) $subtotal;
-                                        $displayDiscount = (float) $discountAmount;
-                                        $taxable = max(0, $displaySubtotal - $displayDiscount);
-                                        $displayTaxPercent = (float) $taxPercentage;
-                                        $displayTax = $taxable * ($displayTaxPercent / 100);
-                                        $displayExtra = (float) $extraCharges;
-                                        $displayTotal = max(0, ($taxable + $displayTax + $displayExtra) - $amountAlreadyPaid);
-                                    }
-                                    $totalItemsCount = $validOrders->sum(fn($o) => $o->items->sum('quantity'));
-                                @endphp
-
-                                <div>
-                                    {{-- Management: Clean & Vacate --}}
-                                    @if($selectedTableId)
-                                        <div style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px;">
-                                            <span style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: #94a3b8; display: block;">Session & Table Turnover</span>
-                                            
-                                            {{-- 1. Vacate Current Selected Session / Party --}}
-                                            @php
-                                                $isCurrentPrimary = $activeSession?->is_primary || empty($activeSession?->host_session_id);
-                                                $vacateLabel = $isCurrentPrimary 
-                                                    ? "Vacate & Complete Party ({$currentCustName})" 
-                                                    : "Vacate & Complete Guest ({$currentCustName})";
-                                                $vacateConfirm = $isCurrentPrimary
-                                                    ? "Are you sure you want to end the session for Party '{$currentCustName}' and their joined guests? If other parties are still dining at this table, they will remain active."
-                                                    : "Are you sure you want to end the session for guest '{$currentCustName}'? Other diners will remain active.";
-                                            @endphp
-                                            <button wire:click.stop="cleanDineInSession({{ $selectedSessionId }}, {{ $isCurrentPrimary ? 'true' : 'false' }})" 
-                                                    onclick="confirm('{{ $vacateConfirm }}') || event.stopImmediatePropagation()" 
-                                                    style="width: 100%; padding: 10px 14px; background: #d1fae5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 12px; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 1px 2px rgba(6, 95, 70, 0.08);">
-                                                <x-heroicon-s-check-circle style="width: 16px; height: 16px; color: #059669;" />
-                                                <span>{{ $vacateLabel }}</span>
-                                            </button>
-
-                                            {{-- 2. Clean & Vacate Entire Table (Secondary Danger Action) --}}
-                                            <button wire:click.stop="cleanTable({{ $selectedTableId }})" 
-                                                    onclick="confirm('⚠️ WARNING: This will immediately end ALL active sessions for ALL parties at this table and mark it Available. Are you sure you want to clean the entire table?') || event.stopImmediatePropagation()" 
-                                                    style="width: 100%; padding: 8px 12px; background: #fff1f2; border: 1px solid #fecdd3; color: #be123c; border-radius: 10px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                                                <x-heroicon-s-sparkles style="width: 14px; height: 14px; color: #e11d48;" />
-                                                <span>Clean & Vacate Entire Table (All Parties)</span>
-                                            </button>
-=======
 
                                 {{-- MANAGEMENT ACTIONS --}}
                                 @if(!$selectedRoomId)
@@ -2191,7 +2054,6 @@
                                                         @endif
                                                     @endif
                                                 </div>
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
 
                                             {{-- All-In-One Quick Status --}}
                                             @if(($isAllInOne ?? false) && $selectedTableId)
@@ -2348,17 +2210,7 @@
                                             </button>
                                         @endif
                                     @endif
-<<<<<<< HEAD
-                                </div>
-                            @else
-                                <div style="height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #94a3b8; padding: 24px;">
-                                    <x-heroicon-o-currency-rupee style="width: 48px; height: 48px; color: #cbd5e1; margin-bottom: 8px;" />
-                                    <p style="font-weight: 700; color: #334155; font-size: 14px; margin: 0;">Select a customer</p>
-                                    <p style="font-size: 12px; color: #94a3b8; margin: 4px 0 0 0;">Select a seated guest or assign a guest to view itemized bills and settlement options.</p>
-                                </div>
-=======
                                 @endif
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                             @endif
                         </aside>
                     </div>
@@ -2789,10 +2641,6 @@
 
         <x-filament-actions::modals />
 
-<<<<<<< HEAD
-        {{-- BROWSER NOTIFICATION AND GUJARATI/HINDI TTS SCRIPT --}}
-=======
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
         <script>
             document.addEventListener('DOMContentLoaded', function () {
                 if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -2807,18 +2655,10 @@
                     }
                 });
 
-<<<<<<< HEAD
-                // Dynamic Text To Speech (Gujarati / Hindi / Indian Accent)
-=======
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                 window.addEventListener('speak-notification', function (e) {
                     if ('speechSynthesis' in window) {
                         const text = e.detail.text || (e.detail[0] ? e.detail[0].text : '');
                         if(!text) return;
-<<<<<<< HEAD
-
-=======
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                         window.speechSynthesis.cancel();
                         let msg = new SpeechSynthesisUtterance(text);
                         let voices = window.speechSynthesis.getVoices();
@@ -2830,10 +2670,6 @@
                         if (indianVoice) {
                             msg.voice = indianVoice;
                         }
-<<<<<<< HEAD
-                        
-=======
->>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                         msg.rate = 0.9;
                         msg.pitch = 1;
                         msg.volume = 1;
