@@ -19,19 +19,24 @@ class WaiterCalled implements ShouldBroadcastNow
     public $tableNumber;
     public $customerName;
     public $eventId;
-    public $branchId; // 🔥 NEW
+    public $branchId;
+    public $serviceType;
 
-    public function __construct($restaurantId, $tableId, $tableNumber, $customerName = 'Guest')
+    public function __construct($restaurantId, $tableId, $tableNumber, $customerName = 'Guest', $branchId = null, $serviceType = 'dine_in')
     {
         $this->restaurantId = $restaurantId;
         $this->tableId = $tableId;
         $this->tableNumber = $tableNumber;
         $this->customerName = $customerName;
+        $this->serviceType = $serviceType;
         $this->eventId = Str::uuid()->toString();
 
-        // 🔥 Auto-fetch branch_id
-        $table = RestaurantTable::find($tableId);
-        $this->branchId = $table ? $table->branch_id : null;
+        if ($branchId !== null) {
+            $this->branchId = $branchId;
+        } else {
+            $table = RestaurantTable::find($tableId);
+            $this->branchId = $table ? $table->branch_id : null;
+        }
     }
 
     public function broadcastOn(): array
@@ -53,7 +58,8 @@ class WaiterCalled implements ShouldBroadcastNow
             'table_id' => $this->tableId,
             'table_number' => $this->tableNumber,
             'customer_name' => $this->customerName,
-            'branch_id' => $this->branchId, // 🔥 Send branch_id to frontend
+            'branch_id' => $this->branchId,
+            'service_type' => $this->serviceType,
             'event_id' => $this->eventId,
             'timestamp' => now()->timestamp,
         ];

@@ -37,9 +37,9 @@ class BranchResource extends Resource
             return true;
         }
 
-        if ($user->isRestaurantAdmin()) {
-            return $user->restaurant && $user->restaurant->has_branches == true;
-        }
+        // if ($user->isRestaurantAdmin()) {
+        //     return $user->restaurant && $user->restaurant->has_branches == true;
+        // }
 
         return false;
     }
@@ -131,6 +131,23 @@ class BranchResource extends Resource
                 })
                 ->columnSpanFull(),
 
+            Forms\Components\FileUpload::make('logo_path')
+                ->label('Branch Logo')
+                ->disk('public')
+                ->directory('branch-logos')
+                ->image()
+                ->acceptedFileTypes([
+                    'image/png',
+                    'image/jpeg',
+                    'image/jpg',
+                    'image/svg+xml',
+                    'image/webp',
+                ])
+                ->visibility('public')
+                ->maxSize(2048)
+                ->helperText('Custom logo for this branch. If empty, the main restaurant logo will be used automatically.')
+                ->columnSpanFull(),
+
             Forms\Components\TextInput::make('name')
                 ->label('Branch Name')
                 ->required()
@@ -161,12 +178,29 @@ class BranchResource extends Resource
                 ->tel()
                 ->maxLength(20),
 
+            Forms\Components\TextInput::make('gst_no')
+                ->label('Branch GSTIN')
+                ->placeholder('e.g., 27AAAAA0000A1Z5')
+                ->maxLength(20)
+                ->helperText('If not set, main restaurant GSTIN will apply.'),
+
             // 👇 NEW: UPI ID Field for Branch 👇
             Forms\Components\TextInput::make('upi_id')
                 ->label('UPI ID (Optional)')
                 ->placeholder('e.g., yourname@okhdfcbank')
                 ->maxLength(255)
                 ->helperText('If provided, payments at this branch will go to this UPI ID instead of the main restaurant.'),
+
+            Forms\Components\TextInput::make('table_limits')
+                ->label('Table Capacity Limit')
+                ->numeric()
+                ->default(0)
+                ->helperText('Max tables allowed for this branch (0 for unlimited).'),
+
+            Forms\Components\Toggle::make('is_pay_first')
+                ->label('Pay First Model')
+                ->helperText('Enable if customers at this branch must pay before ordering.')
+                ->default(false),
 
             Forms\Components\Textarea::make('address')
                 ->rows(3)
@@ -175,6 +209,58 @@ class BranchResource extends Resource
             Forms\Components\Toggle::make('is_active')
                 ->label('Active')
                 ->default(true),
+
+            /* 👇 MENU INHERITANCE CONFIGURATION 👇 */
+            Forms\Components\Radio::make('inherit_restaurant_menu')
+                ->label('Menu Catalog Configuration')
+                ->options([
+                    1 => 'Inherit Main Restaurant Menu (Shares central catalog with branch availability/price overrides)',
+                    0 => 'Independent Menu (Branch starts with its own clean menu and independent categories)',
+                ])
+                ->default(1)
+                ->inline(false)
+                ->required()
+                ->helperText('Choose whether this branch shares the parent restaurant menu items or maintains its own independent catalog.')
+                ->columnSpanFull(),
+
+            /* 👇 MODULES SECTION 👇 */
+            Forms\Components\Section::make('Branch SaaS Modules & Features')
+                ->description('Configure operational features and facilities for this branch.')
+                ->schema([
+                    Forms\Components\Toggle::make('is_rooms_facility')
+                        ->label('Enable Rooms Facility')
+                        ->helperText('Allow this branch to use Hotel/Rooms management & QR ordering.')
+                        ->live()
+                        ->default(false),
+
+                    Forms\Components\TextInput::make('rooms_limit')
+                        ->label('Maximum Rooms Allowed')
+                        ->numeric()
+                        ->default(0)
+                        ->minValue(0)
+                        ->visible(fn(Forms\Get $get) => (bool) $get('is_rooms_facility')),
+
+                    Forms\Components\Toggle::make('has_inventory')
+                        ->label('Enable Inventory & Stock Control')
+                        ->helperText('Grants access to raw materials and stock tracking.')
+                        ->default(false),
+
+                    Forms\Components\Toggle::make('has_detailed_inventory')
+                        ->label('Enable Detailed Auto Inventory')
+                        ->helperText('Recipe-based ingredient deductions on orders.')
+                        ->default(false),
+
+                    Forms\Components\Toggle::make('has_attendance')
+                        ->label('Enable Attendance & Payroll')
+                        ->helperText('Manage branch staff attendance and payroll.')
+                        ->default(false),
+
+                    Forms\Components\Toggle::make('is_all_in_one_cafe')
+                        ->label('Enable All-In-One Dashboard (QSR)')
+                        ->helperText('Manager screen handles Kitchen & Serving directly.')
+                        ->default(false),
+                ])
+                ->columns(2),
 
             /* 👇 ADMIN CREATION SECTION 👇 */
             Forms\Components\Section::make('Create Branch Admin')
@@ -350,6 +436,11 @@ class BranchResource extends Resource
                     ->color('primary')
                     ->visible(fn() => auth()->user()->isSuperAdmin()),
 
+                Tables\Columns\ImageColumn::make('logo_path')
+                    ->label('Logo')
+                    ->circular()
+                    ->disk('public'),
+
                 Tables\Columns\TextColumn::make('name')
                     ->label('Branch Name')
                     ->searchable()
@@ -360,6 +451,11 @@ class BranchResource extends Resource
                     ->searchable()
                     ->copyable(),
 
+                Tables\Columns\TextColumn::make('gst_no')
+                    ->label('GSTIN')
+                    ->placeholder('-')
+                    ->toggleable(),
+
                 // 👇 NEW: Display UPI ID in Table 👇
                 Tables\Columns\TextColumn::make('upi_id')
                     ->label('UPI ID')
@@ -368,8 +464,22 @@ class BranchResource extends Resource
                     ->copyable()
                     ->color('gray'),
 
+                Tables\Columns\TextColumn::make('table_limits')
+                    ->label('Table Limit')
+                    ->formatStateUsing(fn($state) => $state > 0 ? $state : 'Unlimited')
+                    ->toggleable(),
+
+                Tables\Columns\IconColumn::make('inherit_restaurant_menu')
+                    ->label('Inherits Menu')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-check-badge')
+                    ->falseIcon('heroicon-o-x-circle')
+                    ->trueColor('success')
+                    ->falseColor('warning')
+                    ->tooltip(fn($record) => $record->inherit_restaurant_menu ? 'Shares main restaurant menu' : 'Uses independent branch menu'),
+
                 Tables\Columns\TextColumn::make('address')
-                    ->limit(30),
+                    ->limit(25),
 
                 Tables\Columns\IconColumn::make('is_active')
                     ->boolean()

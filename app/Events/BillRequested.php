@@ -17,14 +17,24 @@ class BillRequested implements ShouldBroadcastNow
     public $tableNumber;
     public $customerName;
     public $eventId;
+    public $branchId;
+    public $serviceType;
 
-    public function __construct($restaurantId, $tableId, $tableNumber, $customerName)
+    public function __construct($restaurantId, $tableId, $tableNumber, $customerName, $branchId = null, $serviceType = 'dine_in')
     {
         $this->restaurantId = $restaurantId;
         $this->tableId = $tableId;
         $this->tableNumber = $tableNumber;
         $this->customerName = $customerName;
+        $this->serviceType = $serviceType;
         $this->eventId = (string) Str::uuid();
+
+        if ($branchId !== null) {
+            $this->branchId = $branchId;
+        } else {
+            $table = \App\Models\RestaurantTable::find($tableId);
+            $this->branchId = $table ? $table->branch_id : null;
+        }
     }
 
     public function broadcastOn(): array
@@ -47,6 +57,8 @@ class BillRequested implements ShouldBroadcastNow
             'table_id' => $this->tableId,
             'table_number' => $this->tableNumber,
             'customer_name' => $this->customerName,
+            'branch_id' => $this->branchId,
+            'service_type' => $this->serviceType,
             'timestamp' => now()->toIso8601String(),
         ];
     }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MenuResource\Widgets;
 
 use App\Models\Category;
+use App\Models\Branch;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -29,7 +30,22 @@ class CategoryManagerWidget extends BaseWidget
                 $query = Category::withoutGlobalScopes()
                     ->where('restaurant_id', $user->restaurant_id);
 
-                if ($user->isBranchAdmin() || $user->isManager()) {
+                if ($user->isRestaurantAdmin()) {
+                    // Main restaurant admin can view all categories across central and branches
+                } elseif ($user->isBranchAdmin() || ($user->isManager() && $user->branch_id)) {
+                    $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+                    if ($branch && !$branch->inherit_restaurant_menu) {
+                        $query->where('branch_id', $user->branch_id);
+                    } else {
+                        $query->where(function ($q) use ($user) {
+                            $q->whereNull('branch_id');
+                            if ($user->branch_id) {
+                                $q->orWhere('branch_id', $user->branch_id);
+                            }
+                        });
+                    }
+                } else {
+                    // Main restaurant manager (branch_id is null): ONLY main restaurant categories!
                     $query->whereNull('branch_id');
                 }
 
@@ -105,23 +121,31 @@ class CategoryManagerWidget extends BaseWidget
                     ->searchable()
                     ->color('primary'),
 
+                Tables\Columns\TextColumn::make('origin')
+                    ->label('ORIGIN')
+                    ->badge()
+                    ->state(fn(Category $record) => $record->branch_id === null ? '🏢 Inherited (Main)' : '🏪 Branch Custom')
+                    ->color(fn(Category $record) => $record->branch_id === null ? 'info' : 'warning'),
+
                 Tables\Columns\ToggleColumn::make('is_active')
                     ->label('STATUS')
                     ->onColor('warning')
                     ->getStateUsing(function (Category $record) {
                         $user = auth()->user();
                         if ($user->isBranchAdmin() || $user->isManager()) {
-                            $status = DB::table('branch_category_status')
-                                ->where('category_id', $record->id)
-                                ->where('branch_id', $user->branch_id)
-                                ->first();
-                            return $status ? (bool) $status->is_active : (bool) $record->is_active;
+                            if ($record->branch_id === null) {
+                                $status = DB::table('branch_category_status')
+                                    ->where('category_id', $record->id)
+                                    ->where('branch_id', $user->branch_id)
+                                    ->first();
+                                return $status ? (bool) $status->is_active : (bool) $record->is_active;
+                            }
                         }
                         return (bool) $record->is_active;
                     })
                     ->updateStateUsing(function (Category $record, $state) {
                         $user = auth()->user();
-                        if ($user->isBranchAdmin() || $user->isManager()) {
+                        if (($user->isBranchAdmin() || $user->isManager()) && $record->branch_id === null) {
                             DB::table('branch_category_status')->updateOrInsert(
                                 ['category_id' => $record->id, 'branch_id' => $user->branch_id],
                                 ['is_active' => $state, 'updated_at' => now()]
@@ -144,7 +168,7 @@ class CategoryManagerWidget extends BaseWidget
                     ->form([
                         \Filament\Forms\Components\TextInput::make('name')->required()->maxLength(100),
                     ])
-                    ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+                    ->visible(fn(Category $record) => auth()->user()->isRestaurantAdmin() || (auth()->user()->branch_id && $record->branch_id === auth()->user()->branch_id)),
                 
                 Tables\Actions\DeleteAction::make()
                     ->label('')
@@ -155,7 +179,7 @@ class CategoryManagerWidget extends BaseWidget
                         'onmouseover' => "this.style.color='#b91c1c'",
                         'onmouseout' => "this.style.color='#ef4444'",
                     ])
-                    ->visible(fn() => !auth()->user()->isBranchAdmin() && !auth()->user()->isManager()),
+                    ->visible(fn(Category $record) => auth()->user()->isRestaurantAdmin() || (auth()->user()->branch_id && $record->branch_id === auth()->user()->branch_id)),
             ]);
     }
 }

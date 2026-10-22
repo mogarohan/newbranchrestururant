@@ -100,6 +100,11 @@ class MenuItem extends Model
         return $this->belongsTo(Restaurant::class);
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

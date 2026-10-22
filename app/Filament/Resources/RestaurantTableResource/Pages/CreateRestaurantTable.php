@@ -19,48 +19,37 @@ class CreateRestaurantTable extends CreateRecord
     {
         parent::mount();
 
-        $user = auth()->user();
+        $info = RestaurantTableResource::getTableLimitInfo();
 
-        if ($user->restaurant_id) {
-            $restaurant = Restaurant::find($user->restaurant_id);
-            
-            if ($restaurant && $restaurant->table_limits > 0) {
-                $count = RestaurantTable::where('restaurant_id', $restaurant->id)->count();
-                
-                if ($count >= $restaurant->table_limits) {
-                    Notification::make()
-                        ->warning()
-                        ->title('Action Blocked')
-                        ->body("You have reached your limit of {$restaurant->table_limits} tables. Please contact the Super Admin to increase it.")
-                        ->send();
-                    
-                    $this->redirect(RestaurantTableResource::getUrl('index'));
-                }
-            }
+        if ($info['isLimitReached']) {
+            Notification::make()
+                ->warning()
+                ->title('Action Blocked')
+                ->body("You have reached your limit of {$info['limit']} tables. Please contact {$info['contactPerson']} to increase it.")
+                ->send();
+
+            $this->redirect(RestaurantTableResource::getUrl('index'));
         }
     }
 
     // Failsafe in case a direct POST request bypasses Mount restrictions
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $user = auth()->user();
-        $restaurant = $user->restaurant;
+        $info = RestaurantTableResource::getTableLimitInfo();
 
-        if ($restaurant && $restaurant->table_limits > 0) {
-            $count = RestaurantTable::where('restaurant_id', $restaurant->id)->count();
-            
-            if ($count >= $restaurant->table_limits) {
-                Notification::make()
-                    ->danger()
-                    ->title('Table Limit Exceeded')
-                    ->body("You can only create up to {$restaurant->table_limits} tables. Please contact the Super Admin.")
-                    ->send();
-                
-                $this->halt(); // Stop execution safely
-            }
+        if ($info['isLimitReached']) {
+            Notification::make()
+                ->danger()
+                ->title('Table Limit Exceeded')
+                ->body("You can only create up to {$info['limit']} tables. Please contact {$info['contactPerson']}.")
+                ->send();
+
+            $this->halt(); // Stop execution safely
         }
 
-        $data['restaurant_id'] = $restaurant->id;
+        $user = auth()->user();
+        $data['restaurant_id'] = $user->restaurant_id;
+        $data['branch_id'] = $info['branchId'];
         $data['qr_token'] = (string) Str::uuid();
 
         return $data;
@@ -68,12 +57,6 @@ class CreateRestaurantTable extends CreateRecord
 
     protected function afterCreate(): void
     {
-        $restaurant = auth()->user()->restaurant;
-
-        QrCodeService::generateTableQr(
-            $restaurant->slug,
-            $this->record->table_number,
-            $this->record->qr_token
-        );
+        app(QrCodeService::class)->generate($this->record);
     }
 }

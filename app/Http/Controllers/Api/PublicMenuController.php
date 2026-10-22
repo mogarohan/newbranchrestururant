@@ -134,16 +134,19 @@ class PublicMenuController extends Controller
         }
 
         // ─────────────────────────────────────────────────────────────
-        // Branch Overrides
+        // Branch Overrides & Menu Inheritance
         // ─────────────────────────────────────────────────────────────
 
-        $branchItemStatuses = DB::table('branch_menu_item_status')
-            ->where('branch_id', $entity->branch_id)
-            ->pluck('is_available', 'menu_item_id');
+        $branch = $entity->branch_id ? \App\Models\Branch::find($entity->branch_id) : null;
+        $inheritMenu = $branch ? (bool) $branch->inherit_restaurant_menu : false;
 
-        $branchCatStatuses = DB::table('branch_category_status')
+        $branchItemStatuses = $entity->branch_id ? DB::table('branch_menu_item_status')
             ->where('branch_id', $entity->branch_id)
-            ->pluck('is_active', 'category_id');
+            ->pluck('is_available', 'menu_item_id') : collect();
+
+        $branchCatStatuses = $entity->branch_id ? DB::table('branch_category_status')
+            ->where('branch_id', $entity->branch_id)
+            ->pluck('is_active', 'category_id') : collect();
 
         // ─────────────────────────────────────────────────────────────
         // Categories + Items
@@ -151,10 +154,15 @@ class PublicMenuController extends Controller
 
         $categories = $restaurant->categories()
 
-            ->where(function ($q) use ($entity) {
-                $q->whereNull('branch_id');
+            ->where(function ($q) use ($entity, $inheritMenu) {
                 if ($entity->branch_id) {
-                    $q->orWhere('branch_id', $entity->branch_id);
+                    if ($inheritMenu) {
+                        $q->where(fn($sub) => $sub->where('branch_id', $entity->branch_id)->orWhereNull('branch_id'));
+                    } else {
+                        $q->where('branch_id', $entity->branch_id);
+                    }
+                } else {
+                    $q->whereNull('branch_id');
                 }
             })
 
@@ -162,10 +170,15 @@ class PublicMenuController extends Controller
 
             ->with([
                 'menuItems' => fn($q) => $q
-                    ->where(function ($query) use ($entity) {
-                        $query->whereNull('branch_id');
+                    ->where(function ($query) use ($entity, $inheritMenu) {
                         if ($entity->branch_id) {
-                            $query->orWhere('branch_id', $entity->branch_id);
+                            if ($inheritMenu) {
+                                $query->where(fn($sub) => $sub->where('branch_id', $entity->branch_id)->orWhereNull('branch_id'));
+                            } else {
+                                $query->where('branch_id', $entity->branch_id);
+                            }
+                        } else {
+                            $query->whereNull('branch_id');
                         }
                     })
                     ->orderBy('name'),
@@ -207,6 +220,7 @@ class PublicMenuController extends Controller
                 return [
                     'id' => $category->id,
                     'name' => $category->name,
+                    'is_active' => true,
                     'items' => $filteredItems->map(function ($item) use ($branchItemStatuses) {
 
                         // ─────────────────────────────────────────────
@@ -276,25 +290,28 @@ class PublicMenuController extends Controller
         // Branch Meta
         // ─────────────────────────────────────────────────────────────
 
-        $branch = $entity->branch_id ? \App\Models\Branch::find($entity->branch_id) : null;
+        // $branch is already loaded above
         $finalUpiId = $branch && $branch->upi_id ? $branch->upi_id : $restaurant->upi_id;
         $finalAddress = $branch && $branch->address ? $branch->address : $restaurant->address;
+        $branchName = $branch ? $branch->name : null;
+        $effectiveRestaurantName = $branchName ?: $restaurant->name;
 
         // ─────────────────────────────────────────────────────────────
         // Logo
         // ─────────────────────────────────────────────────────────────
 
         $logoPayload = null;
+        $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : $restaurant->logo_path;
 
-        if ($restaurant->logo_path) {
-            $fullPath = storage_path('app/public/' . $restaurant->logo_path);
+        if ($logoPath) {
+            $fullPath = storage_path('app/public/' . $logoPath);
 
             if (file_exists($fullPath)) {
                 $mime = mime_content_type($fullPath);
                 $b64 = base64_encode(file_get_contents($fullPath));
                 $logoPayload = 'data:' . $mime . ';base64,' . $b64;
             } else {
-                $logoPayload = asset('storage/' . $restaurant->logo_path);
+                $logoPayload = asset('storage/' . $logoPath);
             }
         }
 
@@ -344,13 +361,20 @@ class PublicMenuController extends Controller
 
             'restaurant' => [
                 'id' => $restaurant->id,
-                'name' => $restaurant->name,
+                'name' => $effectiveRestaurantName,
+                'restaurant_name' => $restaurant->name,
+                'branch_name' => $branchName,
                 'address' => $finalAddress,
                 'currency_symbol' => $restaurant->currency_symbol ?? '₹',
                 'upi_id' => $finalUpiId,
                 'logo' => $logoPayload,
                 'is_pay_first' => (bool) $restaurant->is_pay_first,
             ],
+
+            'branch' => $branch ? [
+                'id' => $branch->id,
+                'name' => $branch->name,
+            ] : null,
 
             'table' => [
                 'id' => $entity->id,

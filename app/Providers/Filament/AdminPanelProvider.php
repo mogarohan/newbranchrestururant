@@ -28,7 +28,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(\App\Filament\Pages\Auth\Login::class)
             ->maxContentWidth('full')
             ->brandLogo(asset('img/annsathilogo.png'))
             ->brandLogoHeight('5rem')
@@ -65,6 +65,157 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
             ])
 
+            // ── TOPBAR OUTLET (RESTAURANT / BRANCH) ───────────────────
+            ->renderHook(
+                PanelsRenderHook::TOPBAR_START,
+                fn(): string => Blade::render('
+                    @php
+                        $user = auth()->user();
+                        $restaurant = $user?->restaurant;
+                        $branch = $user?->branch;
+                        
+                        $isSuperAdmin = (bool) ($user?->is_super_admin);
+                        
+                        $restaurantName = $restaurant?->name;
+                        $branchName = $branch?->name;
+                        
+                        $isMainBranch = false;
+                        if (!$branchName && $restaurant && $restaurant->has_branches && !$isSuperAdmin) {
+                            $isMainBranch = true;
+                        }
+
+                        $logoUrl = null;
+                        if ($branch?->logo_path) {
+                            $logoUrl = asset(\'storage/\' . $branch->logo_path);
+                        } elseif ($restaurant?->logo_path) {
+                            $logoUrl = asset(\'storage/\' . $restaurant->logo_path);
+                        }
+                    @endphp
+
+                    @if($user && ($restaurantName || $branchName || $isSuperAdmin))
+                        <div id="fi-topbar-outlet-badge" style="
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 0.5rem;
+                            height: 2.25rem;
+                            padding: 0 0.75rem 0 0.5rem;
+                            background: rgba(42, 71, 149, 0.05);
+                            border: 1px solid rgba(42, 71, 149, 0.12);
+                            border-radius: 9999px;
+                            font-family: Poppins, sans-serif;
+                            white-space: nowrap;
+                            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+                        ">
+                            @if($logoUrl)
+                                <img src="{{ $logoUrl }}" alt="Logo" style="
+                                    width: 1.5rem;
+                                    height: 1.5rem;
+                                    border-radius: 9999px;
+                                    object-fit: cover;
+                                    border: 1px solid rgba(42, 71, 149, 0.2);
+                                ">
+                            @else
+                                <div style="
+                                    width: 1.5rem;
+                                    height: 1.5rem;
+                                    border-radius: 9999px;
+                                    background: rgba(42, 71, 149, 0.1);
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    color: #2a4795;
+                                ">
+                                    <svg style="width: 1rem; height: 1rem;" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.614A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                                    </svg>
+                                </div>
+                            @endif
+
+                            <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                @if($isSuperAdmin && !$restaurantName)
+                                    <span style="font-size: 0.875rem; font-weight: 700; color: #2a4795;">
+                                        AnnSathi
+                                    </span>
+                                    <span style="
+                                        font-family: Inter, sans-serif;
+                                        font-size: 0.68rem;
+                                        font-weight: 600;
+                                        background: #2a4795;
+                                        color: #ffffff;
+                                        padding: 0.1rem 0.4rem;
+                                        border-radius: 9999px;
+                                        letter-spacing: 0.02em;
+                                    ">
+                                        Super Admin
+                                    </span>
+                                @else
+                                    <span style="font-size: 0.875rem; font-weight: 700; color: #2a4795;">
+                                        {{ $restaurantName ?? \'Restaurant\' }}
+                                    </span>
+
+                                    @if($branchName)
+                                        <span style="color: #94a3b8; font-size: 0.75rem;">•</span>
+                                        <span style="
+                                            font-family: Inter, sans-serif;
+                                            font-size: 0.7rem;
+                                            font-weight: 600;
+                                            background: #f16b3f;
+                                            color: #ffffff;
+                                            padding: 0.12rem 0.45rem;
+                                            border-radius: 9999px;
+                                            letter-spacing: 0.02em;
+                                            display: inline-flex;
+                                            align-items: center;
+                                            gap: 0.2rem;
+                                        ">
+                                            <svg style="width: 0.75rem; height: 0.75rem;" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                                            </svg>
+                                            {{ $branchName }}
+                                        </span>
+                                    @elseif($isMainBranch)
+                                        <span style="color: #94a3b8; font-size: 0.75rem;">•</span>
+                                        <span style="
+                                            font-family: Inter, sans-serif;
+                                            font-size: 0.7rem;
+                                            font-weight: 600;
+                                            background: #2a4795;
+                                            color: #ffffff;
+                                            padding: 0.12rem 0.45rem;
+                                            border-radius: 9999px;
+                                            letter-spacing: 0.02em;
+                                        ">
+                                            Main Branch
+                                        </span>
+                                    @endif
+                                @endif
+                            </div>
+                        </div>
+
+                        <script>
+                            (function() {
+                                function fixOutletOrder() {
+                                    const outlet = document.getElementById("fi-topbar-outlet-badge");
+                                    const openBtn = document.querySelector(".fi-topbar-open-sidebar-btn");
+                                    const closeBtn = document.querySelector(".fi-topbar-close-sidebar-btn");
+                                    const targetBtn = closeBtn || openBtn;
+                                    if (!outlet || !targetBtn || !targetBtn.parentElement) return;
+
+                                    if (targetBtn.nextElementSibling !== outlet) {
+                                        targetBtn.parentElement.insertBefore(outlet, targetBtn.nextSibling);
+                                    }
+                                }
+                                fixOutletOrder();
+                                setTimeout(fixOutletOrder, 200);
+                                setTimeout(fixOutletOrder, 600);
+                                document.addEventListener("livewire:navigated", fixOutletOrder);
+                            })();
+                        </script>
+                    @endif
+                ')
+            )
+
             // ── TOPBAR GREETING ──────────────────────────────────────
             ->renderHook(
                 PanelsRenderHook::TOPBAR_END,
@@ -97,6 +248,7 @@ class AdminPanelProvider extends PanelProvider
                             }
                             fixOrder();
                             setTimeout(fixOrder, 300);
+                            document.addEventListener("livewire:navigated", fixOrder);
                         });
                     </script>
                 ')

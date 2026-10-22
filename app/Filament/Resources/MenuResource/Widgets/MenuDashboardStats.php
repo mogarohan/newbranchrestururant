@@ -4,6 +4,7 @@ namespace App\Filament\Resources\MenuResource\Widgets;
 
 use App\Models\Category;
 use App\Models\MenuItem;
+use App\Models\Branch;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\HtmlString;
@@ -22,13 +23,20 @@ class MenuDashboardStats extends BaseWidget
     {
         $user = auth()->user();
         $restaurantId = $user->restaurant_id;
+        $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+        $inheritMenu = $branch ? (bool) $branch->inherit_restaurant_menu : true;
 
         // Accurate Category Count
         $totalCategories = Category::where('restaurant_id', $restaurantId)
-            ->where(function($q) use ($user) {
-                $q->whereNull('branch_id');
+            ->where(function ($q) use ($user, $inheritMenu) {
                 if ($user->branch_id) {
-                    $q->orWhere('branch_id', $user->branch_id);
+                    if (!$inheritMenu) {
+                        $q->where('branch_id', $user->branch_id);
+                    } else {
+                        $q->whereNull('branch_id')->orWhere('branch_id', $user->branch_id);
+                    }
+                } elseif (!$user->isRestaurantAdmin()) {
+                    $q->whereNull('branch_id');
                 }
             })
             ->get()
@@ -45,10 +53,15 @@ class MenuDashboardStats extends BaseWidget
 
         // Accurate Menu Item Count
         $totalItems = MenuItem::where('restaurant_id', $restaurantId)
-            ->where(function($q) use ($user) {
-                $q->whereNull('branch_id');
+            ->where(function ($q) use ($user, $inheritMenu) {
                 if ($user->branch_id) {
-                    $q->orWhere('branch_id', $user->branch_id);
+                    if (!$inheritMenu) {
+                        $q->where('branch_id', $user->branch_id);
+                    } else {
+                        $q->whereNull('branch_id')->orWhere('branch_id', $user->branch_id);
+                    }
+                } elseif (!$user->isRestaurantAdmin()) {
+                    $q->whereNull('branch_id');
                 }
             })
             ->get()

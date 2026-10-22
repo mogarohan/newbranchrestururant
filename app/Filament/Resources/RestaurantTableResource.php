@@ -33,6 +33,55 @@ class RestaurantTableResource extends Resource
             && in_array(auth()->user()->role->name, ['restaurant_admin', 'manager', 'branch_admin']);
     }
 
+    public static function getTableLimitInfo(?\App\Models\User $user = null): array
+    {
+        $user = $user ?? auth()->user();
+        if (!$user || !$user->restaurant_id) {
+            return [
+                'limit' => 0,
+                'currentCount' => 0,
+                'remaining' => 0,
+                'isLimitReached' => false,
+                'contactPerson' => 'Super Admin',
+                'entityName' => 'Restaurant',
+                'branchId' => null,
+            ];
+        }
+
+        $restaurant = $user->restaurant;
+        $isBranchUser = ($user->isBranchAdmin() || $user->isManager()) && !empty($user->branch_id);
+        $branch = $isBranchUser ? ($user->branch ?? \App\Models\Branch::find($user->branch_id)) : null;
+
+        $tableQuery = \App\Models\RestaurantTable::where('restaurant_id', $user->restaurant_id);
+
+        if ($isBranchUser && $branch) {
+            $limit = (int) ($branch->table_limits ?? 0);
+            $currentCount = $tableQuery->where('branch_id', $branch->id)->count();
+            $contactPerson = 'Restaurant Admin';
+            $entityName = $branch->name ?? 'Branch';
+            $branchId = $branch->id;
+        } else {
+            $limit = (int) ($restaurant?->table_limits ?? 0);
+            $currentCount = $tableQuery->whereNull('branch_id')->count();
+            $contactPerson = 'Super Admin';
+            $entityName = $restaurant?->name ?? 'Restaurant';
+            $branchId = null;
+        }
+
+        $remaining = $limit > 0 ? max(0, $limit - $currentCount) : PHP_INT_MAX;
+        $isLimitReached = $limit > 0 && $currentCount >= $limit;
+
+        return [
+            'limit' => $limit,
+            'currentCount' => $currentCount,
+            'remaining' => $remaining,
+            'isLimitReached' => $isLimitReached,
+            'contactPerson' => $contactPerson,
+            'entityName' => $entityName,
+            'branchId' => $branchId,
+        ];
+    }
+
     public static function getEloquentQuery(): Builder
     {
         $user = auth()->user();
@@ -221,29 +270,20 @@ class RestaurantTableResource extends Resource
                     ->icon('heroicon-o-qr-code')
                     ->color('primary')
                     ->disabled(function () {
-                        $restaurant = auth()->user()->restaurant;
-                        if (!$restaurant || $restaurant->table_limits <= 0)
-                            return false;
-
-                        $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
-                        return $currentCount >= $restaurant->table_limits;
+                        $info = static::getTableLimitInfo();
+                        return $info['isLimitReached'];
                     })
                     ->tooltip(function () {
-                        $restaurant = auth()->user()->restaurant;
-                        if (!$restaurant || $restaurant->table_limits <= 0)
-                            return null;
-
-                        $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
-                        if ($currentCount >= $restaurant->table_limits) {
-                            return "Table limit ({$restaurant->table_limits}) reached. Please contact Super Admin to increase limits.";
+                        $info = static::getTableLimitInfo();
+                        if ($info['isLimitReached']) {
+                            return "Table limit ({$info['limit']}) reached. Please contact {$info['contactPerson']} to increase limits.";
                         }
                         return null;
                     })
                     ->form(function () {
-                        $restaurant = auth()->user()->restaurant;
-                        $limit = $restaurant ? $restaurant->table_limits : 0;
-                        $currentCount = $restaurant ? \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count() : 0;
-                        $remaining = max(0, $limit - $currentCount);
+                        $info = static::getTableLimitInfo();
+                        $limit = $info['limit'];
+                        $remaining = $info['remaining'];
 
                         $tablesInput = \Filament\Forms\Components\TextInput::make('total_tables')
                             ->numeric()
@@ -252,7 +292,7 @@ class RestaurantTableResource extends Resource
 
                         if ($limit > 0) {
                             $tablesInput->maxValue($remaining)
-                                ->helperText("You can generate up to {$remaining} more table(s) based on your limit of {$limit}. Contact Super Admin to increase.");
+                                ->helperText("You can generate up to {$remaining} more table(s) based on your limit of {$limit}. Contact {$info['contactPerson']} to increase.");
                         }
 
                         return [
@@ -261,22 +301,22 @@ class RestaurantTableResource extends Resource
                         ];
                     })
                     ->action(function (array $data) {
+                        $info = static::getTableLimitInfo();
                         $user = auth()->user();
                         $restaurant = $user->restaurant;
 
-                        if ($restaurant && $restaurant->table_limits > 0) {
-                            $currentCount = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id)->count();
-                            if (($currentCount + $data['total_tables']) > $restaurant->table_limits) {
+                        if ($info['limit'] > 0) {
+                            if (($info['currentCount'] + $data['total_tables']) > $info['limit']) {
                                 \Filament\Notifications\Notification::make()
                                     ->title('Limit Exceeded')
-                                    ->body("You only have space for " . max(0, $restaurant->table_limits - $currentCount) . " more tables. Please contact Super Admin to increase your limit.")
+                                    ->body("You only have space for {$info['remaining']} more table(s). Please contact {$info['contactPerson']} to increase your limit.")
                                     ->danger()
                                     ->send();
                                 return;
                             }
                         }
 
-                        $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
+                        $branchId = $info['branchId'];
 
                         $lastTableQuery = \App\Models\RestaurantTable::withTrashed()
                             ->where('restaurant_id', $restaurant->id);
@@ -379,7 +419,12 @@ class RestaurantTableResource extends Resource
                                             \Filament\Forms\Components\Placeholder::make('pdf_preview')
                                                 ->label('Live Design Preview')
                                                 ->content(function (\Filament\Forms\Get $get) {
-                                                    $restaurant = auth()->user()->restaurant;
+                                                    $user = auth()->user();
+                                                    $restaurant = $user->restaurant;
+                                                    $branch = null;
+                                                    if ($user->isBranchAdmin() || $user->isManager()) {
+                                                        $branch = $user->branch_id ? \App\Models\Branch::find($user->branch_id) : null;
+                                                    }
 
                                                     $bgType = $get('bg_type') ?? 'image';
                                                     $bgImage = $get('bg_image');
@@ -414,9 +459,10 @@ class RestaurantTableResource extends Resource
                                                         $bgStyle = "background-color: {$bgColor};";
                                                     }
 
-                                                    $restName = strtoupper($restaurant->name ?? 'RESTAURANT');
-                                                    $address = $restaurant->address ?? '123 Main Street, City, State';
-                                                    $logoUrl = ($restaurant && $restaurant->logo_path) ? Storage::disk('public')->url($restaurant->logo_path) : null;
+                                                    $restName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
+                                                    $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '123 Main Street, City, State');
+                                                    $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
+                                                    $logoUrl = $logoPath ? Storage::disk('public')->url($logoPath) : null;
 
                                                     $logoHtml = $logoUrl ? "<img src='{$logoUrl}' style='max-width: 50px; max-height: 50px; object-fit: contain; margin-bottom: 5px;' />" : "";
                                                     $addressHtml = $address ? "<div style='font-size: 10px; color: {$addressColor}; margin: 4px 10px; line-height: 1.2;'>" . nl2br(htmlspecialchars($address)) . "</div>" : "";
@@ -520,12 +566,21 @@ class RestaurantTableResource extends Resource
                             $cardBackgroundStyle = 'background-color: ' . $bgColor . ';';
                         }
 
-                        $restaurantName = strtoupper($restaurant->name ?? 'RESTAURANT');
-                        $address = $restaurant->address ?? '';
+                        $user = auth()->user();
+                        $branch = null;
+                        if ($user->isBranchAdmin() || $user->isManager()) {
+                            $branch = $user->branch_id ? \App\Models\Branch::find($user->branch_id) : null;
+                        } elseif ($tables->first() && $tables->first()->branch_id) {
+                            $branch = \App\Models\Branch::find($tables->first()->branch_id);
+                        }
+
+                        $restaurantName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
+                        $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '');
+                        $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
                         $logoBase64 = '';
 
-                        if ($restaurant && $restaurant->logo_path) {
-                            $logoFullPath = Storage::disk('public')->path($restaurant->logo_path);
+                        if ($logoPath) {
+                            $logoFullPath = Storage::disk('public')->path($logoPath);
                             if (file_exists($logoFullPath)) {
                                 $mime = mime_content_type($logoFullPath);
                                 $logoData = file_get_contents($logoFullPath);

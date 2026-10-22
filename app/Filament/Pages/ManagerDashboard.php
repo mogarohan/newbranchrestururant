@@ -13,6 +13,7 @@ use App\Models\RoomSession;
 use App\Models\ParcelQrSession;
 use App\Models\ParcelQrCode;
 use App\Models\MenuItem;
+use App\Models\Category;
 use Filament\Pages\Page;
 use App\Models\ActivityLog;
 use Filament\Support\Enums\MaxWidth;
@@ -25,6 +26,11 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Grid;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\ToggleButtons;
+use Filament\Forms\Components\Placeholder;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -41,6 +47,11 @@ class ManagerDashboard extends Page
     protected static ?string $title = 'Manager Dashboard Control';
     protected static ?int $navigationSort = 1;
 
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return '';
+    }
+
     public $currentTab = 'tables';
 
     public $selectedTableId = null;
@@ -52,6 +63,30 @@ class ManagerDashboard extends Page
     public $taxPercentage = 0;
     public $extraCharges = 0;
 
+<<<<<<< HEAD
+    // 🌟 Filter & Search Properties (Stitch UI) 🌟
+    public $tableFilter = 'all'; // 'all', 'occupied', 'available', 'bill_pending', 'cleaning'
+    public $searchQuery = '';
+
+    // 🌟 Place Order / KOT Visual Menu Properties (Stitch UI 1a515631d2ff4021b0346acbd2a7a53c) 🌟
+    public $isPlaceOrderOpen = false;
+    public $placeOrderTableId = null;
+    public $placeOrderCounterId = null;
+    public $placeOrderRoomId = null;
+    public $placeOrderSessionId = null;
+    public $placeOrderCustomerName = 'Guest';
+    public $placeOrderPaymentStatus = 'pending'; // 'pending', 'paid_upi', 'paid_card', 'paid_cash'
+    public $placeOrderNotes = '';
+    public $placeOrderPriority = 'normal'; // 'normal', 'urgent', 'hold'
+    public $placeOrderCategory = 'all';
+    public $placeOrderSearch = '';
+    public $placeOrderVegFilter = 'all'; // 'all', 'veg', 'non-veg'
+    public $placeOrderAutoPrint = true;
+    public $placeOrderCart = [];
+
+    // 🌟 ALL-IN-ONE Feature Property 🌟
+=======
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
     public $activeAlerts = []; 
 
     public function mount(): void
@@ -63,6 +98,11 @@ class ManagerDashboard extends Page
     {
         $this->currentTab = $tab;
         $this->closeReceiptModal();
+    }
+
+    public function setTableFilter($filter): void
+    {
+        $this->tableFilter = $filter;
     }
 
     public static function canAccess(): bool
@@ -105,9 +145,9 @@ class ManagerDashboard extends Page
 
         return [
             "echo-private:restaurant.{$restaurantId},.OrderStatusUpdated" => 'handleOrderStatusUpdated',
-            "echo-private:restaurant.{$restaurantId},.OrderCancelled" => '$refresh',
-            "echo-private:restaurant.{$restaurantId},.GuestJoinRequested" => '$refresh',
-            "echo-private:restaurant.{$restaurantId}.alerts,.TableStatusUpdated" => '$refresh',
+            "echo-private:restaurant.{$restaurantId},.OrderCancelled" => 'handleOrderCancelled',
+            "echo-private:restaurant.{$restaurantId},.GuestJoinRequested" => 'handleGuestJoinRequested',
+            "echo-private:restaurant.{$restaurantId}.alerts,.TableStatusUpdated" => 'handleTableStatusUpdated',
             "echo-private:restaurant.{$restaurantId}.alerts,.WaiterCalled" => 'notifyWaiterCalled', 
             "echo-private:restaurant.{$restaurantId}.alerts,.BillRequested" => 'notifyBillRequested',
             "echo-private:restaurant.{$restaurantId}.alerts,.PaymentMethodSelected" => 'notifyPaymentMethod',
@@ -116,6 +156,63 @@ class ManagerDashboard extends Page
         ];
     }
 
+<<<<<<< HEAD
+    // ── TENANT / BRANCH ISOLATION HELPERS ─────────────────────────
+    protected function shouldHandleBranchEvent(?int $eventBranchId): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        // 1. If this manager is assigned to a branch: ONLY process events for their own branch!
+        if (!empty($user->branch_id)) {
+            return (int) $eventBranchId === (int) $user->branch_id;
+        }
+
+        // 2. If this is a Main Restaurant user and the restaurant has branches:
+        // Main restaurant only handles tables/entities with branch_id == null.
+        $restaurant = $user->restaurant;
+        if ($restaurant && $restaurant->has_branches) {
+            return empty($eventBranchId);
+        }
+
+        // 3. Single-outlet restaurant (no branches configured): handles all events for this restaurant.
+        return true;
+    }
+
+    protected function resolveEventBranchId(array $event): ?int
+    {
+        if (isset($event['branch_id']) && $event['branch_id'] !== null) {
+            return (int) $event['branch_id'];
+        }
+
+        if (isset($event['branchId']) && $event['branchId'] !== null) {
+            return (int) $event['branchId'];
+        }
+
+        if (isset($event['order']['branch_id']) && $event['order']['branch_id'] !== null) {
+            return (int) $event['order']['branch_id'];
+        }
+
+        if (!empty($event['table_id'])) {
+            return \App\Models\RestaurantTable::where('id', $event['table_id'])->value('branch_id');
+        }
+
+        if (!empty($event['tableId'])) {
+            return \App\Models\RestaurantTable::where('id', $event['tableId'])->value('branch_id');
+        }
+
+        if (!empty($event['order']['restaurant_table_id'])) {
+            return \App\Models\RestaurantTable::where('id', $event['order']['restaurant_table_id'])->value('branch_id');
+        }
+
+        return null;
+    }
+
+    // 🌟 FORMAT HELPER FOR CONSISTENT "Table-01" ALL OVER 🌟
+=======
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
     private function formatTableNumber($tableNum): string
     {
         if (!$tableNum) return 'Table-Unknown';
@@ -125,6 +222,15 @@ class ManagerDashboard extends Page
 
     public function notifyWaiterCalled($event): void
     {
+        // Tenant isolation: ignore events from room service or other branches
+        if (($event['service_type'] ?? 'dine_in') === 'room') {
+            return;
+        }
+
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
         $rawNum = $event['table_number'] ?? '?';
         $displayNum = $this->formatTableNumber($rawNum); 
         $customer = $event['customer_name'] ?? 'A customer';
@@ -163,6 +269,10 @@ class ManagerDashboard extends Page
 
     public function handleNewOrder($event)
     {
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
         $this->dispatch('$refresh');
 
         $order = $event['order'] ?? null;
@@ -206,6 +316,10 @@ class ManagerDashboard extends Page
 
     public function handleOrderStatusUpdated($event)
     {
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
         $this->dispatch('$refresh');
         $order = $event['order'] ?? null;
         $status = $order['status'] ?? null;
@@ -214,8 +328,50 @@ class ManagerDashboard extends Page
         }
     }
 
+    public function handleTableStatusUpdated($event)
+    {
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
+        $this->dispatch('$refresh');
+    }
+
+    public function handleOrderCancelled($event)
+    {
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
+        $this->dispatch('$refresh');
+    }
+
+    public function handleGuestJoinRequested($event)
+    {
+        $guest = $event['guest'] ?? null;
+        $branchId = $guest['branch_id'] ?? null;
+        if ($branchId === null && !empty($guest['restaurant_table_id'])) {
+            $branchId = \App\Models\RestaurantTable::where('id', $guest['restaurant_table_id'])->value('branch_id');
+        }
+
+        if (!$this->shouldHandleBranchEvent($branchId ? (int)$branchId : null)) {
+            return;
+        }
+
+        $this->dispatch('$refresh');
+    }
+
     public function notifyBillRequested($event): void
     {
+        // Tenant isolation: ignore room service or other branches
+        if (($event['service_type'] ?? 'dine_in') === 'room') {
+            return;
+        }
+
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
         $rawNum = $event['table_number'] ?? '?';
         $displayNum = $this->formatTableNumber($rawNum); 
         $customer = $event['customer_name'] ?? 'A customer';
@@ -234,6 +390,10 @@ class ManagerDashboard extends Page
 
     public function notifyPaymentMethod($event): void
     {
+        if (!$this->shouldHandleBranchEvent($this->resolveEventBranchId($event))) {
+            return;
+        }
+
         $rawNum = $event['table_number'] ?? '?';
         $displayNum = $this->formatTableNumber($rawNum); 
         $method = strtoupper($event['method'] ?? 'CASH');
@@ -261,8 +421,16 @@ class ManagerDashboard extends Page
             $this->closeReceiptModal();
             $this->selectedTableId = $tableId;
             $firstDiner = QrSession::where('restaurant_table_id', $tableId)
+<<<<<<< HEAD
+                ->where('is_active', true)
+                ->orderBy('is_primary', 'desc')
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+=======
                 ->where('is_active', true)->where('is_primary', true)
                 ->orderBy('created_at', 'asc')->first();
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             if ($firstDiner) {
                 $this->selectedSessionId = $firstDiner->id;
             }
@@ -317,6 +485,226 @@ class ManagerDashboard extends Page
         } else {
             return QrSession::find($this->selectedSessionId);
         }
+    }
+
+    public function assignGuestAction(): Action
+    {
+        return Action::make('assignGuestAction')
+            ->label('Assign Guest')
+            ->modalHeading(function (array $arguments) {
+                $tableId = $arguments['table_id'] ?? $this->selectedTableId;
+                if ($tableId) {
+                    $table = RestaurantTable::find($tableId);
+                    if ($table) {
+                        return 'Assign Guest to ' . $this->formatTableNumber($table->table_number);
+                    }
+                }
+                if ($this->selectedParcelCounterId || !empty($arguments['counter_id'])) {
+                    return 'Add Customer to Parcel Queue';
+                }
+                return 'Assign Guest to Table';
+            })
+            ->modalWidth(MaxWidth::Medium)
+            ->fillForm(function (array $arguments) {
+                return [
+                    'table_id' => $arguments['table_id'] ?? $this->selectedTableId,
+                    'counter_id' => $arguments['counter_id'] ?? $this->selectedParcelCounterId,
+                    'customer_name' => '',
+                    'notes' => '',
+                ];
+            })
+            ->form([
+                Hidden::make('counter_id'),
+
+                Select::make('table_id')
+                    ->label('Select Table')
+                    ->options(function () {
+                        $user = auth()->user();
+                        return RestaurantTable::where('restaurant_id', $user->restaurant_id)
+                            ->when($user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id)->orWhereNull('branch_id'))
+                            ->get()
+                            ->mapWithKeys(fn($t) => [$t->id => $this->formatTableNumber($t->table_number) . " (Cap: {$t->seating_capacity}) - " . ucfirst($t->status ?? 'available')]);
+                    })
+                    ->required(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                    ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                    ->live(),
+
+                Select::make('party_role')
+                    ->label('Party / Seating Role')
+                    ->options(function (\Filament\Forms\Get $get) {
+                        $tableId = $get('table_id') ?: $this->selectedTableId;
+                        if (!$tableId) {
+                            return ['new_host' => '👑 Start New Host / Independent Party'];
+                        }
+                        $activeHosts = QrSession::where('restaurant_table_id', $tableId)
+                            ->where('is_active', true)
+                            ->where(fn($q) => $q->where('is_primary', true)->orWhereNull('host_session_id'))
+                            ->get();
+                        $options = ['new_host' => '👑 Start New Host / Independent Party'];
+                        foreach ($activeHosts as $h) {
+                            $options['join_' . $h->id] = "👥 Join {$h->customer_name}'s Party (Host #{$h->id})";
+                        }
+                        return $options;
+                    })
+                    ->default('new_host')
+                    ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                    ->helperText('Choose whether this customer starts their own host party or joins an existing dining group on this table.'),
+
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->placeholder('Enter customer name (optional, defaults to "Guest")')
+                    ->helperText('If the customer\'s name is known, enter it here. Otherwise, leave blank to use "Guest".')
+                    ->maxLength(255),
+
+                TextInput::make('notes')
+                    ->label('Notes / Party Info')
+                    ->placeholder('e.g. Window seat, Birthday, 3 guests (optional)')
+                    ->nullable(),
+            ])
+            ->action(function (array $data, array $arguments) {
+                $counterId = $data['counter_id'] ?? $arguments['counter_id'] ?? $this->selectedParcelCounterId;
+
+                if ($counterId) {
+                    $parcelCounter = ParcelQrCode::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($counterId);
+                    $customerName = trim($data['customer_name'] ?? '');
+                    if (empty($customerName)) {
+                        $activeCount = ParcelQrSession::where('parcel_qr_code_id', $parcelCounter->id)->where('status', 'active')->count();
+                        $customerName = 'Takeaway Customer ' . ($activeCount + 1);
+                    }
+
+                    $session = ParcelQrSession::create([
+                        'restaurant_id' => $parcelCounter->restaurant_id,
+                        'branch_id' => $parcelCounter->branch_id,
+                        'parcel_qr_code_id' => $parcelCounter->id,
+                        'customer_name' => $customerName,
+                        'session_token' => Str::uuid()->toString(),
+                        'status' => 'active',
+                        'last_activity_at' => now(),
+                    ]);
+
+                    $this->selectedParcelCounterId = $parcelCounter->id;
+                    $this->selectedSessionId = $session->id;
+
+                    Notification::make()->title("Customer '{$customerName}' added to queue.")->success()->send();
+                    return;
+                }
+
+                $tableId = $data['table_id'] ?? $arguments['table_id'] ?? $this->selectedTableId;
+                $table = RestaurantTable::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($tableId);
+
+                $customerName = trim($data['customer_name'] ?? '');
+                $tableDisplay = $this->formatTableNumber($table->table_number);
+
+                if (empty($customerName)) {
+                    $activeCount = QrSession::where('restaurant_table_id', $table->id)->where('is_active', true)->count();
+                    $customerName = $activeCount > 0 ? "Guest " . ($activeCount + 1) : "Guest ({$tableDisplay})";
+                }
+
+                $partyRole = $data['party_role'] ?? 'new_host';
+                $isPrimary = true;
+                $hostSessionId = null;
+                $joinedHostName = null;
+
+                if (str_starts_with($partyRole, 'join_')) {
+                    $targetHostId = (int) str_replace('join_', '', $partyRole);
+                    $targetHost = QrSession::where('restaurant_table_id', $table->id)->where('is_active', true)->find($targetHostId);
+                    if ($targetHost) {
+                        $isPrimary = false;
+                        $hostSessionId = $targetHost->id;
+                        $joinedHostName = $targetHost->customer_name;
+                    }
+                }
+
+                $token = Str::uuid()->toString();
+
+                $session = QrSession::create([
+                    'restaurant_id' => $table->restaurant_id,
+                    'branch_id' => $table->branch_id,
+                    'restaurant_table_id' => $table->id,
+                    'customer_name' => $customerName,
+                    'session_token' => $token,
+                    'is_primary' => $isPrimary,
+                    'join_status' => 'active',
+                    'is_active' => true,
+                    'host_session_id' => $hostSessionId,
+                    'expires_at' => now()->addHours(4),
+                ]);
+
+                if ($table->status !== 'occupied') {
+                    $table->update(['status' => 'occupied']);
+                    event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+                }
+
+                $this->selectedTableId = $table->id;
+                $this->selectedSessionId = $session->id;
+
+                $roleText = $isPrimary ? "as Primary Host" : "joined to {$joinedHostName}'s party";
+                Notification::make()
+                    ->title("Guest '{$customerName}' assigned to {$tableDisplay} ({$roleText}).")
+                    ->body("You can now place orders on behalf of {$customerName}.")
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function editCustomerNameAction(): Action
+    {
+        return Action::make('editCustomerNameAction')
+            ->label('Edit Customer Name')
+            ->modalHeading('Update Customer Name')
+            ->modalWidth(MaxWidth::Medium)
+            ->form([
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->required()
+                    ->maxLength(255)
+                    ->placeholder('Enter the customer name')
+                    ->helperText('Update the customer name for this active bill/session.'),
+            ])
+            ->fillForm(function (array $arguments) {
+                $sessionId = $arguments['session_id'] ?? $this->selectedSessionId;
+                if (!$sessionId) return [];
+
+                if ($this->selectedParcelCounterId || !empty($arguments['is_parcel'])) {
+                    $session = ParcelQrSession::find($sessionId);
+                    return ['customer_name' => $session?->customer_name ?? ''];
+                } elseif ($this->selectedRoomId || !empty($arguments['is_room'])) {
+                    $session = RoomSession::find($sessionId);
+                    return ['customer_name' => $session?->guest_name ?? ''];
+                } else {
+                    $session = QrSession::find($sessionId);
+                    return ['customer_name' => $session?->customer_name ?? ''];
+                }
+            })
+            ->action(function (array $data, array $arguments) {
+                $sessionId = $arguments['session_id'] ?? $this->selectedSessionId;
+                $newName = trim($data['customer_name']);
+
+                if ($this->selectedParcelCounterId || !empty($arguments['is_parcel'])) {
+                    $session = ParcelQrSession::where('restaurant_id', auth()->user()->restaurant_id)->find($sessionId);
+                    if ($session) {
+                        $session->update(['customer_name' => $newName]);
+                        Order::where('parcel_qr_session_id', $session->id)->update(['customer_name' => $newName]);
+                    }
+                } elseif ($this->selectedRoomId || !empty($arguments['is_room'])) {
+                    $session = RoomSession::where('restaurant_id', auth()->user()->restaurant_id)->find($sessionId);
+                    if ($session) {
+                        $session->update(['guest_name' => $newName]);
+                        if ($session->room) {
+                            $session->room->update(['guest_name' => $newName]);
+                        }
+                        Order::where('room_session_id', $session->id)->update(['customer_name' => $newName]);
+                    }
+                } else {
+                    $session = QrSession::where('restaurant_id', auth()->user()->restaurant_id)->find($sessionId);
+                    if ($session) {
+                        $session->update(['customer_name' => $newName]);
+                        Order::where('qr_session_id', $session->id)->update(['customer_name' => $newName]);
+                    }
+                }
+
+                Notification::make()->title("Customer name updated to '{$newName}'.")->success()->send();
+            });
     }
 
     public function checkInAction(): Action
@@ -772,6 +1160,13 @@ class ManagerDashboard extends Page
         if (!$session) return;
 
         $restaurant = auth()->user()->restaurant;
+        $user = auth()->user();
+        $branch = null;
+        if ($session && $session->branch_id) {
+            $branch = \App\Models\Branch::find($session->branch_id);
+        } elseif ($user->branch_id) {
+            $branch = \App\Models\Branch::find($user->branch_id);
+        }
 
         $locationName = 'Counter';
         if ($this->selectedParcelCounterId) {
@@ -784,9 +1179,10 @@ class ManagerDashboard extends Page
             $locationName = "Room " . $roomNum;
         }
 
-        $gstIn = $restaurant->gst_no ?? '-';
-        $phone = $restaurant->phone ?? '012345678910';
-        $address = $restaurant->address ?? '-';
+        $brandName = $branch ? $branch->name : ($restaurant->name ?? 'Restaurant');
+        $gstIn = ($branch && $branch->gst_no) ? $branch->gst_no : ($restaurant->gst_no ?? '-');
+        $phone = ($branch && $branch->phone) ? $branch->phone : ($restaurant->phone ?? '012345678910');
+        $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '-');
 
         $itemsHtml = '';
         
@@ -824,17 +1220,47 @@ class ManagerDashboard extends Page
         }
 
         $qrHtml = '';
+<<<<<<< HEAD
+        if (!empty($upiId)) {
+            $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($brandName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
+=======
         if ($pendingPayment->payment_method !== 'cash' && $pendingPayment->payment_method !== 'room_charge' && !empty($upiId)) {
             $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($restaurantName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size(120)->margin(0)->generate($upiUrl);
 
             $qrHtml = "
             <div style='text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #000;'>
-                <div style='font-size: 11px; font-weight: bold; margin-bottom: 8px;'>SCAN TO PAY ₹" . number_format($pendingPayment->amount, 0) . "</div>
+                <div style='font-size: 11px; font-weight: bold; margin-bottom: 8px;'>SCAN TO PAY VIA UPI: ₹" . number_format($pendingPayment->amount, 0) . "</div>
                 <div style='display: block; margin: 0 auto;'>{$qrSvg}</div>
             </div>";
         }
 
+<<<<<<< HEAD
+        $taxable = max(0, (float) $pendingPayment->subtotal - (float) $pendingPayment->discount_amount);
+        $taxPercent = ($taxable > 0 && (float) $pendingPayment->tax_amount > 0) ? round(((float) $pendingPayment->tax_amount / $taxable) * 100, 1) : 0;
+
+        $breakdownHtml = "<div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>";
+        if ((float) $pendingPayment->discount_amount > 0) {
+            $breakdownHtml .= "<div style='font-size: 13px; margin-top: 3px;'>Discount: -₹" . number_format($pendingPayment->discount_amount, 2) . "</div>";
+        }
+        if ((float) $pendingPayment->tax_amount > 0) {
+            $halfTax = (float) $pendingPayment->tax_amount / 2;
+            $halfPercent = round($taxPercent / 2, 2);
+            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 3px;'>CGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 2px;'>SGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 2px; font-weight: bold;'>Total GST " . ($taxPercent > 0 ? "({$taxPercent}%)" : "") . ": ₹" . number_format($pendingPayment->tax_amount, 2) . "</div>";
+        }
+        if ((float) $pendingPayment->extra_charges > 0) {
+            $breakdownHtml .= "<div style='font-size: 13px; margin-top: 3px;'>Extra Charges: +₹" . number_format($pendingPayment->extra_charges, 2) . "</div>";
+        }
+        $breakdownHtml .= "<div style='font-size: 18px; margin-top: 6px; border-top: 1px dashed #000; padding-top: 4px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>";
+
+        $paymentModeText = strtoupper($pendingPayment->payment_method ?: 'CASH');
+        if ($paymentModeText === 'PENDING') {
+            $paymentModeText = 'CASH';
+        }
+=======
         $totalsHtml = "<div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>";
         if ($pendingPayment->discount_amount > 0) {
             $totalsHtml .= "<div style='color: #ef4444;'>Discount: -₹" . number_format($pendingPayment->discount_amount, 2) . "</div>";
@@ -848,12 +1274,13 @@ class ManagerDashboard extends Page
         $totalsHtml .= "<div style='font-size: 18px; margin-top: 5px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>";
 
         $customerName = $session->customer_name ?? $session->guest_name ?? 'Guest';
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
 
         $html = "
         <html><head><style>@page { margin: 0; size: 80mm auto; } body { margin: 5px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; } table { width: 100%; border-collapse: collapse; }</style></head>
         <body>
             <div style='text-align:center;'>
-                <h2 style='margin:0; font-size:20px; font-weight:bold; text-transform: uppercase;'>{$restaurant->name}</h2>
+                <h2 style='margin:0; font-size:20px; font-weight:bold; text-transform: uppercase;'>{$brandName}</h2>
                 <div style='font-size: 12px; margin-top: 5px;'>{$address}</div>
                 <div style='font-size: 12px; margin-top: 2px;'>MOB: {$phone}</div>
                 <div style='font-size: 12px; margin-top: 2px;'>GSTIN: {$gstIn}</div>
@@ -864,8 +1291,13 @@ class ManagerDashboard extends Page
                 <span>Date: " . now()->timezone('Asia/Kolkata')->format('d/m/Y h:i A') . "</span>
             </div>
             <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;'>
+<<<<<<< HEAD
+                <span>Name: {$session->customer_name}</span>
+                <span>Mode: {$paymentModeText}</span>
+=======
                 <span>Name: {$customerName}</span>
                 <span>Mode: " . strtoupper($pendingPayment->payment_method) . "</span>
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             </div>
             <div style='font-size: 13px; font-weight: bold; margin-top: 5px;'>LOCATION: {$locationName}</div>
             <hr style='border-top:1px dashed #000; margin:10px 0;'/>
@@ -878,7 +1310,11 @@ class ManagerDashboard extends Page
                 <tbody>{$itemsHtml}</tbody>
             </table>
             <div style='text-align:right; margin-top: 10px; font-size: 14px; font-weight: bold;'>
+<<<<<<< HEAD
+                {$breakdownHtml}
+=======
                 {$totalsHtml}
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             </div>
 
             {$qrHtml}
@@ -946,7 +1382,11 @@ class ManagerDashboard extends Page
                         'extra_charges' => $extra,
                         'amount' => $amountDue,
                         'status' => $billStatus,
+<<<<<<< HEAD
+                        'payment_method' => $billStatus === 'paid' ? 'online' : 'cash',
+=======
                         'payment_method' => $paymentMethod,
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                         'transaction_reference' => $transactionRef,
                         'bill_number' => $billNumber,
                         'paid_at' => $billStatus === 'paid' ? now()->timezone('Asia/Kolkata') : null, 
@@ -955,7 +1395,11 @@ class ManagerDashboard extends Page
 
                 $upiId = auth()->user()->branch_id ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
 
-                $paymentPayload = array_merge($payment->toArray(), ['upi_id' => $upiId, 'merchant_category_code' => '5812']);
+                $paymentPayload = array_merge($payment->toArray(), [
+                    'upi_id' => $upiId,
+                    'merchant_category_code' => '5812',
+                    'tax_percentage' => (float) $this->taxPercentage,
+                ]);
 
                 if ($billStatus === 'paid') {
                     Order::whereIn('id', $unpaidOrders->pluck('id'))->update(['status' => 'completed', 'payment_status' => 'paid']);
@@ -987,9 +1431,69 @@ class ManagerDashboard extends Page
 
     public function confirmPayment(): void
     {
-        $viewData = $this->getViewData();
-        $pendingPayment = $viewData['pendingPayment'];
+        $this->mountAction('confirmPaymentAction');
+    }
 
+<<<<<<< HEAD
+    public function confirmPaymentAction(): Action
+    {
+        return Action::make('confirmPaymentAction')
+            ->label('Confirm Payment')
+            ->modalHeading(function () {
+                $session = $this->getActiveSession();
+                $custName = $session?->customer_name ?? 'Guest';
+                $viewData = $this->getViewData();
+                $pendingPayment = $viewData['pendingPayment'];
+                $amount = $pendingPayment ? '₹' . number_format($pendingPayment->amount, 2) : '';
+                return "Confirm Bill Payment — {$amount} ({$custName})";
+            })
+            ->modalSubheading('Select the payment method received from the customer to settle the bill and generate the invoice.')
+            ->modalWidth(MaxWidth::Medium)
+            ->modalSubmitActionLabel('Confirm Payment & Settle')
+            ->modalIcon('heroicon-o-check-circle')
+            ->modalIconColor('success')
+            ->fillForm(function (array $arguments) {
+                $sessionId = $arguments['session_id'] ?? $this->selectedSessionId;
+                if ($sessionId && $this->selectedSessionId !== $sessionId) {
+                    $this->selectedSessionId = $sessionId;
+                }
+
+                $session = $this->getActiveSession();
+                $viewData = $this->getViewData();
+                $pendingPayment = $viewData['pendingPayment'];
+
+                $defaultMethod = 'cash';
+                if ($pendingPayment && in_array(strtolower($pendingPayment->payment_method), ['cash', 'upi', 'card', 'other'])) {
+                    $defaultMethod = strtolower($pendingPayment->payment_method);
+                }
+
+                return [
+                    'payment_method' => $defaultMethod,
+                    'transaction_reference' => $pendingPayment?->transaction_reference ?? '',
+                ];
+            })
+            ->form([
+                Placeholder::make('bill_overview')
+                    ->hiddenLabel()
+                    ->content(function () {
+                        $session = $this->getActiveSession();
+                        $viewData = $this->getViewData();
+                        $pendingPayment = $viewData['pendingPayment'];
+                        $amount = $pendingPayment ? number_format($pendingPayment->amount, 2) : '0.00';
+                        $subtotal = $pendingPayment ? number_format($pendingPayment->subtotal, 2) : '0.00';
+                        $tax = $pendingPayment ? number_format($pendingPayment->tax_amount, 2) : '0.00';
+                        $discount = $pendingPayment ? number_format($pendingPayment->discount_amount, 2) : '0.00';
+                        $custName = e($session?->customer_name ?? 'Guest');
+                        $billNo = $pendingPayment?->bill_number ?? '-';
+
+                        $locationName = 'Counter';
+                        if ($this->selectedParcelCounterId) {
+                            $locationName = \App\Models\ParcelQrCode::find($this->selectedParcelCounterId)->name ?? 'Parcel';
+                        } elseif ($this->selectedTableId) {
+                            $rawNum = \App\Models\RestaurantTable::find($this->selectedTableId)->table_number ?? '';
+                            $locationName = $this->formatTableNumber($rawNum);
+                        }
+=======
         if (!$pendingPayment || !$this->selectedSessionId) return;
 
         $isRoom = (bool) $this->selectedRoomId;
@@ -1022,28 +1526,439 @@ class ManagerDashboard extends Page
                 } else {
                     $session->update(['status' => 'completed']);
                 }
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
 
-                $upiId = auth()->user()->branch_id ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
+                        $choiceBadge = '';
+                        if ($pendingPayment && $pendingPayment->payment_method === 'upi') {
+                            $choiceBadge = '<span style="display:inline-flex; align-items:center; gap:4px; background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700;">📱 Customer chose UPI</span>';
+                        } elseif ($pendingPayment && $pendingPayment->payment_method === 'cash') {
+                            $choiceBadge = '<span style="display:inline-flex; align-items:center; gap:4px; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700;">💵 Customer chose Cash</span>';
+                        }
 
-                $paymentPayload = array_merge($pendingPayment->toArray(), [
-                    'upi_id' => $upiId,
-                    'merchant_category_code' => '5812',
-                    'invoice_number' => $invoice->invoice_number,
-                ]);
+                        return new \Illuminate\Support\HtmlString("
+                            <div style='background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; margin-bottom: 6px;'>
+                                <div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 10px;'>
+                                    <div>
+                                        <div style='display:flex; align-items:center; gap:8px;'>
+                                            <span style='background:#1e3a8a; color:#ffffff; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:800; letter-spacing:0.02em;'>
+                                                {$locationName}
+                                            </span>
+                                            <span style='color:#64748b; font-size:12px; font-weight:600;'>Bill #{$billNo}</span>
+                                            {$choiceBadge}
+                                        </div>
+                                        <div style='font-size:14px; font-weight:700; color:#1e293b; margin-top:6px; display:flex; align-items:center; gap:6px;'>
+                                            <span style='color:#64748b;'>👤 Customer:</span>
+                                            <strong style='color:#0f172a;'>{$custName}</strong>
+                                        </div>
+                                    </div>
+                                    <div style='text-align:right;'>
+                                        <span style='font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; display:block;'>Total Due</span>
+                                        <span style='font-size:24px; font-weight:900; color:#ea580c; font-family:monospace; line-height:1;'>₹{$amount}</span>
+                                    </div>
+                                </div>
+                                <div style='display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:12px; color:#475569;'>
+                                    <div style='display:flex; gap:12px; font-size:11px;'>
+                                        <span>Subtotal: <strong>₹{$subtotal}</strong></span>
+                                        " . ((float) $discount > 0 ? "<span style='color:#16a34a;'>Discount: <strong>-₹{$discount}</strong></span>" : "") . "
+                                        " . ((float) $tax > 0 ? "<span>Tax/GST: <strong>₹{$tax}</strong></span>" : "") . "
+                                    </div>
+                                </div>
+                            </div>
+                        ");
+                    }),
+
+                ToggleButtons::make('payment_method')
+                    ->label('Select Settlement Method')
+                    ->options([
+                        'cash' => 'Cash',
+                        'upi' => 'UPI / QR',
+                        'card' => 'Card Swipe',
+                        'other' => 'Other / Comp',
+                    ])
+                    ->icons([
+                        'cash' => 'heroicon-m-banknotes',
+                        'upi' => 'heroicon-m-qr-code',
+                        'card' => 'heroicon-m-credit-card',
+                        'other' => 'heroicon-m-sparkles',
+                    ])
+                    ->colors([
+                        'cash' => 'warning',
+                        'upi' => 'success',
+                        'card' => 'info',
+                        'other' => 'gray',
+                    ])
+                    ->columns(2)
+                    ->gridDirection('row')
+                    ->default('cash')
+                    ->required(),
+
+                TextInput::make('transaction_reference')
+                    ->label('Transaction Reference / Note (Optional)')
+                    ->placeholder('e.g. UTR / Card Auth Code / Cheque No. / Note')
+                    ->prefixIcon('heroicon-m-hashtag')
+                    ->maxLength(255)
+                    ->nullable(),
+            ])
+            ->action(function (array $data, array $arguments) {
+                $sessionId = $arguments['session_id'] ?? $this->selectedSessionId;
+                if ($sessionId && $this->selectedSessionId !== $sessionId) {
+                    $this->selectedSessionId = $sessionId;
+                }
+
+                $session = $this->getActiveSession();
+                if (!$session) {
+                    Notification::make()->title('Active customer session not found.')->danger()->send();
+                    return;
+                }
+
+                $sessionCol = $this->selectedParcelCounterId ? 'parcel_qr_session_id' : 'qr_session_id';
+                if (\App\Models\Invoice::where($sessionCol, $session->id)->exists()) {
+                    Notification::make()->title('Invoice already generated for this session.')->warning()->send();
+                    $this->closeReceiptModal();
+                    return;
+                }
+
+                $orderIds = Order::where($sessionCol, $session->id)->pluck('id');
+                $pendingPayment = Payment::whereIn('order_id', $orderIds)->where('status', 'pending')->latest()->first();
+
+                if (!$pendingPayment) {
+                    $viewData = $this->getViewData();
+                    $pendingPayment = $viewData['pendingPayment'];
+                }
+
+                if (!$pendingPayment) {
+                    Notification::make()->title('No pending bill found to confirm.')->warning()->send();
+                    return;
+                }
+
+                $method = $data['payment_method'] ?? 'cash';
+                $txRef = !empty($data['transaction_reference']) ? trim($data['transaction_reference']) : ($pendingPayment->transaction_reference ?? ('TXN-' . strtoupper(Str::random(8))));
+
+                try {
+                    DB::transaction(function () use ($pendingPayment, $session, $method, $txRef, $sessionCol, &$paymentPayload) {
+                        $pendingPayment->update([
+                            'status' => 'paid',
+                            'paid_at' => now(),
+                            'payment_method' => $method,
+                            'transaction_reference' => $txRef,
+                        ]);
+
+                        Order::where($sessionCol, $session->id)->update(['payment_status' => 'paid']);
+
+                        $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $pendingPayment);
+                        $session->update(['status' => 'completed']);
+
+                        $upiId = auth()->user()->branch_id ? \App\Models\Branch::find(auth()->user()->branch_id)->upi_id : \App\Models\Restaurant::find(auth()->user()->restaurant_id)->upi_id;
+
+                        $paymentPayload = array_merge($pendingPayment->toArray(), [
+                            'upi_id' => $upiId,
+                            'merchant_category_code' => '5812',
+                            'invoice_number' => $invoice->invoice_number,
+                        ]);
+                    });
+
+                    event(new \App\Events\BillGenerated($session->id, $paymentPayload));
+                    
+                    $methodLabel = strtoupper($method);
+                    Notification::make()->title("Payment Confirmed ({$methodLabel}) & Invoice Generated")->success()->send();
+                    $this->closeReceiptModal();
+                } catch (\Exception $e) {
+                    Notification::make()->title('Invoice Generation Failed')->body($e->getMessage())->danger()->send();
+                }
             });
+    }
 
+<<<<<<< HEAD
+    public function openPlaceOrder($tableId = null, $sessionId = null, $counterId = null, $roomId = null): void
+    {
+        $this->placeOrderTableId = $tableId ?? $this->selectedTableId;
+        $this->placeOrderCounterId = $counterId ?? $this->selectedParcelCounterId;
+        $this->placeOrderRoomId = $roomId ?? $this->selectedRoomId;
+        $this->placeOrderSessionId = $sessionId ?? $this->selectedSessionId;
+
+        $activeSession = null;
+        if ($this->placeOrderSessionId) {
+            if ($this->placeOrderCounterId) {
+                $activeSession = ParcelQrSession::find($this->placeOrderSessionId);
+            } elseif ($this->placeOrderRoomId) {
+                $activeSession = RoomSession::find($this->placeOrderSessionId);
+            } else {
+                $activeSession = QrSession::find($this->placeOrderSessionId);
+            }
+=======
             event(new \App\Events\BillGenerated($this->selectedSessionId, $paymentPayload));
             Notification::make()->title('Payment Confirmed & Invoice Generated')->success()->send();
             $this->discountAmount = 0; $this->taxPercentage = 0; $this->extraCharges = 0;
         } catch (\Exception $e) {
             Notification::make()->title('Invoice Generation Failed')->body($e->getMessage())->danger()->send();
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
         }
+
+        // Default to Manager for orders placed from the Manager Dashboard
+        $this->placeOrderCustomerName = 'Manager';
+
+        $this->placeOrderPaymentStatus = 'pending';
+        $this->placeOrderNotes = '';
+        $this->placeOrderPriority = 'normal';
+        $this->placeOrderCategory = 'all';
+        $this->placeOrderSearch = '';
+        $this->placeOrderVegFilter = 'all';
+        $this->placeOrderCart = [];
+        $this->isPlaceOrderOpen = true;
+    }
+
+    public function closePlaceOrder(): void
+    {
+        $this->isPlaceOrderOpen = false;
+        $this->placeOrderCart = [];
+    }
+
+    public function addToCart($menuItemId): void
+    {
+        $item = MenuItem::find($menuItemId);
+        if (!$item) return;
+
+        if ($item->track_stock && $item->stock_quantity !== null && $item->stock_quantity <= 0) {
+            Notification::make()->title("{$item->name} is out of stock.")->danger()->send();
+            return;
+        }
+
+        $currentQty = $this->placeOrderCart[$menuItemId]['quantity'] ?? 0;
+        $newQty = $currentQty + 1;
+
+        if ($item->track_stock && $item->stock_quantity !== null && $newQty > $item->stock_quantity) {
+            Notification::make()->title("Only {$item->stock_quantity} available for {$item->name}.")->warning()->send();
+            return;
+        }
+
+        $imageUrl = $item->image_path ? Storage::disk('public')->url($item->image_path) : null;
+
+        $this->placeOrderCart[$menuItemId] = [
+            'id' => $item->id,
+            'name' => $item->name,
+            'unit_price' => (float) $item->price,
+            'quantity' => $newQty,
+            'notes' => $this->placeOrderCart[$menuItemId]['notes'] ?? '',
+            'type' => $item->type ?? 'veg',
+            'category_id' => $item->category_id,
+            'image_url' => $imageUrl,
+        ];
+    }
+
+    public function decreaseCart($menuItemId): void
+    {
+        if (!isset($this->placeOrderCart[$menuItemId])) return;
+
+        if ($this->placeOrderCart[$menuItemId]['quantity'] > 1) {
+            $this->placeOrderCart[$menuItemId]['quantity']--;
+        } else {
+            unset($this->placeOrderCart[$menuItemId]);
+        }
+    }
+
+    public function removeFromCart($menuItemId): void
+    {
+        unset($this->placeOrderCart[$menuItemId]);
+    }
+
+    public function clearCart(): void
+    {
+        $this->placeOrderCart = [];
+    }
+
+    public function setOrderCategory($categoryId): void
+    {
+        $this->placeOrderCategory = $categoryId;
+    }
+
+    public function setOrderVegFilter($filter): void
+    {
+        $this->placeOrderVegFilter = $filter;
+    }
+
+    public function submitPlaceOrder(): void
+    {
+        if (empty($this->placeOrderCart)) {
+            Notification::make()->title('Please add at least one dish to the order.')->warning()->send();
+            return;
+        }
+
+        $user = auth()->user();
+        $customerName = trim($this->placeOrderCustomerName);
+
+        if (!$this->placeOrderSessionId) {
+            if ($this->placeOrderTableId) {
+                $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderTableId);
+                if (empty($customerName)) {
+                    $customerName = 'Guest (' . $this->formatTableNumber($table->table_number) . ')';
+                }
+
+                $session = QrSession::create([
+                    'restaurant_id' => $table->restaurant_id,
+                    'branch_id' => $table->branch_id,
+                    'restaurant_table_id' => $table->id,
+                    'customer_name' => $customerName,
+                    'session_token' => Str::uuid()->toString(),
+                    'is_primary' => true,
+                    'join_status' => 'active',
+                    'is_active' => true,
+                    'host_session_id' => null,
+                    'expires_at' => now()->addHours(4),
+                ]);
+
+                if ($table->status !== 'occupied') {
+                    $table->update(['status' => 'occupied']);
+                    event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+                }
+
+                $this->placeOrderSessionId = $session->id;
+                if (!$this->selectedTableId) {
+                    $this->selectedTableId = $table->id;
+                }
+                if (!$this->selectedSessionId) {
+                    $this->selectedSessionId = $session->id;
+                }
+            } elseif ($this->placeOrderCounterId) {
+                $parcelCounter = ParcelQrCode::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderCounterId);
+                if (empty($customerName)) {
+                    $customerName = 'Takeaway Customer';
+                }
+
+                $session = ParcelQrSession::create([
+                    'restaurant_id' => $parcelCounter->restaurant_id,
+                    'branch_id' => $parcelCounter->branch_id,
+                    'parcel_qr_code_id' => $parcelCounter->id,
+                    'customer_name' => $customerName,
+                    'session_token' => Str::uuid()->toString(),
+                    'status' => 'active',
+                    'last_activity_at' => now(),
+                ]);
+
+                $this->placeOrderSessionId = $session->id;
+                if (!$this->selectedParcelCounterId) {
+                    $this->selectedParcelCounterId = $parcelCounter->id;
+                }
+                if (!$this->selectedSessionId) {
+                    $this->selectedSessionId = $session->id;
+                }
+            } else {
+                Notification::make()->title('Please select a table or parcel counter first.')->danger()->send();
+                return;
+            }
+        } else {
+            // Keep the active table/room session owner intact. The specific order being placed
+            // by the manager will be tagged with $customerName (defaulting to 'Manager').
+        }
+
+        if (empty($customerName)) {
+            $customerName = 'Manager';
+        }
+
+        $validatedItems = [];
+        $outOfStockItemNames = [];
+
+        DB::transaction(function () use (&$validatedItems, &$outOfStockItemNames) {
+            foreach ($this->placeOrderCart as $cartItem) {
+                $menuItem = MenuItem::where('id', $cartItem['id'])->lockForUpdate()->first();
+                if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
+                    if ($menuItem->stock_quantity <= 0) {
+                        $outOfStockItemNames[] = $menuItem->name;
+                        continue;
+                    } elseif ($menuItem->stock_quantity < $cartItem['quantity']) {
+                        $cartItem['quantity'] = $menuItem->stock_quantity;
+                    }
+                }
+                $validatedItems[] = $cartItem;
+            }
+        });
+
+        if (!empty($outOfStockItemNames)) {
+            Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
+        }
+
+        if (empty($validatedItems)) {
+            return;
+        }
+
+        $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
+
+        if ($this->placeOrderCounterId) {
+            $orderData = ['parcel_qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'parcel'];
+        } elseif ($this->placeOrderRoomId) {
+            $orderData = ['room_session_id' => $this->placeOrderSessionId, 'service_type' => 'room_service'];
+        } else {
+            $orderData = ['restaurant_table_id' => $this->placeOrderTableId, 'qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'dine_in'];
+        }
+
+        $paymentStatus = match ($this->placeOrderPaymentStatus) {
+            'paid_upi', 'paid_card', 'paid_cash', 'paid' => 'paid',
+            default => 'pending',
+        };
+
+        $orderData = array_merge($orderData, [
+            'restaurant_id' => $user->restaurant_id,
+            'branch_id' => $user->branch_id,
+            'customer_name' => $customerName,
+            'notes' => $this->placeOrderNotes,
+            'total_amount' => $totalAmount,
+            'confirmed_total' => $totalAmount,
+            'status' => 'accepted',
+            'payment_status' => $paymentStatus,
+        ]);
+
+        $order = Order::create($orderData);
+
+        foreach ($validatedItems as $item) {
+            $menuItem = MenuItem::find($item['id']);
+            if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
+                $menuItem->decrement('stock_quantity', $item['quantity']);
+                if ($menuItem->fresh()->stock_quantity <= 0) {
+                    $menuItem->update(['is_available' => false]);
+                }
+            }
+            $order->items()->create([
+                'menu_item_id' => $item['id'],
+                'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
+                'quantity' => $item['quantity'],
+                'confirmed_qty' => $item['quantity'],
+                'requested_qty' => $item['quantity'],
+                'unit_price' => $item['unit_price'],
+                'total_price' => $item['unit_price'] * $item['quantity'],
+                'notes' => $item['notes'] ?? null,
+            ]);
+        }
+
+        if (auth()->user()->restaurant?->has_detailed_inventory) {
+            InventoryService::deductForOrder($order);
+        }
+
+        $priorityVal = match ($this->placeOrderPriority) {
+            'urgent' => 10,
+            'hold' => -5,
+            default => 0,
+        };
+
+        KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => $priorityVal]);
+        OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
+        
+        Notification::make()->title("KOT #{$order->id} Sent to Kitchen for {$customerName}!")->success()->send();
+
+        $this->closePlaceOrder();
     }
 
     public function placeOrderAction(): Action
     {
         return Action::make('placeOrderAction')
             ->label('Place Order')
+<<<<<<< HEAD
+            ->action(function (array $arguments) {
+                $this->openPlaceOrder(
+                    $arguments['table_id'] ?? $this->selectedTableId,
+                    $arguments['session_id'] ?? $this->selectedSessionId,
+                    $arguments['counter_id'] ?? $this->selectedParcelCounterId,
+                    $arguments['room_id'] ?? $this->selectedRoomId
+                );
+=======
             ->modalHeading('Place Order on Behalf of Customer')
             ->modalWidth(MaxWidth::TwoExtraLarge)
             ->form([
@@ -1135,6 +2050,7 @@ class ManagerDashboard extends Page
                 $order->refresh();
                 $displayId = $order->daily_order_number ?? $order->id;
                 Notification::make()->title("Order #{$displayId} placed.")->success()->send();
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             });
     }
 
@@ -1152,9 +2068,35 @@ class ManagerDashboard extends Page
             })
             ->modalWidth(MaxWidth::TwoExtraLarge)
             ->form([
+                TextInput::make('customer_name')
+                    ->label('Customer Name')
+                    ->required(),
                 Repeater::make('items')->schema([
                     Hidden::make('id'),
-                    Select::make('menu_item_id')->label('Menu Item')->options(MenuItem::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))->searchable()->required()->live()->afterStateUpdated(fn($state, callable $set) => $set('unit_price', MenuItem::find($state)?->price ?? 0)),
+                    Select::make('menu_item_id')
+                        ->label('Menu Item')
+                        ->options(function () {
+                            $user = auth()->user();
+                            $branch = $user->branch_id ? \App\Models\Branch::find($user->branch_id) : null;
+                            return MenuItem::where('restaurant_id', $user->restaurant_id)
+                                ->when(
+                                    $user->branch_id,
+                                    function ($q) use ($branch, $user) {
+                                        if ($branch && !$branch->inherit_restaurant_menu) {
+                                            return $q->where('branch_id', $user->branch_id);
+                                        }
+                                        return $q->where(fn($q2) => $q2->where('branch_id', $user->branch_id)->orWhereNull('branch_id'));
+                                    },
+                                    fn($q) => $q->whereNull('branch_id')
+                                )
+                                ->where('is_available', true)
+                                ->get()
+                                ->mapWithKeys(fn($item) => [$item->id => "{$item->name} (₹" . number_format($item->price, 0) . ")"]);
+                        })
+                        ->searchable()
+                        ->required()
+                        ->live()
+                        ->afterStateUpdated(fn($state, callable $set) => $set('unit_price', MenuItem::find($state)?->price ?? 0)),
                     TextInput::make('quantity')->numeric()->minValue(1)->required(),
                     Hidden::make('unit_price'),
                     TextInput::make('notes')->nullable(),
@@ -1162,8 +2104,17 @@ class ManagerDashboard extends Page
             ])
             ->fillForm(function (array $arguments) {
                 $order = Order::with('items')->find($arguments['orderId']);
+<<<<<<< HEAD
+                if (!$order)
+                    return [];
+                return [
+                    'customer_name' => $order->customer_name,
+                    'items' => $order->items->map(fn($item) => ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes])->toArray(),
+                ];
+=======
                 if (!$order) return [];
                 return ['items' => $order->items->map(fn($item) => ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes])->toArray()];
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             })
             ->action(function (array $data, array $arguments) {
                 $order = Order::find($arguments['orderId']);
@@ -1208,7 +2159,11 @@ class ManagerDashboard extends Page
                 }
 
                 $order->items()->whereNotIn('id', $existingItemIds)->delete();
-                $order->update(['total_amount' => $totalAmount, 'confirmed_total' => $totalAmount]);
+                $order->update([
+                    'customer_name' => $data['customer_name'] ?? $order->customer_name,
+                    'total_amount' => $totalAmount,
+                    'confirmed_total' => $totalAmount,
+                ]);
 
                 OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
                 
@@ -1253,6 +2208,62 @@ class ManagerDashboard extends Page
         Notification::make()->title("{$displayNum} Cleaned")->success()->send();
         
         $this->closeReceiptModal();
+    }
+
+    public function cleanDineInSession($sessionId, bool $includeGuests = true): void
+    {
+        $user = auth()->user();
+        $session = QrSession::where('restaurant_id', $user->restaurant_id)->find($sessionId);
+        if (!$session) {
+            Notification::make()->title('Session not found.')->danger()->send();
+            return;
+        }
+
+        $table = $session->restaurantTable ?? RestaurantTable::find($session->restaurant_table_id);
+        $tableId = $table?->id;
+        $customerName = $session->customer_name ?? 'Guest';
+
+        $sessionsToClose = collect([$session]);
+        if ($includeGuests && ($session->is_primary || empty($session->host_session_id))) {
+            // If this is a host, also close their active joined guests
+            $guests = QrSession::where('host_session_id', $session->id)->where('is_active', true)->get();
+            $sessionsToClose = $sessionsToClose->merge($guests);
+        }
+
+        foreach ($sessionsToClose as $s) {
+            $s->update(['is_active' => false, 'status' => 'completed']);
+            Order::where('qr_session_id', $s->id)
+                ->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'])
+                ->update(['status' => 'served']);
+            event(new \App\Events\SessionEnded($s->id, $tableId));
+        }
+
+        // Check remaining active sessions on this table
+        $remainingSessions = $tableId
+            ? QrSession::where('restaurant_table_id', $tableId)->where('is_active', true)->get()
+            : collect();
+
+        $displayNum = $table ? $this->formatTableNumber($table->table_number) : 'Table';
+
+        if ($remainingSessions->count() === 0) {
+            if ($table) {
+                $table->update(['status' => 'available']);
+                event(new \App\Events\TableStatusUpdated($table->id, 'available', $table->restaurant_id));
+            }
+            Notification::make()->title("All diners vacated. {$displayNum} is now Available.")->success()->send();
+            $this->closeReceiptModal();
+        } else {
+            // Other sessions still dining on this table!
+            $remainingCount = $remainingSessions->count();
+            $nextSession = $remainingSessions->sortByDesc('is_primary')->first();
+            $this->selectedSessionId = $nextSession?->id;
+
+            Notification::make()
+                ->title("Session for '{$customerName}' ended.")
+                ->body("{$remainingCount} guest(s) still dining at {$displayNum}.")
+                ->success()
+                ->send();
+        }
     }
 
     public function cleanParcelSession($sessionId): void
@@ -1370,14 +2381,15 @@ class ManagerDashboard extends Page
         $user = auth()->user();
         $restaurantId = $user->restaurant_id;
         $branchId = $user->branch_id;
-        $hasRoomsFacility = (bool) $user->restaurant->is_rooms_facility;
+        $branch = $branchId ? \App\Models\Branch::find($branchId) : null;
+        $hasRoomsFacility = $branch ? (bool) $branch->is_rooms_facility : ((bool) ($user->restaurant->is_rooms_facility ?? false));
 
-        $data['upiId'] = $branchId ? (\App\Models\Branch::find($branchId)->upi_id ?? '') : ($user->restaurant->upi_id ?? '');
+        $data['upiId'] = $branch ? ($branch->upi_id ?? ($user->restaurant->upi_id ?? '')) : ($user->restaurant->upi_id ?? '');
 
-        $isAllInOne = $user->restaurant->is_all_in_one_cafe ?? false;
+        $isAllInOne = $branch ? (bool) $branch->is_all_in_one_cafe : ((bool) ($user->restaurant->is_all_in_one_cafe ?? false));
         $data['isAllInOne'] = $isAllInOne;
 
-        $data['restaurantName'] = $user->restaurant->name ?? 'Restaurant';
+        $data['restaurantName'] = $branch ? $branch->name : ($user->restaurant->name ?? 'Restaurant');
 
         $activeStatuses = $isAllInOne ? ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready'] : ['placed'];
 
@@ -1402,7 +2414,7 @@ class ManagerDashboard extends Page
             $tablesQuery = RestaurantTable::where('restaurant_id', $restaurantId);
             if ($branchId) $tablesQuery->where('branch_id', $branchId); else $tablesQuery->whereNull('branch_id');
 
-            $data['tables'] = $tablesQuery->with(['qrSessions' => fn($q) => $q->where('is_active', true)])
+            $rawTables = $tablesQuery->with(['qrSessions' => fn($q) => $q->where('is_active', true)])
                 ->withCount(['qrSessions as active_sessions_count' => fn($q) => $q->where('is_active', true)])->get()
                 ->map(function ($table) {
                     $activeSessionIds = $table->qrSessions->pluck('id')->toArray();
@@ -1413,8 +2425,54 @@ class ManagerDashboard extends Page
                     $table->live_due = max(0, $table->live_subtotal - $orders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount));
                     $table->live_orders_count = $orders->count();
                     $table->pending_payment = Payment::whereIn('order_id', $orders->pluck('id'))->where('status', 'pending')->latest()->first();
+                    $table->is_bill_pending = ($table->pending_payment !== null);
+
+                    $primaryDiner = $table->qrSessions->sortByDesc('is_primary')->first();
+                    $table->primary_guest_name = $primaryDiner?->customer_name ?? null;
+                    $table->seated_at = $primaryDiner?->created_at ?? null;
+
                     return $table;
-                })->sortByDesc(fn($t) => $t->active_sessions_count > 0 ? 2 : ((($t->status ?? '') === 'reserved') ? 1 : 0))->values();
+                });
+
+            $totalTables = $rawTables->count();
+            $data['totalTablesCount'] = $totalTables;
+            $data['occupiedCount'] = $rawTables->filter(fn($t) => $t->active_sessions_count > 0 && !$t->is_bill_pending)->count();
+            $data['availableCount'] = $rawTables->filter(fn($t) => $t->active_sessions_count === 0 && ($t->status ?? 'available') !== 'cleaning' && ($t->status ?? 'available') !== 'reserved')->count();
+            $data['billPendingCount'] = $rawTables->filter(fn($t) => $t->active_sessions_count > 0 && $t->is_bill_pending)->count();
+            $data['cleaningCount'] = $rawTables->where('status', 'cleaning')->count();
+            $data['occupancyRate'] = $totalTables > 0 ? round(($data['occupiedCount'] / $totalTables) * 100) : 0;
+
+            // Shift revenue (today's paid orders)
+            $todayPaidOrders = Order::where('restaurant_id', $restaurantId)
+                ->when($branchId, fn($q) => $q->where('branch_id', $branchId), fn($q) => $q->whereNull('branch_id'))
+                ->where('payment_status', 'paid')
+                ->whereDate('created_at', today())
+                ->get();
+            $data['shiftRevenue'] = $todayPaidOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+            $data['shiftPaidCount'] = $todayPaidOrders->count();
+
+            // Apply filter if selected
+            $filteredTables = $rawTables;
+            if ($this->tableFilter === 'occupied') {
+                $filteredTables = $filteredTables->filter(fn($t) => $t->active_sessions_count > 0 && !$t->is_bill_pending);
+            } elseif ($this->tableFilter === 'available') {
+                $filteredTables = $filteredTables->filter(fn($t) => $t->active_sessions_count === 0 && ($t->status ?? 'available') !== 'cleaning' && ($t->status ?? 'available') !== 'reserved');
+            } elseif ($this->tableFilter === 'bill_pending') {
+                $filteredTables = $filteredTables->filter(fn($t) => $t->active_sessions_count > 0 && $t->is_bill_pending);
+            } elseif ($this->tableFilter === 'cleaning') {
+                $filteredTables = $filteredTables->where('status', 'cleaning');
+            }
+
+            // Apply search query if present
+            if (!empty($this->searchQuery)) {
+                $q = strtolower(trim($this->searchQuery));
+                $filteredTables = $filteredTables->filter(function($t) use ($q) {
+                    return str_contains(strtolower($t->table_number), $q) ||
+                           str_contains(strtolower($t->primary_guest_name ?? ''), $q);
+                });
+            }
+
+            $data['tables'] = $filteredTables->sortByDesc(fn($t) => $t->active_sessions_count > 0 ? 2 : ((($t->status ?? '') === 'reserved') ? 1 : 0))->values();
 
             $parcelQuery = ParcelQrCode::where('restaurant_id', $restaurantId)->where('is_active', true);
             if ($branchId) $parcelQuery->where('branch_id', $branchId); else $parcelQuery->whereNull('branch_id');
@@ -1431,10 +2489,10 @@ class ManagerDashboard extends Page
                     return $counter;
                 })->values();
 
-            $data['totalTables'] = $data['tables']->count() + ParcelQrCode::where('restaurant_id', $restaurantId)->count();
-            $data['activeTables'] = $data['tables']->where('active_sessions_count', '>', 0)->count() + $data['parcelCounters']->where('active_sessions_count', '>', 0)->count();
+            $data['totalTables'] = $rawTables->count() + ParcelQrCode::where('restaurant_id', $restaurantId)->count();
+            $data['activeTables'] = $rawTables->where('active_sessions_count', '>', 0)->count() + $data['parcelCounters']->where('active_sessions_count', '>', 0)->count();
             $data['occupancyRate'] = $data['totalTables'] > 0 ? round(($data['activeTables'] / $data['totalTables']) * 100) : 0;
-            $data['activeSessions'] = $data['tables']->sum('active_sessions_count') + $data['parcelCounters']->sum('active_sessions_count');
+            $data['activeSessions'] = $rawTables->sum('active_sessions_count') + $data['parcelCounters']->sum('active_sessions_count');
         } else {
             $roomsQuery = Room::where('restaurant_id', $restaurantId);
             if ($branchId) $roomsQuery->where('branch_id', $branchId); else $roomsQuery->whereNull('branch_id');
@@ -1460,14 +2518,78 @@ class ManagerDashboard extends Page
 
         if ($this->selectedTableId) {
             $data['selectedEntityData'] = RestaurantTable::find($this->selectedTableId);
-            $data['activeDinersList'] = QrSession::where('restaurant_table_id', $this->selectedTableId)->where('is_active', true)->where('is_primary', true)->get();
+            $activeSessions = QrSession::where('restaurant_table_id', $this->selectedTableId)
+                ->where('is_active', true)
+                ->orderBy('created_at', 'asc')
+                ->get();
+            $data['activeDinersList'] = $activeSessions;
+
+            if ($this->selectedSessionId && !$activeSessions->contains('id', $this->selectedSessionId)) {
+                $this->selectedSessionId = $activeSessions->first()?->id;
+            }
+            if (!$this->selectedSessionId && $activeSessions->isNotEmpty()) {
+                $this->selectedSessionId = $activeSessions->first()->id;
+            }
+
+            // Identify hosts: primary, or null host_session_id, or orphan (host not in activeSessions)
+            $hosts = $activeSessions->filter(function($s) use ($activeSessions) {
+                return $s->is_primary || empty($s->host_session_id) || !$activeSessions->contains('id', $s->host_session_id);
+            });
+
+            $hostParties = [];
+            $partyNum = 1;
+            foreach ($hosts as $host) {
+                $guests = $activeSessions->where('host_session_id', $host->id)->where('id', '!=', $host->id)->values();
+                $partySessionIds = collect([$host->id])->merge($guests->pluck('id'))->toArray();
+
+                $partyOrders = Order::whereIn('qr_session_id', $partySessionIds)
+                    ->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served'])
+                    ->with('items')
+                    ->get();
+
+                $partySubtotal = $partyOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                $partyItemsCount = $partyOrders->sum(fn($o) => $o->items->sum('quantity'));
+
+                $hostOrders = $partyOrders->where('qr_session_id', $host->id);
+                $hostSubtotal = $hostOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                $hostItemsCount = $hostOrders->sum(fn($o) => $o->items->sum('quantity'));
+
+                $guestsWithStats = $guests->map(function($g) use ($partyOrders) {
+                    $gOrders = $partyOrders->where('qr_session_id', $g->id);
+                    $g->orders_count = $gOrders->count();
+                    $g->subtotal = $gOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
+                    $g->items_count = $gOrders->sum(fn($o) => $o->items->sum('quantity'));
+                    return $g;
+                });
+
+                $hostParties[] = [
+                    'party_number' => $partyNum++,
+                    'host' => $host,
+                    'host_subtotal' => $hostSubtotal,
+                    'host_orders_count' => $hostOrders->count(),
+                    'host_items_count' => $hostItemsCount,
+                    'guests' => $guestsWithStats,
+                    'total_diners_count' => 1 + $guests->count(),
+                    'party_subtotal' => $partySubtotal,
+                    'party_items_count' => $partyItemsCount,
+                    'party_orders_count' => $partyOrders->count(),
+                    'all_session_ids' => $partySessionIds,
+                    'is_host_selected' => ($this->selectedSessionId === $host->id),
+                    'is_any_member_selected' => in_array($this->selectedSessionId, $partySessionIds),
+                ];
+            }
+            $data['hostParties'] = $hostParties;
+
             if ($this->selectedSessionId) {
                 $groupIds = QrSession::where('host_session_id', $this->selectedSessionId)->orWhere('id', $this->selectedSessionId)->pluck('id')->toArray();
                 $data['tableOrders'] = Order::with('items.menuItem.category')->whereIn('qr_session_id', $groupIds)->orderBy('created_at', 'desc')->get();
             }
         } elseif ($this->selectedParcelCounterId) {
             $data['selectedEntityData'] = ParcelQrCode::find($this->selectedParcelCounterId);
-            $data['activeDinersList'] = ParcelQrSession::where('parcel_qr_code_id', $this->selectedParcelCounterId)->where('status', 'active')->get();
+            $data['activeDinersList'] = ParcelQrSession::where('parcel_qr_code_id', $this->selectedParcelCounterId)
+                ->where('status', 'active')
+                ->orderBy('created_at', 'asc')
+                ->get();
             if ($this->selectedSessionId) {
                 $data['tableOrders'] = Order::with('items.menuItem.category')->where('parcel_qr_session_id', $this->selectedSessionId)->orderBy('created_at', 'desc')->get();
             }
@@ -1478,6 +2600,75 @@ class ManagerDashboard extends Page
             }
         }
 
+<<<<<<< HEAD
+        $data['activeSession'] = $this->getActiveSession();
+
+        // 🌟 KOT Visual Menu Data (Stitch UI 1a515631d2ff4021b0346acbd2a7a53c) 🌟
+        $branch = $branchId ? \App\Models\Branch::find($branchId) : null;
+        $categories = Category::where('restaurant_id', $restaurantId)
+            ->when(
+                $branchId,
+                function ($q) use ($branch, $branchId) {
+                    if ($branch && !$branch->inherit_restaurant_menu) {
+                        return $q->where('branch_id', $branchId);
+                    }
+                    return $q->where(fn($q2) => $q2->where('branch_id', $branchId)->orWhereNull('branch_id'));
+                },
+                fn($q) => $q->whereNull('branch_id')
+            )
+            ->withCount(['menuItems' => fn($q) => $q->where('is_available', true)])
+            ->orderBy('sort_order', 'asc')
+            ->get();
+
+        $menuItemsQuery = MenuItem::where('restaurant_id', $restaurantId)
+            ->when(
+                $branchId,
+                function ($q) use ($branch, $branchId) {
+                    if ($branch && !$branch->inherit_restaurant_menu) {
+                        return $q->where('branch_id', $branchId);
+                    }
+                    return $q->where(fn($q2) => $q2->where('branch_id', $branchId)->orWhereNull('branch_id'));
+                },
+                fn($q) => $q->whereNull('branch_id')
+            )
+            ->where('is_available', true)
+            ->with('category');
+
+        if ($this->placeOrderCategory !== 'all') {
+            $menuItemsQuery->where('category_id', $this->placeOrderCategory);
+        }
+
+        if (!empty($this->placeOrderSearch)) {
+            $q = trim($this->placeOrderSearch);
+            $menuItemsQuery->where(function ($sub) use ($q) {
+                $sub->where('name', 'like', "%{$q}%")
+                    ->orWhere('description', 'like', "%{$q}%");
+            });
+        }
+
+        if ($this->placeOrderVegFilter === 'veg') {
+            $menuItemsQuery->where('type', 'veg');
+        } elseif ($this->placeOrderVegFilter === 'non-veg') {
+            $menuItemsQuery->where('type', 'non-veg');
+        }
+
+        $data['placeOrderCategories'] = $categories;
+        $data['placeOrderMenuItems'] = $menuItemsQuery->orderBy('name', 'asc')->get();
+        $data['totalMenuItemsCount'] = MenuItem::where('restaurant_id', $restaurantId)
+            ->when(
+                $branchId,
+                function ($q) use ($branch, $branchId) {
+                    if ($branch && !$branch->inherit_restaurant_menu) {
+                        return $q->where('branch_id', $branchId);
+                    }
+                    return $q->where(fn($q2) => $q2->where('branch_id', $branchId)->orWhereNull('branch_id'));
+                },
+                fn($q) => $q->whereNull('branch_id')
+            )
+            ->where('is_available', true)
+            ->count();
+
+=======
         if ($this->selectedSessionId && isset($data['tableOrders'])) {
             $validOrdersForPayment = $data['tableOrders']->whereNotIn('status', ['cancelled', 'rejected']);
             $unpaidOrders = $validOrdersForPayment->where('payment_status', '!=', 'paid');
@@ -1489,6 +2680,7 @@ class ManagerDashboard extends Page
             }
         }
 
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
         return $data;
     }
 }

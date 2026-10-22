@@ -35,6 +35,12 @@ class OrderResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+<<<<<<< HEAD
+        $user = auth()->user();
+        $query = parent::getEloquentQuery()
+            ->where('restaurant_id', $user->restaurant_id)
+            ->with(['items.menuItem', 'table', 'branch'])
+=======
         return parent::getEloquentQuery()
             ->where('restaurant_id', auth()->user()->restaurant_id)
             ->where('is_hidden', false)
@@ -44,7 +50,16 @@ class OrderResource extends Resource
                 'roomSession.room', 
                 'parcelQrSession.parcelQrCode'
             ])
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             ->orderBy('created_at', 'desc');
+
+        if ($user->isBranchAdmin() || $user->isManager()) {
+            if ($user->branch_id) {
+                $query->where('branch_id', $user->branch_id);
+            }
+        }
+
+        return $query;
     }
 
     public static function table(Table $table): Table
@@ -58,6 +73,21 @@ class OrderResource extends Resource
                     ->searchable(['daily_order_number', 'id']) 
                     ->sortable(),
 
+<<<<<<< HEAD
+                Tables\Columns\TextColumn::make('branch.name')
+                    ->label('Outlet')
+                    ->badge()
+                    ->color('warning')
+                    ->placeholder('Main Restaurant')
+                    ->visible(fn() => auth()->user()?->isRestaurantAdmin() && (bool) auth()->user()?->restaurant?->has_branches),
+
+                Tables\Columns\TextColumn::make('table.table_number')
+                    ->label('Table')
+                    ->formatStateUsing(fn($state) => $state ? "T-{$state}" : "Takeaway")
+                    ->searchable()
+                    ->color('primary')
+                    ->weight('bold'),
+=======
                 Tables\Columns\TextColumn::make('location')
                     ->label('Location')
                     ->getStateUsing(function (Order $record) {
@@ -88,6 +118,7 @@ class OrderResource extends Resource
                             ->orWhereHas('roomSession.room', fn($q) => $q->where('room_number', 'like', "%{$search}%"))
                             ->orWhere('service_type', 'like', "%{$search}%");
                     }),
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
 
                 Tables\Columns\TextColumn::make('customer_name')
                     ->label('Customer')
@@ -125,6 +156,30 @@ class OrderResource extends Resource
                     ->sortable(),
             ])
             ->filters([
+<<<<<<< HEAD
+                // 0. Branch / Outlet Filter (Restaurant Admin only)
+                SelectFilter::make('branch_id')
+                    ->label('Filter by Outlet')
+                    ->options(function () {
+                        $user = auth()->user();
+                        if (!$user || !$user->isRestaurantAdmin()) return [];
+                        $branches = \App\Models\Branch::where('restaurant_id', $user->restaurant_id)->pluck('name', 'id')->toArray();
+                        return ['main' => '🏢 Main Restaurant'] + $branches;
+                    })
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+                        if (!$value) return;
+                        if ($value === 'main') {
+                            $query->whereNull('branch_id');
+                        } else {
+                            $query->where('branch_id', $value);
+                        }
+                    })
+                    ->visible(fn() => auth()->user()?->isRestaurantAdmin() && (bool) auth()->user()?->restaurant?->has_branches),
+
+                // 1. Status Filter
+=======
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
                 SelectFilter::make('status')
                     ->options([
                         'accepted' => 'Accepted',

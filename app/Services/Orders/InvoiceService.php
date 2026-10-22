@@ -73,7 +73,31 @@ class InvoiceService
                 });
             });
 
+            $branch = $branchId ? \App\Models\Branch::find($branchId) : null;
+
             try {
+<<<<<<< HEAD
+                return Invoice::create([
+                    'restaurant_id'   => $restaurantId,
+                    'branch_id'       => $branchId,
+                    'qr_session_id'   => $session->id,
+                    'payment_id'      => $payment->id,
+                        'invoice_sequence'=> $nextSequence,
+                        'invoice_prefix'  => $prefix,
+                        'invoice_number'  => $invoiceNumber,
+                        'bill_number'     => $payment->bill_number, // 🌟 NAYA: Passing Temporary Bill Number to Invoice
+                        'invoice_date'    => now()->toDateString(),
+                        'gstin'           => ($branch && $branch->gst_no) ? $branch->gst_no : ($restaurant->gst_no ?? null), 
+                        'place_of_supply' => ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? null), 
+                        'customer_name'   => $session->customer_name ?? 'Customer',
+                    'subtotal'        => $payment->subtotal,
+                    'tax_amount'      => $payment->tax_amount ?? 0,
+                    'discount_amount' => $payment->discount_amount ?? 0,
+                    'extra_charges'   => $payment->extra_charges ?? 0,
+                    'grand_total'     => $payment->amount,
+                    'items_snapshot'  => $items->toArray(),
+                ]);
+=======
                 $invoiceData = [
                     'restaurant_id'    => $restaurantId,
                     'branch_id'        => $branchId,
@@ -98,6 +122,7 @@ class InvoiceService
                 ];
 
                 return Invoice::create($invoiceData);
+>>>>>>> 7882cc5702ee743df08d3676f8f1c82ea3149f15
             } catch (\Illuminate\Database\QueryException $e) {
                 if ($e->errorInfo[1] == 1062) {
                     return Invoice::where('payment_id', $payment->id)->firstOrFail();

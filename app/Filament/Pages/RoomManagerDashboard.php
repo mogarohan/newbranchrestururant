@@ -47,8 +47,34 @@ class RoomManagerDashboard extends Page
         ];
     }
 
+    protected function shouldHandleBranchRoomEvent(?int $eventBranchId): bool
+    {
+        $user = auth()->user();
+        if (!$user) return false;
+
+        if (!empty($user->branch_id)) {
+            return (int) $eventBranchId === (int) $user->branch_id;
+        }
+
+        $restaurant = $user->restaurant;
+        if ($restaurant && $restaurant->has_branches) {
+            return empty($eventBranchId);
+        }
+
+        return true;
+    }
+
     public function notifyWaiterCalled($event)
     {
+        // Only handle room service calls
+        if (($event['service_type'] ?? '') !== 'room') {
+            return;
+        }
+
+        if (!$this->shouldHandleBranchRoomEvent(isset($event['branch_id']) ? (int)$event['branch_id'] : null)) {
+            return;
+        }
+
         $roomNum = $event['table_number'] ?? '?';
         $customer = $event['customer_name'] ?? 'A customer';
         Notification::make()->title("Room Service Requested: Room {$roomNum}")->body("{$customer} requires assistance.")->warning()->send();
@@ -57,6 +83,15 @@ class RoomManagerDashboard extends Page
 
     public function notifyBillRequested($event)
     {
+        // Only handle room service bills
+        if (($event['service_type'] ?? '') !== 'room') {
+            return;
+        }
+
+        if (!$this->shouldHandleBranchRoomEvent(isset($event['branch_id']) ? (int)$event['branch_id'] : null)) {
+            return;
+        }
+
         $roomNum = $event['table_number'] ?? '?';
         $customer = $event['customer_name'] ?? 'A customer';
         Notification::make()->title("Bill Requested: Room {$roomNum}")->body("{$customer} wants to settle their bill.")->warning()->send();

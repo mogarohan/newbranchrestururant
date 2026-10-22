@@ -138,6 +138,9 @@ class PlaceOrderController extends Controller
             $preparedItems = [];
             $stockErrors = [];
 
+            $branch = $entity->branch_id ? \App\Models\Branch::find($entity->branch_id) : null;
+            $inheritMenu = $branch ? (bool) $branch->inherit_restaurant_menu : false;
+
             foreach ($validated['items'] as $item) {
                 $menuItem = MenuItem::where('id', $item['menu_item_id'])
                     ->where('restaurant_id', $restaurant->id)
@@ -148,6 +151,25 @@ class PlaceOrderController extends Controller
                     throw ValidationException::withMessages([
                         'items' => ['One or more items are invalid.'],
                     ]);
+                }
+
+                // ── Branch Menu Isolation Validation ─────────────────────────
+                if ($entity->branch_id) {
+                    if (!$inheritMenu && $menuItem->branch_id !== $entity->branch_id) {
+                        throw ValidationException::withMessages([
+                            'items' => ["{$menuItem->name} is not available at this branch."],
+                        ]);
+                    } elseif ($inheritMenu && $menuItem->branch_id !== null && $menuItem->branch_id !== $entity->branch_id) {
+                        throw ValidationException::withMessages([
+                            'items' => ["{$menuItem->name} is not available at this branch."],
+                        ]);
+                    }
+                } else {
+                    if ($menuItem->branch_id !== null) {
+                        throw ValidationException::withMessages([
+                            'items' => ["{$menuItem->name} is not available at the main restaurant."],
+                        ]);
+                    }
                 }
 
                 // ── Branch availability override ─────────────────────────────
@@ -343,6 +365,7 @@ class PlaceOrderController extends Controller
                 'payment_status' => $order->payment_status,
                 'total_amount' => $order->confirmed_total ?? $order->total_amount,
                 'customer_name' => $order->customer_name,
+                'notes' => $order->notes,
                 'created_at' => $order->created_at,
                 'items' => $order->items->map(function ($item) {
                     return [
@@ -368,22 +391,35 @@ class PlaceOrderController extends Controller
         $orderSubtotal = $activeOrders->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
         $amountPaid = $activeOrders->where('payment_status', 'paid')->sum(fn($o) => $o->confirmed_total ?? $o->total_amount);
 
+        $taxPercentage = 0;
         if ($payment) {
             $invoiceGrandTotal = $payment->subtotal + $payment->tax_amount + $payment->extra_charges - $payment->discount_amount;
             $amountDue = $payment->amount;
+            $taxable = max(0, (float) $payment->subtotal - (float) $payment->discount_amount);
+            $taxPercentage = ($taxable > 0 && (float) $payment->tax_amount > 0) ? round(((float) $payment->tax_amount / $taxable) * 100, 2) : 0;
         } else {
             $invoiceGrandTotal = $orderSubtotal;
             $amountDue = max(0, $invoiceGrandTotal - $amountPaid);
         }
 
+        $paymentPayload = $payment ? array_merge($payment->toArray(), [
+            'upi_id' => $upiId,
+            'tax_percentage' => $taxPercentage,
+        ]) : null;
+
         return response()->json([
             'orders' => $formattedOrders,
             'billing_summary' => [
-                'grand_total' => $invoiceGrandTotal,
-                'amount_paid' => $amountPaid,
-                'amount_due' => $amountDue,
+                'subtotal' => $payment ? (float) $payment->subtotal : (float) $orderSubtotal,
+                'discount_amount' => $payment ? (float) $payment->discount_amount : 0,
+                'tax_amount' => $payment ? (float) $payment->tax_amount : 0,
+                'tax_percentage' => $taxPercentage,
+                'extra_charges' => $payment ? (float) $payment->extra_charges : 0,
+                'grand_total' => (float) $invoiceGrandTotal,
+                'amount_paid' => (float) $amountPaid,
+                'amount_due' => (float) $amountDue,
             ],
-            'payment' => $payment ? array_merge($payment->toArray(), ['upi_id' => $upiId]) : null,
+            'payment' => $paymentPayload,
         ]);
     }
 
@@ -453,7 +489,8 @@ class PlaceOrderController extends Controller
 
         if ($payment) {
             $payment->update(['payment_method' => $method]);
-            event(new \App\Events\PaymentMethodSelected($restaurantId, $tableNum, $method));
+            $branchId = $session->branch_id ?? null;
+            event(new \App\Events\PaymentMethodSelected($restaurantId, $tableNum, $method, $branchId));
         }
 
         return response()->json(['message' => 'Method selected.']);

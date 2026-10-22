@@ -14,12 +14,14 @@ class PaymentMethodSelected implements ShouldBroadcastNow
     public $restaurantId;
     public $tableNumber;
     public $method;
+    public $branchId;
 
-    public function __construct($restaurantId, $tableNumber, $method)
+    public function __construct($restaurantId, $tableNumber, $method, $branchId = null)
     {
         $this->restaurantId = $restaurantId;
         $this->tableNumber = $tableNumber;
         $this->method = $method;
+        $this->branchId = $branchId;
     }
 
     public function broadcastOn(): array
@@ -31,5 +33,16 @@ class PaymentMethodSelected implements ShouldBroadcastNow
     public function broadcastAs(): string
     {
         return 'PaymentMethodSelected';
+    }
+
+    public function broadcastWith(): array
+    {
+        return [
+            'restaurant_id' => $this->restaurantId,
+            'table_number' => $this->tableNumber,
+            'method' => $this->method,
+            'branch_id' => $this->branchId,
+            'timestamp' => now()->toIso8601String(),
+        ];
     }
 }

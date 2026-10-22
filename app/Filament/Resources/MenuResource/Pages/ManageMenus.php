@@ -8,8 +8,10 @@ use App\Models\MenuItem;
 use App\Models\Branch;
 use Filament\Actions;
 use Filament\Resources\Pages\ManageRecords;
+use Filament\Resources\Components\Tab;
 use Filament\Forms;
 use Filament\Notifications\Notification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Support\HtmlString;
@@ -17,6 +19,96 @@ use Illuminate\Support\HtmlString;
 class ManageMenus extends ManageRecords
 {
     protected static string $resource = MenuResource::class;
+
+    public function getTabs(): array
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return [];
+        }
+
+        // CASE 1: Main Restaurant Admin with branches
+        if ($user->isRestaurantAdmin() && $user->restaurant?->has_branches) {
+            $tabs = [];
+
+            // 1. All Outlets
+            $totalAll = MenuItem::withoutGlobalScopes()
+                ->where('restaurant_id', $user->restaurant_id)
+                ->count();
+
+            $tabs['all'] = Tab::make('All Outlets')
+                ->badge($totalAll)
+                ->badgeColor('primary');
+
+            // 2. Central / Main Restaurant
+            $totalMain = MenuItem::withoutGlobalScopes()
+                ->where('restaurant_id', $user->restaurant_id)
+                ->whereNull('branch_id')
+                ->count();
+
+            $tabs['main'] = Tab::make('🏢 Main Restaurant (Central)')
+                ->badge($totalMain)
+                ->badgeColor('success')
+                ->modifyQueryUsing(fn(Builder $query) => $query->whereNull('branch_id'));
+
+            // 3. Each Branch
+            $branches = Branch::where('restaurant_id', $user->restaurant_id)->get();
+            foreach ($branches as $branch) {
+                $totalBranch = MenuItem::withoutGlobalScopes()
+                    ->where('restaurant_id', $user->restaurant_id)
+                    ->where('branch_id', $branch->id)
+                    ->count();
+
+                $tabs['branch_' . $branch->id] = Tab::make('🏪 ' . $branch->name)
+                    ->badge($totalBranch)
+                    ->badgeColor('warning')
+                    ->modifyQueryUsing(fn(Builder $query) => $query->where('branch_id', $branch->id));
+            }
+
+            return $tabs;
+        }
+
+        // CASE 2: Branch User whose branch inherits the main restaurant menu
+        if (($user->isBranchAdmin() || $user->isManager()) && $user->branch_id) {
+            $branch = Branch::find($user->branch_id);
+            if ($branch && $branch->inherit_restaurant_menu) {
+                $totalAll = MenuItem::withoutGlobalScopes()
+                    ->where('restaurant_id', $user->restaurant_id)
+                    ->where(function ($q) use ($user) {
+                        $q->whereNull('branch_id')->orWhere('branch_id', $user->branch_id);
+                    })
+                    ->count();
+
+                $totalInherited = MenuItem::withoutGlobalScopes()
+                    ->where('restaurant_id', $user->restaurant_id)
+                    ->whereNull('branch_id')
+                    ->count();
+
+                $totalBranch = MenuItem::withoutGlobalScopes()
+                    ->where('restaurant_id', $user->restaurant_id)
+                    ->where('branch_id', $user->branch_id)
+                    ->count();
+
+                return [
+                    'all' => Tab::make('All Menu Items')
+                        ->badge($totalAll)
+                        ->badgeColor('primary'),
+
+                    'inherited' => Tab::make('🏢 Inherited (Main Menu)')
+                        ->badge($totalInherited)
+                        ->badgeColor('info')
+                        ->modifyQueryUsing(fn(Builder $query) => $query->whereNull('branch_id')),
+
+                    'branch_items' => Tab::make('🏪 Branch Special Items')
+                        ->badge($totalBranch)
+                        ->badgeColor('warning')
+                        ->modifyQueryUsing(fn(Builder $query) => $query->where('branch_id', $user->branch_id)),
+                ];
+            }
+        }
+
+        return [];
+    }
 
     protected function getHeaderWidgets(): array
     {
@@ -123,23 +215,38 @@ class ManageMenus extends ManageRecords
                 ->extraAttributes(['class' => 'hidden-manage-category hidden'])
                 ->fillForm(function () {
                     $user = auth()->user();
-                    // branch_id null hone par kabhi bhi branch_category_status table use nahi karna (warna insert fail hoga)
-                    $isBranchOverride = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
+                    $isBranchUser = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
+                    $branch = $isBranchUser ? Branch::find($user->branch_id) : null;
 
                     $query = Category::withoutGlobalScopes()
                         ->where('restaurant_id', $user->restaurant_id);
 
-                    if ($isBranchOverride) {
+                    if ($user->isRestaurantAdmin()) {
+                        // Main Restaurant Admin can view all categories
+                    } elseif ($isBranchUser) {
+                        if ($branch && !$branch->inherit_restaurant_menu) {
+                            // Independent menu: Only branch categories
+                            $query->where('branch_id', $user->branch_id);
+                        } else {
+                            // Inherited menu: Parent restaurant categories + this branch's categories
+                            $query->where(function ($q) use ($user) {
+                                $q->whereNull('branch_id')
+                                    ->orWhere('branch_id', $user->branch_id);
+                            });
+                        }
+                    } else {
+                        // Main Restaurant Manager (branch_id is null): ONLY Main Restaurant categories!
                         $query->whereNull('branch_id');
                     }
 
                     $categories = $query->orderBy('sort_order')->orderBy('name')->get();
 
                     return [
-                        'categories' => $categories->map(function ($cat) use ($user, $isBranchOverride) {
+                        'categories' => $categories->map(function ($cat) use ($user, $isBranchUser) {
                             $isActive = (bool) $cat->is_active;
+                            $isInherited = $isBranchUser && ($cat->branch_id === null);
 
-                            if ($isBranchOverride) {
+                            if ($isInherited) {
                                 $status = DB::table('branch_category_status')
                                     ->where('category_id', $cat->id)
                                     ->where('branch_id', $user->branch_id)
@@ -149,7 +256,9 @@ class ManageMenus extends ManageRecords
 
                             return [
                                 'id' => $cat->id,
+                                'branch_id' => $cat->branch_id,
                                 'name' => $cat->name,
+                                'is_inherited' => $isInherited,
                                 'is_active' => $isActive,
                             ];
                         })->toArray(),
@@ -161,28 +270,30 @@ class ManageMenus extends ManageRecords
                         ->addActionLabel('+ Add New Category')
                         ->schema([
                             Forms\Components\Hidden::make('id'),
+                            Forms\Components\Hidden::make('branch_id'),
+                            Forms\Components\Hidden::make('is_inherited')->default(false),
 
                             Forms\Components\TextInput::make('name')
                                 ->label('Category Name')
                                 ->required()
                                 ->maxLength(100)
-                                ->disabled(fn() => (auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null)
-                                ->dehydrated(true), // disabled ho tab bhi value form data mein bheji jaaye
+                                ->disabled(fn(Forms\Get $get) => (bool) $get('is_inherited'))
+                                ->helperText(fn(Forms\Get $get) => $get('is_inherited') ? 'Shared restaurant category (name cannot be edited)' : null)
+                                ->dehydrated(true),
 
                             Forms\Components\Toggle::make('is_active')
                                 ->label('Active')
                                 ->default(true),
                         ])
                         ->columns(2)
-                        ->itemLabel(fn(array $state): ?string => $state['name'] ?? null)
-                        ->deletable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
-                        ->addable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null))
-                        ->reorderable(fn() => !((auth()->user()->isBranchAdmin() || auth()->user()->isManager()) && auth()->user()->branch_id !== null)),
+                        ->itemLabel(fn(array $state): ?string => ($state['name'] ?? null) . (!empty($state['is_inherited']) ? ' (Main Menu)' : ''))
+                        ->deletable(fn(array $state): bool => empty($state['is_inherited']))
+                        ->addable(true)
+                        ->reorderable(true),
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
-                    // branch_id null hone par kabhi bhi branch_category_status table use nahi karna (warna insert fail hoga)
-                    $isBranchOverride = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
+                    $isBranchUser = ($user->isBranchAdmin() || $user->isManager()) && $user->branch_id !== null;
                     $submittedIds = [];
 
                     foreach ($data['categories'] as $index => $catData) {
@@ -191,7 +302,7 @@ class ManageMenus extends ManageRecords
                             $category = Category::withoutGlobalScopes()->find($catData['id']);
                             if (!$category) continue;
 
-                            if ($isBranchOverride) {
+                            if ($isBranchUser && $category->branch_id === null) {
                                 DB::table('branch_category_status')->updateOrInsert(
                                     ['category_id' => $category->id, 'branch_id' => $user->branch_id],
                                     ['is_active' => $catData['is_active'], 'updated_at' => now()]
@@ -200,30 +311,34 @@ class ManageMenus extends ManageRecords
                                 $category->update([
                                     'name' => $catData['name'] ?? $category->name,
                                     'is_active' => $catData['is_active'] ?? $category->is_active,
-                                    'sort_order' => $index, // ✅ drag-drop se jo naya position bana wahi save
+                                    'sort_order' => $index,
                                 ]);
                             }
-                        } elseif (!$isBranchOverride) {
-                            // New category added via repeater
-                            Category::create([
+                        } else {
+                            // New category created via repeater
+                            $newCat = Category::create([
                                 'restaurant_id' => $user->restaurant_id,
                                 'branch_id' => $user->branch_id,
                                 'name' => $catData['name'] ?? '',
                                 'is_active' => $catData['is_active'] ?? true,
-                                'sort_order' => $index, // ✅ naya category bhi apni position pe save hoga
+                                'sort_order' => $index,
                             ]);
+                            $submittedIds[] = $newCat->id;
                         }
                     }
 
-                    // Delete categories removed from the repeater (owner only, branch overrides never delete)
-                    if (!$isBranchOverride) {
-                        $existingIds = Category::withoutGlobalScopes()
-                            ->where('restaurant_id', $user->restaurant_id)
-                            ->pluck('id')->toArray();
-                        $toDelete = array_diff($existingIds, $submittedIds);
-                        if (!empty($toDelete)) {
-                            Category::whereIn('id', $toDelete)->delete();
-                        }
+                    // Delete categories removed from the repeater
+                    $deleteQuery = Category::withoutGlobalScopes()
+                        ->where('restaurant_id', $user->restaurant_id);
+                    if ($isBranchUser) {
+                        $deleteQuery->where('branch_id', $user->branch_id);
+                    } elseif (!$user->isRestaurantAdmin()) {
+                        $deleteQuery->whereNull('branch_id');
+                    }
+                    $existingIds = $deleteQuery->pluck('id')->toArray();
+                    $toDelete = array_diff($existingIds, $submittedIds);
+                    if (!empty($toDelete)) {
+                        Category::whereIn('id', $toDelete)->delete();
                     }
 
                     Notification::make()->title('Categories updated successfully')->success()->send();
@@ -236,6 +351,14 @@ class ManageMenus extends ManageRecords
                 ->modalDescription($fixedModalCss)
                 ->extraAttributes(['class' => 'hidden-add-category hidden'])
                 ->form([
+                    Forms\Components\Select::make('branch_id')
+                        ->label('Target Outlet / Branch')
+                        ->placeholder('🏢 Main Restaurant (Central / All Outlets)')
+                        ->options(fn() => Branch::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                        ->visible(fn() => auth()->user()->isRestaurantAdmin() && (bool) auth()->user()->restaurant?->has_branches)
+                        ->helperText('Select which branch owns these categories, or leave empty for central restaurant.')
+                        ->columnSpanFull(),
+
                     Forms\Components\Repeater::make('categories')
                         ->label('Categories to Add')
                         ->addActionLabel('Add Another Category')
@@ -256,12 +379,13 @@ class ManageMenus extends ManageRecords
                 ])
                 ->action(function (array $data) {
                     $user = auth()->user();
+                    $targetBranchId = $user->branch_id ?? ($data['branch_id'] ?? null);
                     $categoriesAdded = 0;
 
                     foreach ($data['categories'] as $catData) {
                         Category::create([
                             'restaurant_id' => $user->restaurant_id,
-                            'branch_id' => $user->branch_id,
+                            'branch_id' => $targetBranchId,
                             'name' => $catData['name'],
                             'is_active' => $catData['is_active'],
                         ]);
@@ -278,23 +402,41 @@ class ManageMenus extends ManageRecords
                 ->modalDescription($fixedModalCss)
                 ->extraAttributes(['class' => 'hidden-add-item hidden'])
                 ->form([
+                    Forms\Components\Select::make('branch_id')
+                        ->label('Target Outlet / Branch')
+                        ->placeholder('🏢 Main Restaurant (Central / Shared)')
+                        ->options(fn() => Branch::where('restaurant_id', auth()->user()->restaurant_id)->pluck('name', 'id'))
+                        ->visible(fn() => auth()->user()->isRestaurantAdmin() && (bool) auth()->user()->restaurant?->has_branches)
+                        ->live()
+                        ->helperText('Select which branch this item belongs to, or leave empty for central restaurant.')
+                        ->columnSpanFull(),
+
                     Forms\Components\Select::make('category_id')
                         ->label('Target Category')
                         ->required()
-                        ->options(function () {
+                        ->options(function (Forms\Get $get) {
                             $user = auth()->user();
                             $query = Category::withoutGlobalScopes()
                                 ->where('restaurant_id', $user->restaurant_id)
-                                ->where('is_active', true)
-                                ->where(function ($q) use ($user) {
-                                    $q->whereNull('branch_id');
-                                    if ($user->branch_id) {
-                                        $q->orWhere('branch_id', $user->branch_id);
-                                    }
-                                })
-                                ->orderBy('sort_order')
-                                ->orderBy('name');
-                            return $query->pluck('name', 'id');
+                                ->where('is_active', true);
+
+                            $targetBranchId = $user->branch_id ?? $get('branch_id');
+
+                            if ($targetBranchId) {
+                                $branch = Branch::find($targetBranchId);
+                                if ($branch && !$branch->inherit_restaurant_menu) {
+                                    $query->where('branch_id', $targetBranchId);
+                                } else {
+                                    $query->where(function ($q) use ($targetBranchId) {
+                                        $q->whereNull('branch_id')
+                                            ->orWhere('branch_id', $targetBranchId);
+                                    });
+                                }
+                            } else {
+                                $query->whereNull('branch_id');
+                            }
+
+                            return $query->orderBy('sort_order')->orderBy('name')->pluck('name', 'id');
                         })
                         ->searchable()
                         ->columnSpanFull()
@@ -312,14 +454,6 @@ class ManageMenus extends ManageRecords
                                 ->options(['veg' => 'Veg', 'non-veg' => 'Non-Veg',])
                                 ->default('veg')
                                 ->required(),
-                            Forms\Components\TextInput::make('stock_quantity')
-                                ->numeric()
-                                ->placeholder('Unlimited')
-                                ->default(null), // FIX: Ensures blank values are sent as null, not 0
-                            Forms\Components\TextInput::make('low_stock_threshold')
-                                ->numeric()
-                                ->default(3)
-                                ->required(),
                             Forms\Components\Textarea::make('description')->maxLength(500)->rows(6),
 
                             Forms\Components\FileUpload::make('image_path')
@@ -334,8 +468,10 @@ class ManageMenus extends ManageRecords
                                     $categoryName = Category::find($categoryId)?->name ?? 'uncategorized';
                                     $categorySlug = Str::slug($categoryName);
 
-                                    if ($user->branch_id) {
-                                        $branchName = Branch::find($user->branch_id)?->name ?? 'branch';
+                                    $targetBranchId = $user->branch_id ?? $get('../../branch_id');
+
+                                    if ($targetBranchId) {
+                                        $branchName = Branch::find($targetBranchId)?->name ?? 'branch';
                                         $branchSlug = Str::slug($branchName);
                                         return "restaurants/{$restaurantSlug}/branches/{$branchSlug}/Categories/{$categorySlug}";
                                     }
@@ -361,18 +497,17 @@ class ManageMenus extends ManageRecords
                 ->action(function (array $data) {
                     $user = auth()->user();
                     $categoryId = $data['category_id'];
+                    $targetBranchId = $user->branch_id ?? ($data['branch_id'] ?? null);
                     $itemsAdded = 0;
 
                     foreach ($data['items'] as $item) {
                         MenuItem::create([
                             'restaurant_id' => $user->restaurant_id,
-                            'branch_id' => $user->branch_id,
+                            'branch_id' => $targetBranchId,
                             'category_id' => $categoryId,
                             'name' => $item['name'],
                             'price' => $item['price'],
                             'type' => $item['type'],
-                            'stock_quantity' => blank($item['stock_quantity']) ? null : $item['stock_quantity'], // FIX: Blank check
-                            'low_stock_threshold' => $item['low_stock_threshold'] ?? 3,
                             'description' => $item['description'] ?? null,
                             'image_path' => $item['image_path'],
                             'is_available' => $item['is_available'],

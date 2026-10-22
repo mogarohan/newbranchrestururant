@@ -29,6 +29,44 @@ class QrSessionController extends Controller
         abort_unless($id, 404, 'Entity ID missing');
         abort_unless($token, 403, 'Token missing');
 
+        $restaurant = Restaurant::find($restaurantId);
+
+        $branchId = null;
+        if ($type === 'table') {
+            $branchId = RestaurantTable::where('id', $id)->where('restaurant_id', $restaurantId)->value('branch_id');
+        } elseif ($type === 'room') {
+            $branchId = Room::where('id', $id)->where('restaurant_id', $restaurantId)->value('branch_id');
+        } elseif ($type === 'parcel') {
+            $branchId = ParcelQrCode::where('id', $id)->where('restaurant_id', $restaurantId)->value('branch_id');
+        }
+
+        $branch = $branchId ? \App\Models\Branch::find($branchId) : null;
+        $branchName = $branch ? $branch->name : null;
+        $effectiveName = $branchName ?: ($restaurant ? $restaurant->name : null);
+        $finalAddress = ($branch && $branch->address) ? $branch->address : ($restaurant ? $restaurant->address : null);
+        $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant ? $restaurant->logo_path : null);
+
+        $logoPayload = null;
+        if ($logoPath) {
+            $fullPath = storage_path('app/public/' . $logoPath);
+            if (file_exists($fullPath)) {
+                $mime = mime_content_type($fullPath);
+                $b64 = base64_encode(file_get_contents($fullPath));
+                $logoPayload = 'data:' . $mime . ';base64,' . $b64;
+            } else {
+                $logoPayload = asset('storage/' . $logoPath);
+            }
+        }
+        $restaurantPayload = $restaurant ? [
+            'id' => $restaurant->id,
+            'name' => $effectiveName,
+            'restaurant_name' => $restaurant->name,
+            'branch_name' => $branchName,
+            'address' => $finalAddress,
+            'currency_symbol' => $restaurant->currency_symbol ?? '₹',
+            'logo' => $logoPayload,
+        ] : null;
+
         // ── TABLE VALIDATION ──
         if ($type === 'table') {
             $table = RestaurantTable::where('id', $id)
@@ -62,6 +100,7 @@ class QrSessionController extends Controller
                 'capacity' => $table->seating_capacity,
                 'occupancy' => $currentOccupancy,
                 'table_number' => $table->table_number ?? $table->number ?? $table->id,
+                'restaurant' => $restaurantPayload,
             ]);
         }
 
@@ -85,7 +124,8 @@ class QrSessionController extends Controller
                 'valid' => true, 
                 'type' => 'room', 
                 'name' => 'Room ' . $room->room_number,
-                'has_active_session' => (bool) $activeSession
+                'has_active_session' => (bool) $activeSession,
+                'restaurant' => $restaurantPayload,
             ]);
         }
 
@@ -103,7 +143,8 @@ class QrSessionController extends Controller
             return response()->json([
                 'valid' => true, 
                 'type' => 'parcel', 
-                'name' => $parcel->name
+                'name' => $parcel->name,
+                'restaurant' => $restaurantPayload,
             ]);
         }
 
@@ -326,26 +367,32 @@ class QrSessionController extends Controller
         
         if ($type === 'room') {
             $session = \App\Models\RoomSession::where('session_token', $token)->first();
-            $entity = \App\Models\Room::find($session->room_id);
+            $entity = \App\Models\Room::find($session?->room_id);
             $number = $entity ? $entity->room_number : '?';
-            $customerName = $session->guest_name;
+            $customerName = $session?->guest_name ?? 'Room Guest';
+            $serviceType = 'room';
         } elseif ($type === 'parcel') {
             return response()->json(['message' => 'Parcel counters do not support calling a waiter.'], 400);
         } else {
             $session = \App\Models\QrSession::where('session_token', $token)->first();
-            $entity = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+            $entity = \App\Models\RestaurantTable::find($session?->restaurant_table_id);
             $number = $entity ? ($entity->number ?? $entity->table_number) : '?';
-            $customerName = $session->customer_name;
+            $customerName = $session?->customer_name ?? 'Guest';
+            $serviceType = 'dine_in';
         }
 
         if (!$session) return response()->json(['message' => 'Invalid session token provided.'], 404);
 
+        $branchId = $session->branch_id ?? ($entity->branch_id ?? null);
+
         try {
             event(new \App\Events\WaiterCalled(
                 $session->restaurant_id,
-                $entity->id,
+                $entity?->id,
                 $number,
-                $customerName
+                $customerName,
+                $branchId,
+                $serviceType
             ));
         } catch (\Exception $e) {}
 
@@ -359,26 +406,32 @@ class QrSessionController extends Controller
 
         if ($type === 'room') {
             $session = \App\Models\RoomSession::where('session_token', $token)->first();
-            $entity = \App\Models\Room::find($session->room_id);
+            $entity = \App\Models\Room::find($session?->room_id);
             $number = $entity ? $entity->room_number : '?';
-            $customerName = $session->guest_name;
+            $customerName = $session?->guest_name ?? 'Room Guest';
+            $serviceType = 'room';
         } elseif ($type === 'parcel') {
             return response()->json(['message' => 'Parcel orders bill automatically.'], 400);
         } else {
             $session = \App\Models\QrSession::where('session_token', $token)->first();
-            $entity = \App\Models\RestaurantTable::find($session->restaurant_table_id);
+            $entity = \App\Models\RestaurantTable::find($session?->restaurant_table_id);
             $number = $entity ? ($entity->number ?? $entity->table_number) : '?';
-            $customerName = $session->customer_name;
+            $customerName = $session?->customer_name ?? 'Guest';
+            $serviceType = 'dine_in';
         }
 
         if (!$session) return response()->json(['message' => 'Invalid session.'], 404);
 
+        $branchId = $session->branch_id ?? ($entity->branch_id ?? null);
+
         try {
             event(new \App\Events\BillRequested(
                 $session->restaurant_id,
-                $entity->id,
+                $entity?->id,
                 $number,
-                $customerName
+                $customerName,
+                $branchId,
+                $serviceType
             ));
         } catch (\Exception $e) {}
 

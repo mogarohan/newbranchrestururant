@@ -60,13 +60,23 @@ class MenuResource extends Resource
         $user = auth()->user();
         $query = parent::getEloquentQuery()->withoutGlobalScopes();
         
-        $query->where('restaurant_id', $user->restaurant_id)
-              ->where(function($q) use ($user) {
-                  $q->whereNull('branch_id'); 
-                  if ($user->branch_id) {
-                      $q->orWhere('branch_id', $user->branch_id); 
-                  }
-              });
+        $query->where('restaurant_id', $user->restaurant_id);
+
+        if ($user->isBranchAdmin() || $user->isManager()) {
+            $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+            if ($branch && !$branch->inherit_restaurant_menu) {
+                // Independent branch: Only its own items
+                $query->where('branch_id', $user->branch_id);
+            } else {
+                // Inherited: Central items + this branch's items
+                $query->where(function ($q) use ($user) {
+                    $q->whereNull('branch_id');
+                    if ($user->branch_id) {
+                        $q->orWhere('branch_id', $user->branch_id);
+                    }
+                });
+            }
+        }
 
         return $query;
     }
@@ -156,7 +166,10 @@ class MenuResource extends Resource
                     .fi-ta-record .fi-ta-actions button:nth-of-type(2):hover { background: rgba(239, 68, 68, 0.1) !important; }
 
                     .branch-badge {
-                        position: absolute; top: 10px; right: 10px; background: #f16b3f; color: white; font-size: 0.6rem; font-weight: 900; padding: 2px 8px; border-radius: 10px; z-index: 20; border: 1px solid #000000;
+                        position: absolute; top: 10px; right: 10px; background: #f16b3f; color: white; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 99px; z-index: 20; border: 1.5px solid #000000; letter-spacing: 0.02em; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                    }
+                    .inherited-badge {
+                        position: absolute; top: 10px; right: 10px; background: #2a4795; color: white; font-size: 0.62rem; font-weight: 800; padding: 2px 8px; border-radius: 99px; z-index: 20; border: 1.5px solid #000000; letter-spacing: 0.02em; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
                     }
                 </style>
             '))
@@ -167,10 +180,16 @@ class MenuResource extends Resource
             ])
             ->columns([
                 Tables\Columns\Layout\Stack::make([
-                    Tables\Columns\TextColumn::make('branch_id')
-                        ->formatStateUsing(fn ($state) => $state ? 'Branch Item' : '')
-                        ->extraAttributes(['class' => 'branch-badge'])
-                        ->visible(fn ($record) => $record && $record->branch_id !== null),
+                    Tables\Columns\TextColumn::make('origin_badge')
+                        ->state(fn ($record) => $record)
+                        ->formatStateUsing(function ($state, $record): HtmlString {
+                            if ($record->branch_id === null) {
+                                return new HtmlString('<span class="inherited-badge">🏢 INHERITED</span>');
+                            }
+                            $user = auth()->user();
+                            $label = ($user && $user->isRestaurantAdmin()) ? ($record->branch?->name ?? 'BRANCH') : 'BRANCH ITEM';
+                            return new HtmlString('<span class="branch-badge">🏪 ' . e(strtoupper($label)) . '</span>');
+                        }),
 
                     Tables\Columns\ImageColumn::make('image_path')
                         ->height('140px') 
@@ -184,11 +203,20 @@ class MenuResource extends Resource
                             ->searchable(), 
 
                         Tables\Columns\TextColumn::make('type')
-                            ->formatStateUsing(fn (string $state): HtmlString => new HtmlString(
-                                $state === 'veg' 
+                            ->formatStateUsing(function (string $state, $record): HtmlString {
+                                $typeHtml = $state === 'veg' 
                                     ? '<span class="type-badge-veg">● VEG</span>' 
-                                    : '<span class="type-badge-non-veg">● NON-VEG</span>'
-                            )),
+                                    : '<span class="type-badge-non-veg">● NON-VEG</span>';
+
+                                if ($record->branch_id === null) {
+                                    $sourceHtml = '<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 99px; font-size: 0.62rem; font-weight: 800; background: rgba(42, 71, 149, 0.12); color: #2a4795; border: 1px solid rgba(42, 71, 149, 0.3);">🏢 Central Menu</span>';
+                                } else {
+                                    $branchLabel = auth()->user()?->isRestaurantAdmin() ? ($record->branch?->name ?? 'Branch') : 'Branch Item';
+                                    $sourceHtml = '<span style="display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 99px; font-size: 0.62rem; font-weight: 800; background: rgba(241, 107, 63, 0.15); color: #f16b3f; border: 1px solid rgba(241, 107, 63, 0.35);">🏪 ' . e($branchLabel) . '</span>';
+                                }
+
+                                return new HtmlString('<div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px;">' . $typeHtml . $sourceHtml . '</div>');
+                            }),
 
                         Tables\Columns\TextColumn::make('category.name')
                             ->badge()
@@ -229,18 +257,74 @@ class MenuResource extends Resource
                 ])->space(0),
             ])
             ->filters([
+                Tables\Filters\SelectFilter::make('menu_source')
+                    ->label('Filter by Origin')
+                    ->options([
+                        'inherited' => '🏢 Inherited (Main Restaurant)',
+                        'branch' => '🏪 Created by This Branch',
+                    ])
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+                        if (!$value) return;
+                        $user = auth()->user();
+                        if ($value === 'inherited') {
+                            $query->whereNull('branch_id');
+                        } elseif ($value === 'branch') {
+                            $query->where('branch_id', $user?->branch_id);
+                        }
+                    })
+                    ->visible(function () {
+                        $user = auth()->user();
+                        if (!$user || !($user->isBranchAdmin() || $user->isManager())) return false;
+                        $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+                        return $branch && $branch->inherit_restaurant_menu;
+                    }),
+
+                Tables\Filters\SelectFilter::make('branch_id')
+                    ->label('Filter by Outlet')
+                    ->options(function () {
+                        $user = auth()->user();
+                        if (!$user || !$user->isRestaurantAdmin()) return [];
+                        $branches = Branch::where('restaurant_id', $user->restaurant_id)->pluck('name', 'id')->toArray();
+                        return ['main' => '🏢 Main Restaurant (Central)'] + $branches;
+                    })
+                    ->query(function (Builder $query, array $data) {
+                        $value = $data['value'] ?? null;
+                        if (!$value) return;
+                        if ($value === 'main') {
+                            $query->whereNull('branch_id');
+                        } else {
+                            $query->where('branch_id', $value);
+                        }
+                    })
+                    ->visible(fn() => auth()->user()?->isRestaurantAdmin() && (bool) auth()->user()?->restaurant?->has_branches),
+
                 Tables\Filters\SelectFilter::make('category_id')
                     ->label('Filter by Category')
                     ->options(function () {
                         $user = auth()->user();
                         if (!$user || !$user->restaurant_id) return [];
-                        return Category::withoutGlobalScopes()
-                            ->where('restaurant_id', $user->restaurant_id)
-                            ->where(function($q) use ($user) {
-                                $q->whereNull('branch_id');
-                                if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
-                            })
-                            ->orderBy('sort_order')
+                        $query = Category::withoutGlobalScopes()
+                            ->where('restaurant_id', $user->restaurant_id);
+
+                        if ($user->isRestaurantAdmin()) {
+                            // Main restaurant admin can view all categories
+                        } elseif ($user->isBranchAdmin() || ($user->isManager() && $user->branch_id)) {
+                            $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+                            if ($branch && !$branch->inherit_restaurant_menu) {
+                                $query->where('branch_id', $user->branch_id);
+                            } else {
+                                $query->where(function($q) use ($user) {
+                                    $q->whereNull('branch_id');
+                                    if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
+                                });
+                            }
+                        } else {
+                            // Main restaurant manager: only central categories
+                            $query->whereNull('branch_id');
+                        }
+
+                        return $query->orderBy('sort_order')
                             ->orderBy('name')
                             ->pluck('name', 'id')->toArray();
                     })->searchable(),
@@ -324,13 +408,27 @@ class MenuResource extends Resource
                             ->disabled(fn($record) => $record && auth()->user()->branch_id !== null && $record->branch_id === null)
                             ->options(function () {
                                 $user = auth()->user();
-                                return Category::withoutGlobalScopes()
-                                    ->where('restaurant_id', $user->restaurant_id)
-                                    ->where(function($q) use ($user) {
-                                        $q->whereNull('branch_id');
-                                        if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
-                                    })
-                                    ->orderBy('sort_order')
+                                $query = Category::withoutGlobalScopes()
+                                    ->where('restaurant_id', $user->restaurant_id);
+
+                                if ($user->isRestaurantAdmin()) {
+                                    // Main restaurant admin can view all categories
+                                } elseif ($user->isBranchAdmin() || ($user->isManager() && $user->branch_id)) {
+                                    $branch = $user->branch_id ? Branch::find($user->branch_id) : null;
+                                    if ($branch && !$branch->inherit_restaurant_menu) {
+                                        $query->where('branch_id', $user->branch_id);
+                                    } else {
+                                        $query->where(function($q) use ($user) {
+                                            $q->whereNull('branch_id');
+                                            if ($user->branch_id) $q->orWhere('branch_id', $user->branch_id);
+                                        });
+                                    }
+                                } else {
+                                    // Main restaurant manager: only central categories
+                                    $query->whereNull('branch_id');
+                                }
+
+                                return $query->orderBy('sort_order')
                                     ->orderBy('name')
                                     ->pluck('name', 'id');
                             }),
