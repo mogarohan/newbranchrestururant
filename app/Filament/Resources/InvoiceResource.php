@@ -13,11 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Filters\Filter;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Support\HtmlString;
-use Filament\Support\Enums\MaxWidth;
-use Filament\Support\Colors\Color; 
 use ZipArchive;
 
 class InvoiceResource extends Resource
@@ -34,10 +30,11 @@ class InvoiceResource extends Resource
 
         if ($user->isBranchAdmin() || $user->isManager()) {
             $query->where('branch_id', $user->branch_id);
+        } else {
+            $query->whereNull('branch_id');
         }
-        // 🌟 FIX: For Restaurant Admins, we don't apply whereNull('branch_id'), so they can see all invoices!
 
-        return $query->with(['qrSession.restaurantTable', 'roomSession.room', 'parcelQrSession.parcelQrCode']);
+        return $query;
     }
 
      public static function canAccess(): bool
@@ -46,7 +43,7 @@ class InvoiceResource extends Resource
             && auth()->user()->restaurant_id
             && in_array(auth()->user()->role->name ?? null, ['manager', 'branch_admin','restaurant_admin']);
     }
-    
+    // 🔒 STRICTLY IMMUTABLE RESOURCE
     public static function canCreate(): bool { return false; }
     public static function canEdit(\Illuminate\Database\Eloquent\Model $record): bool { return false; }
     public static function canDelete(\Illuminate\Database\Eloquent\Model $record): bool { return false; }
@@ -62,54 +59,26 @@ class InvoiceResource extends Resource
                     ->weight('bold')
                     ->color('primary'),
                     
+                // 🌟 NAYA: Added Bill Number column to Table
                 Tables\Columns\TextColumn::make('bill_number')
                     ->label('Bill #')
                     ->searchable()
                     ->sortable()
                     ->color('gray'),
 
-                Tables\Columns\TextColumn::make('location')
-                    ->label('Location')
-                    ->getStateUsing(function (Invoice $record) {
-                        if ($record->room_session_id) {
-                            return "🚪 ROOM " . ($record->roomSession->room->room_number ?? '?');
-                        } elseif ($record->parcel_qr_session_id) {
-                            $name = $record->parcelQrSession->parcelQrCode->name ?? 'Parcel';
-                            return "🛍️ " . strtoupper($name);
-                        } elseif ($record->qr_session_id) {
-                            $tableNum = $record->qrSession->restaurantTable->table_number ?? 'Takeaway';
-                            if (str_contains(strtolower($tableNum), 'takeaway')) {
-                                return "🥡 TAKEAWAY";
-                            }
-                            $cleanNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
-                            return "🍽️ TABLE-" . trim($cleanNum);
-                        }
-                        return 'Counter';
-                    })
-                    ->badge()
-                    ->color(fn (Invoice $record): array => match (true) {
-                        (bool) $record->parcel_qr_session_id => Color::Amber,
-                        (bool) $record->room_session_id => Color::Blue,
-                        default => Color::Emerald,
-                    }),
-
                 Tables\Columns\TextColumn::make('invoice_date')
                     ->date('d M Y')
-                    ->timezone('Asia/Kolkata')
                     ->sortable(),
-                    
                 Tables\Columns\TextColumn::make('customer_name')
-                    ->label('Customer')
-                    ->weight('bold')
                     ->searchable(),
-                    
                 Tables\Columns\TextColumn::make('grand_total')
-                    ->money('INR')
+                    ->money('INR') // Update to your locale if needed
                     ->sortable()
                     ->weight('bold'),
             ])
             ->defaultSort('invoice_sequence', 'desc')
             ->filters([
+                // 1. By Date
                 Filter::make('invoice_date')
                     ->form([
                         DatePicker::make('created_from')->label('From Date'),
@@ -121,6 +90,7 @@ class InvoiceResource extends Resource
                             ->when($data['created_until'], fn (Builder $q, $date) => $q->whereDate('invoice_date', '<=', $date));
                     }),
                 
+                // 2. By Invoice Range (Sequence)
                 Filter::make('invoice_sequence')
                     ->form([
                         TextInput::make('seq_from')->numeric()->label('Start Sequence (e.g. 1)'),
@@ -133,20 +103,6 @@ class InvoiceResource extends Resource
                     }),
             ])
             ->actions([
-                Tables\Actions\Action::make('view_pdf')
-                    ->label('View')
-                    ->icon('heroicon-o-eye')
-                    ->color('info')
-                    ->modalHeading(fn (Invoice $record) => 'Invoice: ' . $record->invoice_number)
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Close')
-                    ->modalWidth(MaxWidth::FourExtraLarge)
-                    ->modalContent(function (Invoice $record) {
-                        $pdf = self::generatePdf($record);
-                        $base64 = base64_encode($pdf->output());
-                        return new HtmlString('<iframe src="data:application/pdf;base64,' . $base64 . '" width="100%" height="650px" style="border: none; border-radius: 8px;"></iframe>');
-                    }),
-
                 Tables\Actions\Action::make('download_pdf')
                     ->label('Download PDF')
                     ->icon('heroicon-o-document-arrow-down')
@@ -159,6 +115,7 @@ class InvoiceResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
+                    // 📦 ENTERPRISE BULK DOWNLOAD (Memory Safe + Collision Proof + Cleaned Up)
                     Tables\Actions\BulkAction::make('export_zip')
                         ->label('Export Selected as ZIP')
                         ->icon('heroicon-o-archive-box-arrow-down')
@@ -171,9 +128,10 @@ class InvoiceResource extends Resource
                                 return;
                             }
 
-                            $timestamp = now()->timezone('Asia/Kolkata')->format('Y_m_d_His');
+                            $timestamp = now()->format('Y_m_d_His');
                             $random = Str::uuid();
 
+                            // Safer isolated temp paths (NOT exposed to the public symlink)
                             $tempDir = storage_path("app/temp/invoices_{$timestamp}_{$random}");
                             $zipPath = storage_path("app/temp/invoices_{$timestamp}_{$random}.zip");
 
@@ -190,12 +148,19 @@ class InvoiceResource extends Resource
                                     $pdfFileName = "{$invoice->invoice_number}.pdf";
                                     $pdfTempPath = "{$tempDir}/{$pdfFileName}";
 
+                                    // Generate PDF directly to disk
                                     self::generatePdf($invoice)->save($pdfTempPath);
+
+                                    // Add physical file into zip
                                     $zip->addFile($pdfTempPath, $pdfFileName);
+                                    
+                                    // Optional: Immediately release filesystem cache
                                     clearstatcache(true, $pdfTempPath);
                                 }
 
                                 $zip->close();
+
+                                // Cleanup temp PDFs BEFORE response
                                 File::deleteDirectory($tempDir);
 
                                 return response()
@@ -203,13 +168,17 @@ class InvoiceResource extends Resource
                                     ->deleteFileAfterSend(true);
 
                             } catch (\Throwable $e) {
+                                // Ensure cleanup even on failure
                                 if (isset($zip)) {
                                     @$zip->close();
                                 }
+
                                 File::deleteDirectory($tempDir);
+
                                 if (File::exists($zipPath)) {
                                     File::delete($zipPath);
                                 }
+
                                 throw $e;
                             }
                         }),
@@ -217,10 +186,17 @@ class InvoiceResource extends Resource
             ]);
     }
 
+    // PDF Generator Helper
     private static function generatePdf(Invoice $invoice)
     {
         $restaurant = $invoice->restaurant;
-        
+        $branch = $invoice->branch_id ? ($invoice->branch ?? \App\Models\Branch::find($invoice->branch_id)) : null;
+
+        $brandName = $branch ? $branch->name : ($restaurant->name ?? 'Restaurant');
+        $gstIn = ($branch && $branch->gst_no) ? $branch->gst_no : ($invoice->gstin ?? ($restaurant->gst_no ?? 'N/A'));
+        $pos = ($branch && $branch->address) ? $branch->address : ($invoice->place_of_supply ?? ($restaurant->address ?? 'N/A'));
+        $phone = ($branch && $branch->phone) ? $branch->phone : ($restaurant->phone ?? '');
+
         $itemsHtml = '';
         foreach ($invoice->items_snapshot as $item) {
             $hsn = isset($item['hsn_code']) && $item['hsn_code'] ? "<br><small style='color:gray;'>HSN: {$item['hsn_code']}</small>" : '';
@@ -234,57 +210,75 @@ class InvoiceResource extends Resource
             </tr>";
         }
 
-        $logoBase64 = '';
-        if ($restaurant && $restaurant->logo_path) {
-            $logoFullPath = Storage::disk('public')->path($restaurant->logo_path);
-            if (file_exists($logoFullPath)) {
-                $mime = mime_content_type($logoFullPath);
-                $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($logoFullPath));
-            }
-        }
-        $logoHtml = $logoBase64 ? "<img src='{$logoBase64}' style='max-height: 80px; max-width: 180px; object-fit: contain;' />" : "";
+        $taxable = max(0, (float) $invoice->subtotal - (float) $invoice->discount_amount);
+        $taxPercent = ($taxable > 0 && (float) $invoice->tax_amount > 0) ? round(((float) $invoice->tax_amount / $taxable) * 100, 1) : 0;
+        $halfTax = (float) $invoice->tax_amount / 2;
+        $halfPercent = round($taxPercent / 2, 2);
 
-        $gstIn = $invoice->gstin ?? 'N/A';
-        $pos = $invoice->place_of_supply ?? 'N/A';
+        $breakdownRows = "
+            <tr>
+                <td style='padding: 8px; text-align: right;'><strong>Subtotal:</strong></td>
+                <td style='padding: 8px; text-align: right;'>₹" . number_format($invoice->subtotal, 2) . "</td>
+            </tr>";
 
-        $locationName = 'Counter';
-        if ($invoice->room_session_id && $invoice->roomSession) {
-            $locationName = "Room " . ($invoice->roomSession->room->room_number ?? '');
-        } elseif ($invoice->parcel_qr_session_id && $invoice->parcelQrSession) {
-            $locationName = "Parcel Queue: " . ($invoice->parcelQrSession->parcelQrCode->name ?? 'PARCEL');
-        } elseif ($invoice->qr_session_id && $invoice->qrSession) {
-            $tableNum = $invoice->qrSession->restaurantTable->table_number ?? '';
-            $cleanNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
-            $locationName = "Table-" . trim($cleanNum);
+        if ((float) $invoice->discount_amount > 0) {
+            $breakdownRows .= "
+            <tr>
+                <td style='padding: 8px; text-align: right; color: #b91c1c;'><strong>Discount:</strong></td>
+                <td style='padding: 8px; text-align: right; color: #b91c1c;'>-₹" . number_format($invoice->discount_amount, 2) . "</td>
+            </tr>";
         }
+
+        if ((float) $invoice->tax_amount > 0) {
+            $breakdownRows .= "
+            <tr>
+                <td style='padding: 8px; text-align: right;'><strong>CGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ":</strong></td>
+                <td style='padding: 8px; text-align: right;'>₹" . number_format($halfTax, 2) . "</td>
+            </tr>
+            <tr>
+                <td style='padding: 8px; text-align: right;'><strong>SGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ":</strong></td>
+                <td style='padding: 8px; text-align: right;'>₹" . number_format($halfTax, 2) . "</td>
+            </tr>
+            <tr>
+                <td style='padding: 8px; text-align: right;'><strong>Total Tax (GST " . ($taxPercent > 0 ? "{$taxPercent}%" : "") . "):</strong></td>
+                <td style='padding: 8px; text-align: right;'>₹" . number_format($invoice->tax_amount, 2) . "</td>
+            </tr>";
+        }
+
+        if ((float) $invoice->extra_charges > 0) {
+            $breakdownRows .= "
+            <tr>
+                <td style='padding: 8px; text-align: right;'><strong>Extra Charges:</strong></td>
+                <td style='padding: 8px; text-align: right;'>+₹" . number_format($invoice->extra_charges, 2) . "</td>
+            </tr>";
+        }
+
+        $breakdownRows .= "
+            <tr style='background: #f8f9fa; border-top: 2px solid #000; border-bottom: 2px solid #000;'>
+                <td style='padding: 12px; text-align: right; font-size: 18px;'><strong>GRAND TOTAL:</strong></td>
+                <td style='padding: 12px; text-align: right; font-size: 18px;'><strong>₹" . number_format($invoice->grand_total, 2) . "</strong></td>
+            </tr>";
+
+        $phoneHtml = $phone ? "<p style='margin: 3px 0 0 0; font-size: 13px;'>Phone: {$phone}</p>" : "";
 
         $html = "
             <div style='font-family: Arial, sans-serif; padding: 20px; color: #333;'>
-                
-                <table style='width: 100%; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px;'>
-                    <tr>
-                        <td style='width: 30%; vertical-align: middle; text-align: left;'>
-                            {$logoHtml}
-                        </td>
-                        <td style='width: 70%; text-align: right; vertical-align: middle;'>
-                            <h1 style='margin: 0; font-size: 26px; text-transform: uppercase;'>{$restaurant->name}</h1>
-                            <p style='margin: 5px 0 0 0; font-size: 12px;'>GSTIN: <strong>{$gstIn}</strong> | POS: {$pos}</p>
-                            <h2 style='color: #555; margin-top: 10px; margin-bottom: 0;'>TAX INVOICE</h2>
-                        </td>
-                    </tr>
-                </table>
+                <div style='text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;'>
+                    <h1 style='margin: 0; font-size: 28px;'>{$brandName}</h1>
+                    <p style='margin: 5px 0 0 0;'>GSTIN: <strong>{$gstIn}</strong> | POS: {$pos}</p>
+                    {$phoneHtml}
+                    <h2 style='color: #555; margin-top: 15px;'>TAX INVOICE</h2>
+                </div>
                 
                 <table style='width: 100%; margin-bottom: 30px;'>
                     <tr>
-                        <td style='width: 50%; vertical-align: top;'>
-                            <p style='margin: 3px 0;'><strong>Invoice No:</strong> {$invoice->invoice_number}</p>
-                            <p style='margin: 3px 0;'><strong>Ref Bill No:</strong> {$invoice->bill_number}</p> 
-                            <p style='margin: 3px 0;'><strong>Date:</strong> " . \Carbon\Carbon::parse($invoice->invoice_date)->timezone('Asia/Kolkata')->format('d M Y') . "</p>
-                            <p style='margin: 3px 0;'><strong>Location:</strong> <span style='font-weight: bold; color: #1e40af;'>{$locationName}</span></p>
+                        <td style='width: 50%;'>
+                            <p><strong>Invoice No:</strong> {$invoice->invoice_number}</p>
+                            <p><strong>Ref Bill No:</strong> {$invoice->bill_number}</p> <!-- 🌟 NAYA: Showing Bill No on PDF -->
+                            <p><strong>Date:</strong> {$invoice->invoice_date->format('d M Y')}</p>
                         </td>
-                        <td style='width: 50%; text-align: right; vertical-align: top;'>
-                            <p style='margin: 3px 0;'><strong>Billed To:</strong></p>
-                            <p style='margin: 3px 0; font-size: 16px; font-weight: bold;'>{$invoice->customer_name}</p>
+                        <td style='width: 50%; text-align: right;'>
+                            <p><strong>Billed To:</strong> {$invoice->customer_name}</p>
                         </td>
                     </tr>
                 </table>
@@ -309,12 +303,13 @@ class InvoiceResource extends Resource
             </div>
         ";
 
+        // 🚀 DOMPDF Optimizations for Performance & Security
         return Pdf::loadHTML($html)
             ->setPaper('a4')
             ->setWarnings(false)
             ->setOption([
                 'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => false, 
+                'isRemoteEnabled' => false, // Disables external networks/images to prevent memory spikes
             ]);
     }
 
