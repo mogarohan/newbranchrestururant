@@ -13,6 +13,8 @@ class QrSession extends Model
         'restaurant_table_id',
         'session_token',
         'customer_name',
+        'customer_phone',
+        'customer_id',
         'is_primary',
         'join_status',
         'is_active',
@@ -30,6 +32,11 @@ class QrSession extends Model
     {
         return $this->expires_at->isPast();
     }
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
     public function table(): BelongsTo
     {
         return $this->belongsTo(RestaurantTable::class, 'restaurant_table_id');

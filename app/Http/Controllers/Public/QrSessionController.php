@@ -10,6 +10,7 @@ use App\Models\RoomSession;
 use App\Models\ParcelQrSession;
 use App\Models\Room;
 use App\Models\ParcelQrCode;
+use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -162,14 +163,40 @@ class QrSessionController extends Controller
         $type = $request->input('type', 'table');
 
         $sessionToken = Str::uuid()->toString();
+        $customerPhone = $request->input('customer_phone') ? trim($request->input('customer_phone')) : null;
 
         // ── TABLE SESSION ──
         if ($type === 'table') {
-            $request->validate(['customer_name' => 'required|string|max:255']);
-            $customerName = $request->input('customer_name');
+            $request->validate([
+                'customer_name' => 'required|string|max:255',
+                'customer_phone' => 'nullable|string|max:20',
+            ]);
+            $customerName = trim($request->input('customer_name'));
 
             $table = RestaurantTable::where('id', $id)->where('restaurant_id', $restaurantId)->whereNull('deleted_at')->firstOrFail();
             abort_unless($table->qr_token === $token, 403, 'Invalid token');
+
+            // Find or create customer entry
+            $customer = null;
+            if (!empty($customerPhone)) {
+                $customer = Customer::updateOrCreate(
+                    ['restaurant_id' => $restaurantId, 'phone' => $customerPhone],
+                    [
+                        'branch_id' => $table->branch_id,
+                        'name' => $customerName,
+                        'last_visit_at' => now(),
+                    ]
+                );
+            } else {
+                $customer = Customer::firstOrCreate(
+                    ['restaurant_id' => $restaurantId, 'name' => $customerName, 'phone' => null],
+                    [
+                        'branch_id' => $table->branch_id,
+                        'last_visit_at' => now(),
+                    ]
+                );
+                $customer->update(['last_visit_at' => now()]);
+            }
 
             $mode = $request->input('mode');
             $existingHost = QrSession::where('restaurant_table_id', $table->id)
@@ -188,8 +215,10 @@ class QrSessionController extends Controller
                 return QrSession::create([
                     'restaurant_id' => $restaurantId,
                     'branch_id' => $table->branch_id,
+                    'customer_id' => $customer?->id,
                     'restaurant_table_id' => $table->id,
                     'customer_name' => $customerName,
+                    'customer_phone' => $customerPhone,
                     'session_token' => $sessionToken,
                     'is_primary' => true,
                     'join_status' => 'active',
@@ -202,8 +231,10 @@ class QrSessionController extends Controller
             $guestSession = QrSession::create([
                 'restaurant_id' => $restaurantId,
                 'branch_id' => $table->branch_id,
+                'customer_id' => $customer?->id,
                 'restaurant_table_id' => $table->id,
                 'customer_name' => $customerName,
+                'customer_phone' => $customerPhone,
                 'session_token' => $sessionToken,
                 'is_primary' => false,
                 'join_status' => 'pending',
@@ -229,41 +260,79 @@ class QrSessionController extends Controller
             if (!$activeSession) {
                 return response()->json(['message' => 'No active guest checked into this room.'], 403);
             }
+
+            if (!empty($customerPhone) && empty($activeSession->customer_phone)) {
+                $activeSession->update(['customer_phone' => $customerPhone]);
+            }
             
             return response()->json([
                 'session_token' => $activeSession->session_token,
                 'service_type' => 'room',
-                'customer_name' => $activeSession->guest_name
+                'customer_name' => $activeSession->guest_name,
+                'customer_phone' => $activeSession->customer_phone,
             ]);
         }
 
         // ── PARCEL SESSION ──
         if ($type === 'parcel') {
-            $request->validate(['customer_name' => 'required|string|max:255']);
-            $customerName = $request->input('customer_name');
+            $request->validate([
+                'customer_name' => 'required|string|max:255',
+                'customer_phone' => 'nullable|string|max:20',
+            ]);
+            $customerName = trim($request->input('customer_name'));
 
             $parcelQr = ParcelQrCode::where('id', $id)->where('restaurant_id', $restaurantId)->where('qr_token', $token)->whereNull('deleted_at')->firstOrFail();
             
+            // Find or create customer entry
+            $customer = null;
+            if (!empty($customerPhone)) {
+                $customer = Customer::updateOrCreate(
+                    ['restaurant_id' => $restaurantId, 'phone' => $customerPhone],
+                    [
+                        'branch_id' => $parcelQr->branch_id,
+                        'name' => $customerName,
+                        'last_visit_at' => now(),
+                    ]
+                );
+            } else {
+                $customer = Customer::firstOrCreate(
+                    ['restaurant_id' => $restaurantId, 'name' => $customerName, 'phone' => null],
+                    [
+                        'branch_id' => $parcelQr->branch_id,
+                        'last_visit_at' => now(),
+                    ]
+                );
+                $customer->update(['last_visit_at' => now()]);
+            }
+
             $existingSession = ParcelQrSession::where('parcel_qr_code_id', $parcelQr->id)
                 ->where('customer_name', $customerName)
+                ->when($customerPhone, fn($q) => $q->where('customer_phone', $customerPhone))
                 ->where('status', 'active')
                 ->where('created_at', '>=', now()->subHours(2))
                 ->first();
 
             if ($existingSession) {
-                $existingSession->update(['last_activity_at' => now()]);
+                $existingSession->update([
+                    'last_activity_at' => now(),
+                    'customer_id' => $customer?->id ?? $existingSession->customer_id,
+                    'customer_phone' => $customerPhone ?? $existingSession->customer_phone,
+                ]);
                 return response()->json([
                     'session_token' => $existingSession->session_token,
                     'service_type' => 'parcel',
-                    'customer_name' => $existingSession->customer_name
+                    'customer_name' => $existingSession->customer_name,
+                    'customer_phone' => $existingSession->customer_phone,
                 ]);
             }
 
             $session = ParcelQrSession::create([
                 'restaurant_id' => $parcelQr->restaurant_id,
                 'branch_id' => $parcelQr->branch_id,
+                'customer_id' => $customer?->id,
                 'parcel_qr_code_id' => $parcelQr->id,
                 'customer_name' => $customerName,
+                'customer_phone' => $customerPhone,
                 'session_token' => $sessionToken,
                 'status' => 'active',
                 'last_activity_at' => now(),
@@ -272,7 +341,8 @@ class QrSessionController extends Controller
             return response()->json([
                 'session_token' => $session->session_token,
                 'service_type' => 'parcel',
-                'customer_name' => $session->customer_name
+                'customer_name' => $session->customer_name,
+                'customer_phone' => $session->customer_phone,
             ]);
         }
 

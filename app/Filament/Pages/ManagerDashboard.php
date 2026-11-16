@@ -568,6 +568,13 @@ class ManagerDashboard extends Page
                     ->helperText('If the customer\'s name is known, enter it here. Otherwise, leave blank to use "Guest".')
                     ->maxLength(255),
 
+                TextInput::make('customer_phone')
+                    ->label('Customer Phone (Optional)')
+                    ->placeholder('e.g. 9876543210')
+                    ->tel()
+                    ->maxLength(20)
+                    ->nullable(),
+
                 TextInput::make('notes')
                     ->label('Notes / Party Info')
                     ->placeholder('e.g. Window seat, Birthday, 3 guests (optional)')
@@ -575,6 +582,7 @@ class ManagerDashboard extends Page
             ])
             ->action(function (array $data, array $arguments) {
                 $counterId = $data['counter_id'] ?? $arguments['counter_id'] ?? $this->selectedParcelCounterId;
+                $customerPhone = !empty($data['customer_phone']) ? trim($data['customer_phone']) : null;
 
                 if ($counterId) {
                     $parcelCounter = ParcelQrCode::where('restaurant_id', auth()->user()->restaurant_id)->findOrFail($counterId);
@@ -584,11 +592,21 @@ class ManagerDashboard extends Page
                         $customerName = 'Takeaway Customer ' . ($activeCount + 1);
                     }
 
+                    $customer = null;
+                    if (!empty($customerPhone)) {
+                        $customer = \App\Models\Customer::updateOrCreate(
+                            ['restaurant_id' => $parcelCounter->restaurant_id, 'phone' => $customerPhone],
+                            ['branch_id' => $parcelCounter->branch_id, 'name' => $customerName, 'last_visit_at' => now()]
+                        );
+                    }
+
                     $session = ParcelQrSession::create([
                         'restaurant_id' => $parcelCounter->restaurant_id,
                         'branch_id' => $parcelCounter->branch_id,
+                        'customer_id' => $customer?->id,
                         'parcel_qr_code_id' => $parcelCounter->id,
                         'customer_name' => $customerName,
+                        'customer_phone' => $customerPhone,
                         'session_token' => Str::uuid()->toString(),
                         'status' => 'active',
                         'last_activity_at' => now(),
@@ -612,6 +630,14 @@ class ManagerDashboard extends Page
                     $customerName = $activeCount > 0 ? "Guest " . ($activeCount + 1) : "Guest ({$tableDisplay})";
                 }
 
+                $customer = null;
+                if (!empty($customerPhone)) {
+                    $customer = \App\Models\Customer::updateOrCreate(
+                        ['restaurant_id' => $table->restaurant_id, 'phone' => $customerPhone],
+                        ['branch_id' => $table->branch_id, 'name' => $customerName, 'last_visit_at' => now()]
+                    );
+                }
+
                 $partyRole = $data['party_role'] ?? 'new_host';
                 $isPrimary = true;
                 $hostSessionId = null;
@@ -632,8 +658,10 @@ class ManagerDashboard extends Page
                 $session = QrSession::create([
                     'restaurant_id' => $table->restaurant_id,
                     'branch_id' => $table->branch_id,
+                    'customer_id' => $customer?->id,
                     'restaurant_table_id' => $table->id,
                     'customer_name' => $customerName,
+                    'customer_phone' => $customerPhone,
                     'session_token' => $token,
                     'is_primary' => $isPrimary,
                     'join_status' => 'active',
@@ -1134,7 +1162,7 @@ class ManagerDashboard extends Page
 
         $brandName = $branch ? $branch->name : ($restaurant->name ?? 'Restaurant');
         $gstIn = ($branch && $branch->gst_no) ? $branch->gst_no : ($restaurant->gst_no ?? '-');
-        $phone = ($branch && $branch->phone) ? $branch->phone : ($restaurant->phone ?? '012345678910');
+        $phone = ($branch && !empty($branch->phone)) ? $branch->phone : ($restaurant->phone_no ?? $restaurant->phone ?? '-');
         $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '-');
 
         $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
@@ -1342,7 +1370,7 @@ class ManagerDashboard extends Page
                 return "Confirm Bill Payment — {$amount} ({$custName})";
             })
             ->modalSubheading('Select the payment method received from the customer to settle the bill and generate the invoice.')
-            ->modalWidth(MaxWidth::Medium)
+            ->modalWidth(MaxWidth::Large)
             ->modalSubmitActionLabel('Confirm Payment & Settle')
             ->modalIcon('heroicon-o-check-circle')
             ->modalIconColor('success')
@@ -1361,9 +1389,14 @@ class ManagerDashboard extends Page
                     $defaultMethod = strtolower($pendingPayment->payment_method);
                 }
 
+                $txRef = '';
+                if ($pendingPayment && in_array(strtolower($pendingPayment->payment_method), ['upi', 'card', 'other'])) {
+                    $txRef = $pendingPayment->transaction_reference ?? '';
+                }
+
                 return [
                     'payment_method' => $defaultMethod,
-                    'transaction_reference' => $pendingPayment?->transaction_reference ?? '',
+                    'transaction_reference' => $txRef,
                 ];
             })
             ->form([
@@ -1378,6 +1411,7 @@ class ManagerDashboard extends Page
                         $tax = $pendingPayment ? number_format($pendingPayment->tax_amount, 2) : '0.00';
                         $discount = $pendingPayment ? number_format($pendingPayment->discount_amount, 2) : '0.00';
                         $custName = e($session?->customer_name ?? 'Guest');
+                        $custPhone = $session?->customer_phone ? e($session->customer_phone) : null;
                         $billNo = $pendingPayment?->bill_number ?? '-';
 
                         $locationName = 'Counter';
@@ -1386,42 +1420,69 @@ class ManagerDashboard extends Page
                         } elseif ($this->selectedTableId) {
                             $rawNum = \App\Models\RestaurantTable::find($this->selectedTableId)->table_number ?? '';
                             $locationName = $this->formatTableNumber($rawNum);
+                        } elseif ($this->selectedRoomId) {
+                            $locationName = 'Room ' . (\App\Models\Room::find($this->selectedRoomId)->room_number ?? '');
                         }
 
-                        $choiceBadge = '';
-                        if ($pendingPayment && $pendingPayment->payment_method === 'upi') {
-                            $choiceBadge = '<span style="display:inline-flex; align-items:center; gap:4px; background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700;">📱 Customer chose UPI</span>';
-                        } elseif ($pendingPayment && $pendingPayment->payment_method === 'cash') {
-                            $choiceBadge = '<span style="display:inline-flex; align-items:center; gap:4px; background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700;">💵 Customer chose Cash</span>';
-                        }
-
-                        return new \Illuminate\Support\HtmlString("
-                            <div style='background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 14px 16px; margin-bottom: 6px;'>
-                                <div style='display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 10px;'>
-                                    <div>
-                                        <div style='display:flex; align-items:center; gap:8px;'>
-                                            <span style='background:#1e3a8a; color:#ffffff; padding:3px 10px; border-radius:8px; font-size:11px; font-weight:800; letter-spacing:0.02em;'>
-                                                {$locationName}
-                                            </span>
-                                            <span style='color:#64748b; font-size:12px; font-weight:600;'>Bill #{$billNo}</span>
-                                            {$choiceBadge}
-                                        </div>
-                                        <div style='font-size:14px; font-weight:700; color:#1e293b; margin-top:6px; display:flex; align-items:center; gap:6px;'>
-                                            <span style='color:#64748b;'>👤 Customer:</span>
-                                            <strong style='color:#0f172a;'>{$custName}</strong>
-                                        </div>
-                                    </div>
-                                    <div style='text-align:right;'>
-                                        <span style='font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; display:block;'>Total Due</span>
-                                        <span style='font-size:24px; font-weight:900; color:#ea580c; font-family:monospace; line-height:1;'>₹{$amount}</span>
+                        $choiceBanner = '';
+                        if ($pendingPayment && strtolower($pendingPayment->payment_method) === 'upi') {
+                            $choiceBanner = "
+                                <div style='margin-top: 10px; padding: 8px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; display: flex; align-items: center; gap: 8px;'>
+                                    <span style='font-size: 16px;'>📱</span>
+                                    <div style='font-size: 12px; font-weight: 700; color: #1e40af;'>
+                                        Customer selected <u>UPI / QR</u> payment on their phone
                                     </div>
                                 </div>
-                                <div style='display:flex; justify-content:space-between; align-items:center; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:12px; color:#475569;'>
-                                    <div style='display:flex; gap:12px; font-size:11px;'>
-                                        <span>Subtotal: <strong>₹{$subtotal}</strong></span>
-                                        " . ((float) $discount > 0 ? "<span style='color:#16a34a;'>Discount: <strong>-₹{$discount}</strong></span>" : "") . "
-                                        " . ((float) $tax > 0 ? "<span>Tax/GST: <strong>₹{$tax}</strong></span>" : "") . "
+                            ";
+                        } elseif ($pendingPayment && strtolower($pendingPayment->payment_method) === 'cash') {
+                            $choiceBanner = "
+                                <div style='margin-top: 10px; padding: 8px 12px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; display: flex; align-items: center; gap: 8px;'>
+                                    <span style='font-size: 16px;'>💵</span>
+                                    <div style='font-size: 12px; font-weight: 700; color: #92400e;'>
+                                        Customer selected <u>Cash</u> payment at counter / table
                                     </div>
+                                </div>
+                            ";
+                        }
+
+                        $phoneBadge = $custPhone ? "<span style='font-size: 11px; color: #64748b; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;'>📞 {$custPhone}</span>" : "";
+
+                        return new \Illuminate\Support\HtmlString("
+                            <div style='background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%); border: 1.5px solid #e2e8f0; border-radius: 16px; padding: 16px 18px; margin-bottom: 8px; box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.05);'>
+                                <div style='display:flex; justify-content:space-between; align-items:center; padding-bottom: 12px; border-bottom: 1px solid #e2e8f0;'>
+                                    <div style='display:flex; align-items:center; gap:8px;'>
+                                        <span style='background:#1e3a8a; color:#ffffff; padding:4px 12px; border-radius:8px; font-size:12px; font-weight:800; letter-spacing:0.02em; white-space:nowrap;'>
+                                            {$locationName}
+                                        </span>
+                                        <span style='background:#f1f5f9; border:1px solid #cbd5e1; color:#334155; padding:3px 9px; border-radius:6px; font-size:11px; font-weight:700; font-family:monospace; white-space:nowrap;'>
+                                            Bill #{$billNo}
+                                        </span>
+                                    </div>
+                                    <div style='text-align:right;'>
+                                        <span style='font-size:10px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.05em; display:block; line-height:1;'>Total Due</span>
+                                        <span style='font-size:24px; font-weight:900; color:#ea580c; font-family:monospace; line-height:1.2;'>₹{$amount}</span>
+                                    </div>
+                                </div>
+
+                                {$choiceBanner}
+
+                                <div style='display:flex; justify-content:space-between; align-items:center; margin-top: 12px; padding: 8px 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px;'>
+                                    <div style='display:flex; align-items:center; gap:8px;'>
+                                        <div style='width: 26px; height: 26px; border-radius: 50%; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 12px;'>
+                                            👤
+                                        </div>
+                                        <div>
+                                            <span style='font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; display: block; line-height: 1;'>Customer</span>
+                                            <strong style='font-size: 13px; color: #0f172a;'>{$custName}</strong>
+                                        </div>
+                                    </div>
+                                    {$phoneBadge}
+                                </div>
+
+                                <div style='display:flex; justify-content:space-between; align-items:center; padding-top:10px; margin-top:10px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b;'>
+                                    <div>Subtotal: <strong style='color:#0f172a;'>₹{$subtotal}</strong></div>
+                                    " . ((float) $discount > 0 ? "<div style='color:#16a34a;'>Discount: <strong>-₹{$discount}</strong></div>" : "") . "
+                                    " . ((float) $tax > 0 ? "<div style='color:#0284c7;'>Tax/GST: <strong>₹{$tax}</strong></div>" : "") . "
                                 </div>
                             </div>
                         ");

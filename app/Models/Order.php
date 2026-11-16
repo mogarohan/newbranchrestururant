@@ -16,6 +16,8 @@ class Order extends Model
         'status',
         'payment_status',
         'customer_name',
+        'customer_phone',
+        'customer_id',
         'notes',
         //'subtotal',
         'total_amount',
@@ -23,6 +25,11 @@ class Order extends Model
         'parcel_qr_session_id',
         'service_type',
     ];
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
     public function parcelQrSession()
     {
         return $this->belongsTo(ParcelQrSession::class);

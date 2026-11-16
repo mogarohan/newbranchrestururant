@@ -98,6 +98,14 @@ class Restaurant extends Model
         return $this->hasMany(MeasurementUnit::class);
     }
 
+    /**
+     * Accessor alias for phone / phone_no compatibility.
+     */
+    public function getPhoneAttribute(): ?string
+    {
+        return $this->attributes['phone_no'] ?? null;
+    }
+
     public function inventoryTransactions(): HasMany
     {
         return $this->hasMany(InventoryTransaction::class);

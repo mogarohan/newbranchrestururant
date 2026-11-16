@@ -195,7 +195,7 @@ class InvoiceResource extends Resource
         $brandName = $branch ? $branch->name : ($restaurant->name ?? 'Restaurant');
         $gstIn = ($branch && $branch->gst_no) ? $branch->gst_no : ($invoice->gstin ?? ($restaurant->gst_no ?? 'N/A'));
         $pos = ($branch && $branch->address) ? $branch->address : ($invoice->place_of_supply ?? ($restaurant->address ?? 'N/A'));
-        $phone = ($branch && $branch->phone) ? $branch->phone : ($restaurant->phone ?? '');
+        $phone = ($branch && !empty($branch->phone)) ? $branch->phone : ($restaurant->phone_no ?? $restaurant->phone ?? '');
 
         $itemsHtml = '';
         foreach ($invoice->items_snapshot as $item) {

@@ -232,6 +232,8 @@ class PlaceOrderController extends Controller
                     'branch_id' => $entity->branch_id,
                     'service_type' => $serviceType === 'table' ? 'dine_in' : ($isRoom ? 'room_service' : 'parcel'), // 👈 MAP ENUM
                     'customer_name' => $isRoom ? $session->guest_name : $session->customer_name,
+                    'customer_phone' => $session->customer_phone ?? null,
+                    'customer_id' => $session->customer_id ?? null,
                     'status' => 'placed',
                     'payment_status' => 'pending',
                     'tax_amount' => 0,
@@ -261,6 +263,13 @@ class PlaceOrderController extends Controller
                         'confirmed_qty' => $itemData['quantity'],
                         'total_price' => $itemData['total_price'],
                         'notes' => $itemData['notes'],
+                    ]);
+                }
+
+                if (!empty($session->customer_id)) {
+                    \App\Models\Customer::where('id', $session->customer_id)->increment('total_orders_count', 1, [
+                        'total_spent' => DB::raw("total_spent + {$totalAmount}"),
+                        'last_visit_at' => now(),
                     ]);
                 }
 
