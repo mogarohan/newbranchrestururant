@@ -404,10 +404,38 @@ class RestaurantTableResource extends Resource
                                             \Filament\Forms\Components\Section::make('Color Customization')
                                                 ->schema([
                                                     \Filament\Forms\Components\ColorPicker::make('name_color')->label('Restaurant Name')->default('#9A3B2A')->live(),
+                                                    \Filament\Forms\Components\ColorPicker::make('tagline_color')->label('Tagline Text Color')->default('#1F2937')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('table_color')->label('Table Number')->default('#32402A')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('subtitle_color')->label('Subtitles & Labels')->default('#4B5320')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('accent_color')->label('Divider Lines & Borders')->default('#E47A33')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('pill_bg_color')->label('Scan Pill Background')->default('#B85C4A')->live(),
+                                                ])->columns(2),
+
+                                            \Filament\Forms\Components\Section::make('Tagline Typography & Visibility')
+                                                ->schema([
+                                                    \Filament\Forms\Components\Select::make('tagline_size')
+                                                        ->label('Tagline Font Size')
+                                                        ->options([
+                                                            '11px' => 'Small (11px)',
+                                                            '13px' => 'Medium (13px)',
+                                                            '14px' => 'Large (14px) — Recommended',
+                                                            '16px' => 'Extra Large (16px)',
+                                                            '18px' => 'Jumbo (18px)',
+                                                        ])
+                                                        ->default('14px')
+                                                        ->live(),
+
+                                                    \Filament\Forms\Components\Select::make('tagline_weight')
+                                                        ->label('Tagline Style & Weight')
+                                                        ->options([
+                                                            'bold' => 'Bold (Recommended for visibility)',
+                                                            'semibold' => 'Semi-Bold',
+                                                            'normal' => 'Regular',
+                                                            'italic_bold' => 'Bold Italic',
+                                                            'italic' => 'Italic',
+                                                        ])
+                                                        ->default('bold')
+                                                        ->live(),
                                                 ])->columns(2),
                                         ]),
 
@@ -419,7 +447,7 @@ class RestaurantTableResource extends Resource
                                                 ->label('Live Design Preview')
                                                 ->content(function (\Filament\Forms\Get $get) {
                                                     $user = auth()->user();
-                                                    $restaurant = $user->restaurant;
+                                                    $restaurant = $user->restaurant ?? ($user->restaurant_id ? \App\Models\Restaurant::find($user->restaurant_id) : \App\Models\Restaurant::first());
                                                     $branch = null;
                                                     if ($user->isBranchAdmin() || $user->isManager()) {
                                                         $branch = $user->branch_id ? \App\Models\Branch::find($user->branch_id) : null;
@@ -430,10 +458,23 @@ class RestaurantTableResource extends Resource
                                                     $bgColor = $get('bg_color') ?? '#E2F0CB';
 
                                                     $nameColor = $get('name_color') ?? '#9A3B2A';
+                                                    $taglineColor = $get('tagline_color') ?? '#1F2937';
+                                                    $taglineSize = $get('tagline_size') ?? '14px';
+                                                    $taglineWeightChoice = $get('tagline_weight') ?? 'bold';
                                                     $tableColor = $get('table_color') ?? '#32402A';
                                                     $subtitleColor = $get('subtitle_color') ?? '#4B5320';
                                                     $accentColor = $get('accent_color') ?? '#E47A33';
                                                     $pillBgColor = $get('pill_bg_color') ?? '#B85C4A';
+
+                                                    $fontWeight = match($taglineWeightChoice) {
+                                                        'bold', 'italic_bold' => 'bold',
+                                                        'semibold' => '600',
+                                                        default => 'normal',
+                                                    };
+                                                    $fontStyle = match($taglineWeightChoice) {
+                                                        'italic', 'italic_bold' => 'italic',
+                                                        default => 'normal',
+                                                    };
 
                                                     $bgStyle = '';
                                                     if ($bgType === 'image') {
@@ -458,6 +499,8 @@ class RestaurantTableResource extends Resource
                                                     }
 
                                                     $restName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
+                                                    $tagline = ($branch && !empty($branch->tagline)) ? $branch->tagline : ($restaurant->tagline ?? '');
+                                                    $taglineHtml = $tagline ? "<div style='font-size: {$taglineSize}; font-weight: {$fontWeight}; font-style: {$fontStyle}; color: {$taglineColor}; margin: 4px auto 2px auto; line-height: 1.3; letter-spacing: 0.5px; text-shadow: 0 1px 1px rgba(255,255,255,0.8);'>" . htmlspecialchars($tagline) . "</div>" : "";
                                                     $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
                                                     $logoUrl = $logoPath ? Storage::disk('public')->url($logoPath) : null;
 
@@ -468,7 +511,7 @@ class RestaurantTableResource extends Resource
                                                             <div style='width: 100%; height: 100%; border-radius: 12px; padding: 8px; text-align: center; box-sizing: border-box; {$bgStyle} box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); overflow: hidden;'>
                                                                 {$logoHtml}
                                                                 <div style='font-family: Times, serif; font-size: 20px; font-weight: bold; color: {$nameColor}; text-transform: uppercase; letter-spacing: 1px;'>{$restName}</div>
-                                                                
+                                                                {$taglineHtml}
                                                                 <div style='border-top: 3px solid {$accentColor}; width: 40px; margin: 8px auto;'></div>
                                                                 <div style='font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 1px;'>EXQUISITE DINING EXPERIENCE</div>
                                                                 
@@ -500,10 +543,10 @@ class RestaurantTableResource extends Resource
                         set_time_limit(300);
 
                         $user = auth()->user();
-                        $restaurant = $user->restaurant;
+                        $restaurant = $user->restaurant ?? ($user->restaurant_id ? \App\Models\Restaurant::find($user->restaurant_id) : \App\Models\Restaurant::first());
                         $branchId = ($user->isBranchAdmin() || $user->isManager()) ? $user->branch_id : null;
 
-                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant->id);
+                        $query = \App\Models\RestaurantTable::where('restaurant_id', $restaurant?->id ?? 1);
                         if ($branchId) {
                             $query->where('branch_id', $branchId);
                         } else {
@@ -516,10 +559,23 @@ class RestaurantTableResource extends Resource
                         $bgImage = $data['bg_image'] ?? null;
 
                         $nameColor = $data['name_color'] ?? '#9A3B2A';
+                        $taglineColor = $data['tagline_color'] ?? '#1F2937';
+                        $taglineSize = $data['tagline_size'] ?? '14px';
+                        $taglineWeightChoice = $data['tagline_weight'] ?? 'bold';
                         $tableColor = $data['table_color'] ?? '#32402A';
                         $subtitleColor = $data['subtitle_color'] ?? '#4B5320';
                         $accentColor = $data['accent_color'] ?? '#E47A33';
                         $pillBgColor = $data['pill_bg_color'] ?? '#B85C4A';
+
+                        $fontWeight = match($taglineWeightChoice) {
+                            'bold', 'italic_bold' => 'bold',
+                            'semibold' => '600',
+                            default => 'normal',
+                        };
+                        $fontStyle = match($taglineWeightChoice) {
+                            'italic', 'italic_bold' => 'italic',
+                            default => 'normal',
+                        };
 
                         $cardBackgroundStyle = '';
                         if ($bgType === 'image') {
@@ -569,6 +625,8 @@ class RestaurantTableResource extends Resource
                         }
 
                         $restaurantName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
+                        $tagline = ($branch && !empty($branch->tagline)) ? $branch->tagline : ($restaurant->tagline ?? '');
+                        $taglineHtml = $tagline ? '<div class="tagline">' . htmlspecialchars($tagline) . '</div>' : '';
                         $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
                         $logoBase64 = '';
 
@@ -593,6 +651,7 @@ class RestaurantTableResource extends Resource
                             .card { border-radius: 12px; width: 100%; height: 122mm; box-sizing: border-box; text-align: center; ' . $cardBackgroundStyle . ' overflow: hidden; position: relative; }
                             .content-wrapper { background-color: transparent; width: 100%; height: 100%; padding-top: 8px; box-sizing: border-box; }
                             .title { font-family: "Times", serif; font-size: 20px; font-weight: bold; color: ' . $nameColor . '; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+                            .tagline { font-size: ' . $taglineSize . '; font-weight: ' . $fontWeight . '; font-style: ' . $fontStyle . '; color: ' . $taglineColor . '; margin: 4px 10px 2px 10px; line-height: 1.3; letter-spacing: 0.5px; }
                             .orange-line { border-top: 3px solid ' . $accentColor . '; width: 40px; margin: 6px auto; } 
                             .subtitle { font-size: 9px; color: ' . $subtitleColor . '; font-weight: bold; letter-spacing: 1.5px; margin-bottom: 8px; }
                             .qr-bracket-table { margin: 0 auto 8px auto; border-collapse: collapse; }
@@ -630,6 +689,7 @@ class RestaurantTableResource extends Resource
                                     $html .= '<td class="quadrant"><div class="card"><div class="content-wrapper">
                                         ' . $logoHtml . '
                                         <div class="title">' . $restaurantName . '</div>
+                                        ' . $taglineHtml . '
                                         <div class="orange-line"></div><div class="subtitle">EXQUISITE DINING EXPERIENCE</div>
                                         <table class="qr-bracket-table"><tr><td class="br-tl"></td><td></td><td></td></tr><tr><td></td><td><img src="' . $qrBase64 . '" class="qr-img" /></td><td></td></tr><tr><td></td><td></td><td class="br-br"></td></tr></table>
                                         <div class="btn-wrapper"><div class="scan-pill">SCAN TO MENU</div></div>

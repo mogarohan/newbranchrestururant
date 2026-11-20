@@ -206,6 +206,13 @@ class BranchResource extends Resource
                 ->rows(3)
                 ->columnSpanFull(),
 
+            Forms\Components\TextInput::make('tagline')
+                ->label('Branch Tagline / Slogan (Optional)')
+                ->placeholder('e.g., Downtown Outlet / Pure Veg Dining')
+                ->maxLength(255)
+                ->helperText('If not set, main restaurant tagline will apply.')
+                ->columnSpanFull(),
+
             Forms\Components\Toggle::make('is_active')
                 ->label('Active')
                 ->default(true),

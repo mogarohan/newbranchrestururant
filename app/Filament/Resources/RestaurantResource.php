@@ -81,6 +81,12 @@ class RestaurantResource extends Resource
                 ->maxLength(65535)
                 ->columnSpanFull(),
 
+            Forms\Components\TextInput::make('tagline')
+                ->label('Tagline / Slogan')
+                ->placeholder('e.g., Taste of Authentic Flavors / Pure Veg Family Restaurant')
+                ->maxLength(255)
+                ->columnSpanFull(),
+
             Forms\Components\TextInput::make('phone_no')
                 ->label('Phone Number')
                 ->tel()

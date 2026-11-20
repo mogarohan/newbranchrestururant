@@ -14,6 +14,7 @@ class Branch extends Model
         'phone',
         'gst_no',
         'address',
+        'tagline',
         'is_active',
         'table_limits',
         'has_inventory',
@@ -53,5 +54,18 @@ class Branch extends Model
     public function restaurant()
     {
         return $this->belongsTo(Restaurant::class, 'restaurant_id');
+    }
+
+    /**
+     * Accessor alias for tag_line / tagline compatibility.
+     */
+    public function getTagLineAttribute(): ?string
+    {
+        return $this->attributes['tagline'] ?? null;
+    }
+
+    public function setTagLineAttribute(?string $value): void
+    {
+        $this->attributes['tagline'] = $value;
     }
 }

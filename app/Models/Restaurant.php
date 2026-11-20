@@ -23,6 +23,7 @@ class Restaurant extends Model
         'max_branches',
         'upi_id',
         'address',
+        'tagline',
         'phone_no',
         'is_pay_first',
         'gst_no',
@@ -104,6 +105,19 @@ class Restaurant extends Model
     public function getPhoneAttribute(): ?string
     {
         return $this->attributes['phone_no'] ?? null;
+    }
+
+    /**
+     * Accessor alias for tag_line / tagline compatibility.
+     */
+    public function getTagLineAttribute(): ?string
+    {
+        return $this->attributes['tagline'] ?? null;
+    }
+
+    public function setTagLineAttribute(?string $value): void
+    {
+        $this->attributes['tagline'] = $value;
     }
 
     public function inventoryTransactions(): HasMany
