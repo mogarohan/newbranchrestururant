@@ -404,7 +404,6 @@ class RestaurantTableResource extends Resource
                                             \Filament\Forms\Components\Section::make('Color Customization')
                                                 ->schema([
                                                     \Filament\Forms\Components\ColorPicker::make('name_color')->label('Restaurant Name')->default('#9A3B2A')->live(),
-                                                    \Filament\Forms\Components\ColorPicker::make('address_color')->label('Address Text')->default('#333333')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('table_color')->label('Table Number')->default('#32402A')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('subtitle_color')->label('Subtitles & Labels')->default('#4B5320')->live(),
                                                     \Filament\Forms\Components\ColorPicker::make('accent_color')->label('Divider Lines & Borders')->default('#E47A33')->live(),
@@ -431,7 +430,6 @@ class RestaurantTableResource extends Resource
                                                     $bgColor = $get('bg_color') ?? '#E2F0CB';
 
                                                     $nameColor = $get('name_color') ?? '#9A3B2A';
-                                                    $addressColor = $get('address_color') ?? '#333333';
                                                     $tableColor = $get('table_color') ?? '#32402A';
                                                     $subtitleColor = $get('subtitle_color') ?? '#4B5320';
                                                     $accentColor = $get('accent_color') ?? '#E47A33';
@@ -460,21 +458,18 @@ class RestaurantTableResource extends Resource
                                                     }
 
                                                     $restName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
-                                                    $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '123 Main Street, City, State');
                                                     $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
                                                     $logoUrl = $logoPath ? Storage::disk('public')->url($logoPath) : null;
 
                                                     $logoHtml = $logoUrl ? "<img src='{$logoUrl}' style='max-width: 50px; max-height: 50px; object-fit: contain; margin-bottom: 5px;' />" : "";
-                                                    $addressHtml = $address ? "<div style='font-size: 10px; color: {$addressColor}; margin: 4px 10px; line-height: 1.2;'>" . nl2br(htmlspecialchars($address)) . "</div>" : "";
 
                                                     return new HtmlString("
                                                         <div style='width: 100%; max-width: 300px; height: 460px; border: 1px dashed #999; padding: 8px; margin: 0 auto; box-sizing: border-box;'>
                                                             <div style='width: 100%; height: 100%; border-radius: 12px; padding: 8px; text-align: center; box-sizing: border-box; {$bgStyle} box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); overflow: hidden;'>
                                                                 {$logoHtml}
                                                                 <div style='font-family: Times, serif; font-size: 20px; font-weight: bold; color: {$nameColor}; text-transform: uppercase; letter-spacing: 1px;'>{$restName}</div>
-                                                                {$addressHtml}
                                                                 
-                                                                <div style='border-top: 3px solid {$accentColor}; width: 40px; margin: 6px auto;'></div>
+                                                                <div style='border-top: 3px solid {$accentColor}; width: 40px; margin: 8px auto;'></div>
                                                                 <div style='font-size: 9px; color: {$subtitleColor}; font-weight: bold; letter-spacing: 1px;'>EXQUISITE DINING EXPERIENCE</div>
                                                                 
                                                                 <div style='display: flex; justify-content: center; align-items: center; margin-top: 10px; margin-bottom: 8px;'>
@@ -521,7 +516,6 @@ class RestaurantTableResource extends Resource
                         $bgImage = $data['bg_image'] ?? null;
 
                         $nameColor = $data['name_color'] ?? '#9A3B2A';
-                        $addressColor = $data['address_color'] ?? '#333333';
                         $tableColor = $data['table_color'] ?? '#32402A';
                         $subtitleColor = $data['subtitle_color'] ?? '#4B5320';
                         $accentColor = $data['accent_color'] ?? '#E47A33';
@@ -575,7 +569,6 @@ class RestaurantTableResource extends Resource
                         }
 
                         $restaurantName = $branch ? strtoupper($branch->name) : strtoupper($restaurant->name ?? 'RESTAURANT');
-                        $address = ($branch && $branch->address) ? $branch->address : ($restaurant->address ?? '');
                         $logoPath = ($branch && $branch->logo_path) ? $branch->logo_path : ($restaurant->logo_path ?? null);
                         $logoBase64 = '';
 
@@ -589,7 +582,6 @@ class RestaurantTableResource extends Resource
                         }
 
                         $logoHtml = $logoBase64 ? '<img src="' . $logoBase64 . '" style="max-width: 50px; max-height: 50px; object-fit: contain; margin-bottom: 5px;" />' : '';
-                        $addressHtml = $address ? '<div style="font-size: 11px; color: ' . $addressColor . '; margin: 4px 15px; line-height: 1.2;">' . nl2br(htmlspecialchars($address)) . '</div>' : '';
 
                         // CSS aur Layout - Height guaranteed small enough ki 1 page pe 4 fit hon!
                         $html = '<!DOCTYPE html><html><head><style>
@@ -638,7 +630,6 @@ class RestaurantTableResource extends Resource
                                     $html .= '<td class="quadrant"><div class="card"><div class="content-wrapper">
                                         ' . $logoHtml . '
                                         <div class="title">' . $restaurantName . '</div>
-                                        ' . $addressHtml . '
                                         <div class="orange-line"></div><div class="subtitle">EXQUISITE DINING EXPERIENCE</div>
                                         <table class="qr-bracket-table"><tr><td class="br-tl"></td><td></td><td></td></tr><tr><td></td><td><img src="' . $qrBase64 . '" class="qr-img" /></td><td></td></tr><tr><td></td><td></td><td class="br-br"></td></tr></table>
                                         <div class="btn-wrapper"><div class="scan-pill">SCAN TO MENU</div></div>
