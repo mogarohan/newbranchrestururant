@@ -110,7 +110,8 @@ class RolePermissionSeeder extends Seeder
                 'order.create',
                 'order.update_status',
                 'payment.collect',
-                'order.view'
+                'order.view',
+                'menu.view',
             ],
 
             'customer' => [
