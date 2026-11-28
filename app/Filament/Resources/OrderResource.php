@@ -101,7 +101,10 @@ class OrderResource extends Resource
                 Tables\Columns\TextColumn::make('items_summary')
                     ->label('Items')
                     ->getStateUsing(function (Order $record) {
-                        return $record->items->map(fn($i) => "{$i->quantity}x {$i->item_name}")->implode(', ');
+                        return $record->items->map(function ($i) {
+                            $st = $i->status ? " [" . ucfirst($i->status) . "]" : '';
+                            return "{$i->quantity}x {$i->item_name}{$st}";
+                        })->implode(', ');
                     })
                     ->wrap(),
 

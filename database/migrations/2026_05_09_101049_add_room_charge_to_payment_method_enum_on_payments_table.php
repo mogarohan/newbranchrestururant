@@ -16,7 +16,9 @@ return new class extends Migration {
 
         // 2. ALTER: Modify the ENUM to include 'room_charge'
         // Using raw SQL is necessary for ENUM changes in MySQL
-        DB::statement("ALTER TABLE payments MODIFY COLUMN payment_method ENUM('cash','upi', 'online', 'card', 'pending', 'room_charge') DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE payments MODIFY COLUMN payment_method ENUM('cash','upi', 'online', 'card', 'pending', 'room_charge') DEFAULT 'pending'");
+        }
     }
 
     public function down(): void
@@ -26,6 +28,8 @@ return new class extends Migration {
             ->where('payment_method', 'room_charge')
             ->update(['payment_method' => 'pending']);
 
-        DB::statement("ALTER TABLE payments MODIFY COLUMN payment_method ENUM('cash','upi', 'online', 'card', 'pending') DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE payments MODIFY COLUMN payment_method ENUM('cash','upi', 'online', 'card', 'pending') DEFAULT 'pending'");
+        }
     }
 };

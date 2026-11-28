@@ -5,6 +5,7 @@ namespace App\Filament\Pages;
 use App\Models\RestaurantTable;
 use App\Models\Room;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\KitchenQueue;
 use App\Models\OrderStatusLog;
 use App\Models\Payment;
@@ -60,8 +61,10 @@ class ManagerDashboard extends Page
     public $selectedSessionId = null;
 
     public $discountAmount = 0;
-    public $taxPercentage = 0;
+    public $taxPercentage = 5.00; // Default 5.00% GST
     public $extraCharges = 0;
+    public bool $billIncludeQr = true;
+    public $billPaperSize = '80mm'; // '80mm', '58mm', 'a4'
 
     // 🌟 Filter & Search Properties (Stitch UI) 🌟
     public $tableFilter = 'all'; // 'all', 'occupied', 'available', 'bill_pending', 'cleaning'
@@ -82,6 +85,16 @@ class ManagerDashboard extends Page
     public $placeOrderVegFilter = 'all'; // 'all', 'veg', 'non-veg'
     public $placeOrderAutoPrint = true;
     public $placeOrderCart = [];
+    public bool $isSubmittingOrder = false;
+    public $placeOrderCustomerPhone = '';
+    public $placeOrderServiceType = 'dine_in'; // 'dine_in', 'parcel'
+    public $placeOrderPaymentMethod = 'cash'; // 'cash', 'upi', 'card'
+    public bool $isInstantBillMode = false;
+    public $instantBillDiscount = 0.00;
+    public $instantBillTaxPercent = 0.00;
+    public $instantBillExtraCharges = 0.00;
+    public bool $instantBillIncludeQr = true;
+    public $instantBillPaperSize = '80mm'; // '80mm', '58mm', 'a4'
 
     // 🌟 ALL-IN-ONE Feature Property 🌟
     public $activeAlerts = []; 
@@ -328,12 +341,20 @@ class ManagerDashboard extends Page
             return;
         }
 
+        // Suppress self-event echo: if the action was taken by this authenticated manager, skip re-handling
+        $actorId = $event['actor_id'] ?? $event['order']['actor_id'] ?? null;
+        if ($actorId !== null && (int)$actorId === (int)auth()->id()) {
+            return;
+        }
+
         $this->dispatch('$refresh');
 
         $order = $event['order'] ?? null;
         $status = $order['status'] ?? null;
+        $actorType = $event['actor_type'] ?? $event['order']['actor_type'] ?? null;
 
-        if ($status === 'placed') {
+        // Only announce as new incoming order if placed externally (e.g., by customer)
+        if ($status === 'placed' && $actorType !== 'staff') {
             $this->handleNewOrder($event);
         }
     }
@@ -434,6 +455,10 @@ class ManagerDashboard extends Page
             $this->selectedTableId = $tableId;
             $firstDiner = QrSession::where('restaurant_table_id', $tableId)
                 ->where('is_active', true)
+                ->where(function($q) {
+                    $q->where('is_primary', true)
+                      ->orWhere('join_status', 'approved');
+                })
                 ->orderBy('is_primary', 'desc')
                 ->orderBy('created_at', 'asc')
                 ->first();
@@ -508,77 +533,93 @@ class ManagerDashboard extends Page
                 if ($tableId) {
                     $table = RestaurantTable::find($tableId);
                     if ($table) {
-                        return 'Assign Guest to ' . $this->formatTableNumber($table->table_number);
+                        return 'Seat Guest at ' . $this->formatTableNumber($table->table_number);
                     }
                 }
                 if ($this->selectedParcelCounterId || !empty($arguments['counter_id'])) {
                     return 'Add Customer to Parcel Queue';
                 }
-                return 'Assign Guest to Table';
+                return 'Seat Walk-in Guest';
             })
-            ->modalWidth(MaxWidth::Medium)
+            ->modalDescription('Assign guest or start a new dining party on floor')
+            ->modalIcon('heroicon-o-user-plus')
+            ->modalIconColor('warning')
+            ->modalWidth(MaxWidth::Large)
+            ->modalSubmitActionLabel('Seat Guest & Open')
+            ->extraModalWindowAttributes(['class' => 'stitch-assign-guest-modal'])
             ->fillForm(function (array $arguments) {
                 return [
                     'table_id' => $arguments['table_id'] ?? $this->selectedTableId,
                     'counter_id' => $arguments['counter_id'] ?? $this->selectedParcelCounterId,
                     'customer_name' => '',
+                    'customer_phone' => '',
+                    'party_role' => 'new_host',
                     'notes' => '',
                 ];
             })
             ->form([
                 Hidden::make('counter_id'),
 
-                Select::make('table_id')
-                    ->label('Select Table')
-                    ->options(function () {
-                        $user = auth()->user();
-                        return RestaurantTable::where('restaurant_id', $user->restaurant_id)
-                            ->when($user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id)->orWhereNull('branch_id'))
-                            ->get()
-                            ->mapWithKeys(fn($t) => [$t->id => $this->formatTableNumber($t->table_number) . " (Cap: {$t->seating_capacity}) - " . ucfirst($t->status ?? 'available')]);
-                    })
-                    ->required(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
-                    ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
-                    ->live(),
+                Grid::make(['default' => 1, 'sm' => 2])->schema([
+                    Select::make('table_id')
+                        ->label('Table Selection')
+                        ->prefixIcon('heroicon-m-table-cells')
+                        ->options(function () {
+                            $user = auth()->user();
+                            return RestaurantTable::where('restaurant_id', $user->restaurant_id)
+                                ->when($user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id)->orWhereNull('branch_id'))
+                                ->get()
+                                ->mapWithKeys(fn($t) => [$t->id => $this->formatTableNumber($t->table_number) . " (Cap: {$t->seating_capacity}) - " . ucfirst($t->status ?? 'available')]);
+                        })
+                        ->required(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                        ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                        ->searchable()
+                        ->live()
+                        ->columnSpanFull(),
 
-                Select::make('party_role')
-                    ->label('Party / Seating Role')
-                    ->options(function (\Filament\Forms\Get $get) {
-                        $tableId = $get('table_id') ?: $this->selectedTableId;
-                        if (!$tableId) {
-                            return ['new_host' => '👑 Start New Host / Independent Party'];
-                        }
-                        $activeHosts = QrSession::where('restaurant_table_id', $tableId)
-                            ->where('is_active', true)
-                            ->where(fn($q) => $q->where('is_primary', true)->orWhereNull('host_session_id'))
-                            ->get();
-                        $options = ['new_host' => '👑 Start New Host / Independent Party'];
-                        foreach ($activeHosts as $h) {
-                            $options['join_' . $h->id] = "👥 Join {$h->customer_name}'s Party (Host #{$h->id})";
-                        }
-                        return $options;
-                    })
-                    ->default('new_host')
-                    ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
-                    ->helperText('Choose whether this customer starts their own host party or joins an existing dining group on this table.'),
+                    Select::make('party_role')
+                        ->label('Seating Role')
+                        ->prefixIcon('heroicon-m-user-group')
+                        ->options(function (\Filament\Forms\Get $get) {
+                            $tableId = $get('table_id') ?: $this->selectedTableId;
+                            if (!$tableId) {
+                                return ['new_host' => '👑 New Primary Host / Party'];
+                            }
+                            $activeHosts = QrSession::where('restaurant_table_id', $tableId)
+                                ->where('is_active', true)
+                                ->where(fn($q) => $q->where('is_primary', true)->orWhereNull('host_session_id'))
+                                ->get();
+                            $options = ['new_host' => '👑 New Primary Host / Party'];
+                            foreach ($activeHosts as $h) {
+                                $options['join_' . $h->id] = "👥 Join {$h->customer_name}'s Party (#{$h->id})";
+                            }
+                            return $options;
+                        })
+                        ->default('new_host')
+                        ->visible(fn(\Filament\Forms\Get $get) => empty($get('counter_id')) && !$this->selectedParcelCounterId)
+                        ->columnSpanFull(),
 
-                TextInput::make('customer_name')
-                    ->label('Customer Name')
-                    ->placeholder('Enter customer name (optional, defaults to "Guest")')
-                    ->helperText('If the customer\'s name is known, enter it here. Otherwise, leave blank to use "Guest".')
-                    ->maxLength(255),
+                    TextInput::make('customer_name')
+                        ->label('Customer Name')
+                        ->prefixIcon('heroicon-m-user')
+                        ->placeholder('Walk-in Guest')
+                        ->maxLength(255),
 
-                TextInput::make('customer_phone')
-                    ->label('Customer Phone (Optional)')
-                    ->placeholder('e.g. 9876543210')
-                    ->tel()
-                    ->maxLength(20)
-                    ->nullable(),
+                    TextInput::make('customer_phone')
+                        ->label('Phone Number (Optional)')
+                        ->prefixIcon('heroicon-m-phone')
+                        ->placeholder('10-digit mobile...')
+                        ->tel()
+                        ->maxLength(20)
+                        ->nullable(),
 
-                TextInput::make('notes')
-                    ->label('Notes / Party Info')
-                    ->placeholder('e.g. Window seat, Birthday, 3 guests (optional)')
-                    ->nullable(),
+                    TextInput::make('notes')
+                        ->label('Party Notes / Preferences')
+                        ->prefixIcon('heroicon-m-pencil-square')
+                        ->placeholder('e.g. Window seat, Birthday, 3 guests')
+                        ->nullable()
+                        ->columnSpanFull(),
+                ]),
             ])
             ->action(function (array $data, array $arguments) {
                 $counterId = $data['counter_id'] ?? $arguments['counter_id'] ?? $this->selectedParcelCounterId;
@@ -1133,6 +1174,13 @@ class ManagerDashboard extends Page
         $upiId = $viewData['upiId'];
         $restaurantName = $viewData['restaurantName'];
 
+        // Auto-generate invoice/payment record if printing directly before customer bill generation
+        if (!$pendingPayment && $this->selectedSessionId) {
+            $this->sendBillToCustomer();
+            $viewData = $this->getViewData();
+            $pendingPayment = $viewData['pendingPayment'];
+        }
+
         if (!$pendingPayment || !$this->selectedSessionId) {
             Notification::make()->title('No active bill found.')->danger()->send();
             return;
@@ -1167,31 +1215,51 @@ class ManagerDashboard extends Page
 
         $orders = $viewData['tableOrders']->whereIn('status', ['placed', 'accepted', 'partial_accepted', 'preparing', 'ready', 'served']);
 
-        $itemsHtml = '';
+        $mergedItems = [];
+        $totalQty = 0;
         foreach ($orders as $order) {
             foreach ($order->items as $item) {
-                $displayQty = $item->confirmed_qty ?? $item->quantity;
-                if ($displayQty <= 0)
+                $displayQty = (int) ($item->confirmed_qty ?? $item->quantity);
+                if ($displayQty <= 0) {
                     continue;
-                $rate = $item->unit_price;
-                $amount = $rate * $displayQty;
-                $itemsHtml .= "<tr>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$item->item_name}</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center;'>{$displayQty}</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($rate, 2) . "</td>
-                    <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($amount, 2) . "</td>
-                </tr>";
+                }
+                $rate = (float) $item->unit_price;
+                $name = trim($item->item_name);
+                $key = ($item->menu_item_id ? ('menu_' . $item->menu_item_id) : ('name_' . md5($name))) . '_' . number_format($rate, 2, '.', '');
+
+                if (!isset($mergedItems[$key])) {
+                    $mergedItems[$key] = [
+                        'name' => $name,
+                        'qty' => 0,
+                        'rate' => $rate,
+                        'amount' => 0,
+                    ];
+                }
+                $mergedItems[$key]['qty'] += $displayQty;
+                $mergedItems[$key]['amount'] += ($rate * $displayQty);
+                $totalQty += $displayQty;
             }
         }
 
+        $itemsHtml = '';
+        foreach ($mergedItems as $mItem) {
+            $itemsHtml .= "<tr>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$mItem['name']}</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center; font-weight: bold;'>{$mItem['qty']}</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($mItem['rate'], 2) . "</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($mItem['amount'], 2) . "</td>
+            </tr>";
+        }
+
         $qrHtml = '';
-        if (!empty($upiId)) {
+        if ($this->billIncludeQr && !empty($upiId)) {
             $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($brandName) . "&am={$pendingPayment->amount}&cu=INR&tr={$pendingPayment->transaction_reference}";
-            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size(120)->margin(0)->generate($upiUrl);
+            $qrSize = ($this->billPaperSize === '58mm') ? 95 : 120;
+            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size($qrSize)->margin(0)->generate($upiUrl);
 
             $qrHtml = "
-            <div style='text-align: center; margin-top: 15px; padding-top: 10px; border-top: 1px dashed #000;'>
-                <div style='font-size: 11px; font-weight: bold; margin-bottom: 8px;'>SCAN TO PAY VIA UPI: ₹" . number_format($pendingPayment->amount, 0) . "</div>
+            <div style='text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;'>
+                <div style='font-size: 10px; font-weight: bold; margin-bottom: 6px;'>SCAN TO PAY VIA UPI: ₹" . number_format($pendingPayment->amount, 0) . "</div>
                 <div style='display: block; margin: 0 auto;'>{$qrSvg}</div>
             </div>";
         }
@@ -1199,62 +1267,83 @@ class ManagerDashboard extends Page
         $taxable = max(0, (float) $pendingPayment->subtotal - (float) $pendingPayment->discount_amount);
         $taxPercent = ($taxable > 0 && (float) $pendingPayment->tax_amount > 0) ? round(((float) $pendingPayment->tax_amount / $taxable) * 100, 1) : 0;
 
-        $breakdownHtml = "<div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>";
+        $totalItemTypes = count($mergedItems);
+        $breakdownHtml = "<div style='font-size: 11px; margin-bottom: 4px; color: #334155; font-weight: bold;'>Total Qty: {$totalQty} ({$totalItemTypes} Items)</div>";
+        $breakdownHtml .= "<div>Sub Total: ₹" . number_format($pendingPayment->subtotal, 2) . "</div>";
         if ((float) $pendingPayment->discount_amount > 0) {
-            $breakdownHtml .= "<div style='font-size: 13px; margin-top: 3px;'>Discount: -₹" . number_format($pendingPayment->discount_amount, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>Discount: -₹" . number_format($pendingPayment->discount_amount, 2) . "</div>";
         }
         if ((float) $pendingPayment->tax_amount > 0) {
             $halfTax = (float) $pendingPayment->tax_amount / 2;
             $halfPercent = round($taxPercent / 2, 2);
-            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 3px;'>CGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
-            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 2px;'>SGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
-            $breakdownHtml .= "<div style='font-size: 12px; margin-top: 2px; font-weight: bold;'>Total GST " . ($taxPercent > 0 ? "({$taxPercent}%)" : "") . ": ₹" . number_format($pendingPayment->tax_amount, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>CGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>SGST " . ($halfPercent > 0 ? "({$halfPercent}%)" : "") . ": ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px; font-weight: bold;'>Total GST " . ($taxPercent > 0 ? "({$taxPercent}%)" : "") . ": ₹" . number_format($pendingPayment->tax_amount, 2) . "</div>";
         }
         if ((float) $pendingPayment->extra_charges > 0) {
-            $breakdownHtml .= "<div style='font-size: 13px; margin-top: 3px;'>Extra Charges: +₹" . number_format($pendingPayment->extra_charges, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>Extra Charges: +₹" . number_format($pendingPayment->extra_charges, 2) . "</div>";
         }
-        $breakdownHtml .= "<div style='font-size: 18px; margin-top: 6px; border-top: 1px dashed #000; padding-top: 4px;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>";
+        $breakdownHtml .= "<div style='font-size: 16px; margin-top: 5px; border-top: 1px dashed #000; padding-top: 4px; font-weight: 900;'>Grand Total: ₹" . number_format($pendingPayment->amount, 2) . "</div>";
 
         $paymentModeText = strtoupper($pendingPayment->payment_method ?: 'CASH');
         if ($paymentModeText === 'PENDING') {
             $paymentModeText = 'CASH';
         }
 
+        // Paper Size Formats (80mm vs 58mm vs A4)
+        if ($this->billPaperSize === '58mm') {
+            $pageStyle = "@page { margin: 0; size: 58mm auto; } body { width: 50mm; margin: 2mm auto; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; line-height: 1.2; } table { width: 100%; border-collapse: collapse; font-size: 9px; }";
+            $headerTitleSize = "15px";
+        } elseif ($this->billPaperSize === 'a4') {
+            $pageStyle = "@page { margin: 15mm; size: A4 portrait; } body { max-width: 170mm; margin: 0 auto; font-family: Arial, sans-serif; font-size: 13px; color: #000; line-height: 1.4; } table { width: 100%; border-collapse: collapse; font-size: 12px; }";
+            $headerTitleSize = "22px";
+        } else { // 80mm default
+            $pageStyle = "@page { margin: 0; size: 80mm auto; } body { width: 72mm; margin: 4mm auto; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; line-height: 1.3; } table { width: 100%; border-collapse: collapse; font-size: 11px; }";
+            $headerTitleSize = "18px";
+        }
+
         $html = "
-        <html><head><style>@page { margin: 0; size: 80mm auto; } body { margin: 5px; font-family: 'Courier New', Courier, monospace; font-size: 13px; color: #000; } table { width: 100%; border-collapse: collapse; }</style></head>
+        <html><head><style>{$pageStyle}</style></head>
         <body>
             <div style='text-align:center;'>
-                <h2 style='margin:0; font-size:20px; font-weight:bold; text-transform: uppercase;'>{$brandName}</h2>
-                <div style='font-size: 12px; margin-top: 5px;'>{$address}</div>
-                <div style='font-size: 12px; margin-top: 2px;'>MOB: {$phone}</div>
-                <div style='font-size: 12px; margin-top: 2px;'>GSTIN: {$gstIn}</div>
+                <h2 style='margin:0; font-size:{$headerTitleSize}; font-weight:bold; text-transform: uppercase;'>{$brandName}</h2>
+                <div style='font-size: 11px; margin-top: 3px;'>{$address}</div>
+                <div style='font-size: 11px; margin-top: 2px;'>MOB: {$phone}</div>
+                <div style='font-size: 11px; margin-top: 2px;'>GSTIN: {$gstIn}</div>
             </div>
-            <hr style='border-top:1px dashed #000; margin:10px 0;'/>
-            <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold;'>
+            <hr style='border-top:1px dashed #000; margin:8px 0;'/>
+            <div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;'>
                 <span>Bill No: {$pendingPayment->bill_number}</span>
                 <span>Date: " . now()->format('d/m/Y') . "</span>
             </div>
-            <div style='display: flex; justify-content: space-between; font-size: 12px; font-weight: bold; margin-top: 5px;'>
+            <div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-top: 3px;'>
                 <span>Name: {$session->customer_name}</span>
                 <span>Mode: {$paymentModeText}</span>
             </div>
-            <div style='font-size: 13px; font-weight: bold; margin-top: 5px;'>LOCATION: {$locationName}</div>
-            <hr style='border-top:1px dashed #000; margin:10px 0;'/>
+            <div style='font-size: 11px; font-weight: bold; margin-top: 3px;'>LOCATION: {$locationName}</div>
+            <hr style='border-top:1px dashed #000; margin:8px 0;'/>
             <table>
                 <thead>
-                    <tr style='text-transform: uppercase; font-size: 11px; border-bottom: 1px dashed #000;'>
-                        <th style='text-align:left; padding-bottom:5px;'>Description</th><th style='text-align:center; padding-bottom:5px;'>Qty</th><th style='text-align:right; padding-bottom:5px;'>Rate</th><th style='text-align:right; padding-bottom:5px;'>Amount</th>
+                    <tr style='text-transform: uppercase; font-size: 10px; border-bottom: 1px dashed #000;'>
+                        <th style='text-align:left; padding-bottom:4px;'>Item</th><th style='text-align:center; padding-bottom:4px;'>Qty</th><th style='text-align:right; padding-bottom:4px;'>Rate</th><th style='text-align:right; padding-bottom:4px;'>Amount</th>
                     </tr>
                 </thead>
                 <tbody>{$itemsHtml}</tbody>
+                <tfoot>
+                    <tr style='border-top: 1px dashed #000; border-bottom: 1px dashed #000; font-weight: bold; font-size: 11px;'>
+                        <td style='padding: 6px 0; text-transform: uppercase;'>TOTAL QTY</td>
+                        <td style='padding: 6px 0; text-align: center; font-size: 12px;'>{$totalQty}</td>
+                        <td colspan='2' style='padding: 6px 0; text-align: right;'>{$totalItemTypes} Items</td>
+                    </tr>
+                </tfoot>
             </table>
-            <div style='text-align:right; margin-top: 10px; font-size: 14px; font-weight: bold;'>
+            <div style='text-align:right; margin-top: 8px; font-size: 12px; font-weight: bold;'>
                 {$breakdownHtml}
             </div>
 
             {$qrHtml}
 
-            <div style='text-align:center; margin-top:20px; font-size:12px; font-weight:bold;'>*** THANK YOU FOR DINING WITH US! ***</div>
+            <div style='text-align:center; margin-top:16px; font-size:11px; font-weight:bold;'>*** THANK YOU FOR DINING WITH US! ***</div>
         </body></html>";
 
         $escapedHtml = json_encode($html);
@@ -1605,10 +1694,38 @@ class ManagerDashboard extends Page
             } else {
                 $activeSession = QrSession::find($this->placeOrderSessionId);
             }
+        } elseif ($this->placeOrderTableId) {
+            // Auto-resolve to the table's primary active customer session if already seated
+            $activeSession = QrSession::where('restaurant_table_id', $this->placeOrderTableId)
+                ->where('is_active', true)
+                ->orderBy('is_primary', 'desc')
+                ->orderBy('created_at', 'asc')
+                ->first();
+            if ($activeSession) {
+                $this->placeOrderSessionId = $activeSession->id;
+            }
+        } elseif ($this->placeOrderCounterId) {
+            // Auto-resolve to the counter's active takeaway customer session if present
+            $activeSession = ParcelQrSession::where('parcel_qr_code_id', $this->placeOrderCounterId)
+                ->where('status', 'active')
+                ->orderBy('created_at', 'asc')
+                ->first();
+            if ($activeSession) {
+                $this->placeOrderSessionId = $activeSession->id;
+            }
         }
 
-        // Default to Manager for orders placed from the Manager Dashboard
-        $this->placeOrderCustomerName = 'Manager';
+        // Default to Manager for orders placed from the Manager Dashboard unless session has guest name
+        $this->placeOrderCustomerName = $activeSession?->customer_name ?: 'Manager';
+        $this->placeOrderCustomerPhone = $activeSession?->customer_phone ?: '';
+        $this->placeOrderServiceType = $this->placeOrderCounterId ? 'parcel' : 'dine_in';
+        $this->placeOrderPaymentMethod = 'cash';
+        $this->isInstantBillMode = false;
+        $this->instantBillDiscount = 0.00;
+        $this->instantBillTaxPercent = 0.00;
+        $this->instantBillExtraCharges = 0.00;
+        $this->instantBillIncludeQr = true;
+        $this->instantBillPaperSize = '80mm';
 
         $this->placeOrderPaymentStatus = 'pending';
         $this->placeOrderNotes = '';
@@ -1618,6 +1735,17 @@ class ManagerDashboard extends Page
         $this->placeOrderVegFilter = 'all';
         $this->placeOrderCart = [];
         $this->isPlaceOrderOpen = true;
+    }
+
+    public function openInstantBilling($tableId = null, $counterId = null): void
+    {
+        $this->openPlaceOrder($tableId, null, $counterId, null);
+        $this->isInstantBillMode = true;
+        if ($this->placeOrderCustomerName === 'Manager') {
+            $this->placeOrderCustomerName = 'Walk-in Guest';
+        }
+        $this->placeOrderPaymentStatus = 'paid_cash';
+        $this->placeOrderPaymentMethod = 'cash';
     }
 
     public function closePlaceOrder(): void
@@ -1691,172 +1819,538 @@ class ManagerDashboard extends Page
 
     public function submitPlaceOrder(): void
     {
+        if ($this->isSubmittingOrder) {
+            return;
+        }
+
         if (empty($this->placeOrderCart)) {
             Notification::make()->title('Please add at least one dish to the order.')->warning()->send();
             return;
         }
 
-        $user = auth()->user();
-        $customerName = trim($this->placeOrderCustomerName);
+        $this->isSubmittingOrder = true;
+        try {
+            $user = auth()->user();
+            $customerName = trim($this->placeOrderCustomerName);
 
-        if (!$this->placeOrderSessionId) {
-            if ($this->placeOrderTableId) {
-                $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderTableId);
-                if (empty($customerName)) {
-                    $customerName = 'Guest (' . $this->formatTableNumber($table->table_number) . ')';
-                }
+            if (!$this->placeOrderSessionId) {
+                if ($this->placeOrderTableId) {
+                    $table = RestaurantTable::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderTableId);
+                    if (empty($customerName)) {
+                        $customerName = 'Guest (' . $this->formatTableNumber($table->table_number) . ')';
+                    }
 
-                $session = QrSession::create([
-                    'restaurant_id' => $table->restaurant_id,
-                    'branch_id' => $table->branch_id,
-                    'restaurant_table_id' => $table->id,
-                    'customer_name' => $customerName,
-                    'session_token' => Str::uuid()->toString(),
-                    'is_primary' => true,
-                    'join_status' => 'active',
-                    'is_active' => true,
-                    'host_session_id' => null,
-                    'expires_at' => now()->addHours(4),
-                ]);
+                    $session = QrSession::create([
+                        'restaurant_id' => $table->restaurant_id,
+                        'branch_id' => $table->branch_id,
+                        'restaurant_table_id' => $table->id,
+                        'customer_name' => $customerName,
+                        'session_token' => Str::uuid()->toString(),
+                        'is_primary' => true,
+                        'join_status' => 'active',
+                        'is_active' => true,
+                        'host_session_id' => null,
+                        'expires_at' => now()->addHours(4),
+                    ]);
 
-                if ($table->status !== 'occupied') {
-                    $table->update(['status' => 'occupied']);
-                    event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
-                }
+                    if ($table->status !== 'occupied') {
+                        $table->update(['status' => 'occupied']);
+                        event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+                    }
 
-                $this->placeOrderSessionId = $session->id;
-                if (!$this->selectedTableId) {
-                    $this->selectedTableId = $table->id;
-                }
-                if (!$this->selectedSessionId) {
-                    $this->selectedSessionId = $session->id;
-                }
-            } elseif ($this->placeOrderCounterId) {
-                $parcelCounter = ParcelQrCode::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderCounterId);
-                if (empty($customerName)) {
-                    $customerName = 'Takeaway Customer';
-                }
+                    $this->placeOrderSessionId = $session->id;
+                    if (!$this->selectedTableId) {
+                        $this->selectedTableId = $table->id;
+                    }
+                    if (!$this->selectedSessionId) {
+                        $this->selectedSessionId = $session->id;
+                    }
+                } elseif ($this->placeOrderCounterId) {
+                    $parcelCounter = ParcelQrCode::where('restaurant_id', $user->restaurant_id)->findOrFail($this->placeOrderCounterId);
+                    if (empty($customerName)) {
+                        $customerName = 'Takeaway Customer';
+                    }
 
-                $session = ParcelQrSession::create([
-                    'restaurant_id' => $parcelCounter->restaurant_id,
-                    'branch_id' => $parcelCounter->branch_id,
-                    'parcel_qr_code_id' => $parcelCounter->id,
-                    'customer_name' => $customerName,
-                    'session_token' => Str::uuid()->toString(),
-                    'status' => 'active',
-                    'last_activity_at' => now(),
-                ]);
+                    $session = ParcelQrSession::create([
+                        'restaurant_id' => $parcelCounter->restaurant_id,
+                        'branch_id' => $parcelCounter->branch_id,
+                        'parcel_qr_code_id' => $parcelCounter->id,
+                        'customer_name' => $customerName,
+                        'session_token' => Str::uuid()->toString(),
+                        'status' => 'active',
+                        'last_activity_at' => now(),
+                    ]);
 
-                $this->placeOrderSessionId = $session->id;
-                if (!$this->selectedParcelCounterId) {
-                    $this->selectedParcelCounterId = $parcelCounter->id;
-                }
-                if (!$this->selectedSessionId) {
-                    $this->selectedSessionId = $session->id;
+                    $this->placeOrderSessionId = $session->id;
+                    if (!$this->selectedParcelCounterId) {
+                        $this->selectedParcelCounterId = $parcelCounter->id;
+                    }
+                    if (!$this->selectedSessionId) {
+                        $this->selectedSessionId = $session->id;
+                    }
+                } else {
+                    Notification::make()->title('Please select a table or parcel counter first.')->danger()->send();
+                    return;
                 }
             } else {
-                Notification::make()->title('Please select a table or parcel counter first.')->danger()->send();
+                // Keep the active table/room session owner intact. The specific order being placed
+                // by the manager will be tagged with $customerName (defaulting to 'Manager').
+            }
+
+            if (empty($customerName)) {
+                $customerName = 'Manager';
+            }
+
+            $validatedItems = [];
+            $outOfStockItemNames = [];
+
+            DB::transaction(function () use (&$validatedItems, &$outOfStockItemNames) {
+                foreach ($this->placeOrderCart as $cartItem) {
+                    $menuItem = MenuItem::where('id', $cartItem['id'])->lockForUpdate()->first();
+                    if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
+                        if ($menuItem->stock_quantity <= 0) {
+                            $outOfStockItemNames[] = $menuItem->name;
+                            continue;
+                        } elseif ($menuItem->stock_quantity < $cartItem['quantity']) {
+                            $cartItem['quantity'] = $menuItem->stock_quantity;
+                        }
+                    }
+                    $validatedItems[] = $cartItem;
+                }
+            });
+
+            if (!empty($outOfStockItemNames)) {
+                Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
+            }
+
+            if (empty($validatedItems)) {
                 return;
             }
-        } else {
-            // Keep the active table/room session owner intact. The specific order being placed
-            // by the manager will be tagged with $customerName (defaulting to 'Manager').
-        }
 
-        if (empty($customerName)) {
-            $customerName = 'Manager';
-        }
+            $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
 
-        $validatedItems = [];
-        $outOfStockItemNames = [];
+            if ($this->placeOrderCounterId) {
+                $orderData = ['parcel_qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'parcel'];
+            } elseif ($this->placeOrderRoomId) {
+                $orderData = ['room_session_id' => $this->placeOrderSessionId, 'service_type' => 'room_service'];
+            } else {
+                $orderData = ['restaurant_table_id' => $this->placeOrderTableId, 'qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'dine_in'];
+            }
 
-        DB::transaction(function () use (&$validatedItems, &$outOfStockItemNames) {
-            foreach ($this->placeOrderCart as $cartItem) {
-                $menuItem = MenuItem::where('id', $cartItem['id'])->lockForUpdate()->first();
+            $paymentStatus = match ($this->placeOrderPaymentStatus) {
+                'paid_upi', 'paid_card', 'paid_cash', 'paid' => 'paid',
+                default => 'pending',
+            };
+
+            $orderData = array_merge($orderData, [
+                'restaurant_id' => $user->restaurant_id,
+                'branch_id' => $user->branch_id,
+                'customer_name' => $customerName,
+                'notes' => $this->placeOrderNotes,
+                'total_amount' => $totalAmount,
+                'confirmed_total' => $totalAmount,
+                'status' => 'accepted',
+                'payment_status' => $paymentStatus,
+            ]);
+
+            $order = Order::create($orderData);
+
+            foreach ($validatedItems as $item) {
+                $menuItem = MenuItem::find($item['id']);
                 if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
-                    if ($menuItem->stock_quantity <= 0) {
-                        $outOfStockItemNames[] = $menuItem->name;
-                        continue;
-                    } elseif ($menuItem->stock_quantity < $cartItem['quantity']) {
-                        $cartItem['quantity'] = $menuItem->stock_quantity;
+                    $menuItem->decrement('stock_quantity', $item['quantity']);
+                    if ($menuItem->fresh()->stock_quantity <= 0) {
+                        $menuItem->update(['is_available' => false]);
                     }
                 }
-                $validatedItems[] = $cartItem;
+                $order->items()->create([
+                    'menu_item_id' => $item['id'],
+                    'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
+                    'quantity' => $item['quantity'],
+                    'confirmed_qty' => $item['quantity'],
+                    'requested_qty' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'total_price' => $item['unit_price'] * $item['quantity'],
+                    'notes' => $item['notes'] ?? null,
+                    'status' => 'placed',
+                ]);
             }
-        });
 
-        if (!empty($outOfStockItemNames)) {
-            Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
+            if (auth()->user()->restaurant?->has_detailed_inventory) {
+                InventoryService::deductForOrder($order);
+            }
+
+            $priorityVal = match ($this->placeOrderPriority) {
+                'urgent' => 10,
+                'hold' => -5,
+                default => 0,
+            };
+
+            KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => $priorityVal]);
+            OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
+            
+            Notification::make()->title("KOT #{$order->id} Sent to Kitchen for {$customerName}!")->success()->send();
+
+            $this->closePlaceOrder();
+        } finally {
+            $this->isSubmittingOrder = false;
         }
+    }
 
-        if (empty($validatedItems)) {
+    public function submitInstantBill(): void
+    {
+        if ($this->isSubmittingOrder) {
             return;
         }
 
-        $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
-
-        if ($this->placeOrderCounterId) {
-            $orderData = ['parcel_qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'parcel'];
-        } elseif ($this->placeOrderRoomId) {
-            $orderData = ['room_session_id' => $this->placeOrderSessionId, 'service_type' => 'room_service'];
-        } else {
-            $orderData = ['restaurant_table_id' => $this->placeOrderTableId, 'qr_session_id' => $this->placeOrderSessionId, 'service_type' => 'dine_in'];
+        if (empty($this->placeOrderCart)) {
+            Notification::make()->title('Order Cart is Empty!')->warning()->send();
+            return;
         }
 
-        $paymentStatus = match ($this->placeOrderPaymentStatus) {
-            'paid_upi', 'paid_card', 'paid_cash', 'paid' => 'paid',
-            default => 'pending',
-        };
+        $this->isSubmittingOrder = true;
 
-        $orderData = array_merge($orderData, [
-            'restaurant_id' => $user->restaurant_id,
-            'branch_id' => $user->branch_id,
-            'customer_name' => $customerName,
-            'notes' => $this->placeOrderNotes,
-            'total_amount' => $totalAmount,
-            'confirmed_total' => $totalAmount,
-            'status' => 'accepted',
-            'payment_status' => $paymentStatus,
-        ]);
+        try {
+            $user = auth()->user();
+            $customerName = trim($this->placeOrderCustomerName) ?: 'Walk-in Guest';
+            $customerPhone = trim($this->placeOrderCustomerPhone) ?: null;
+            $serviceType = $this->placeOrderServiceType ?: ($this->placeOrderCounterId ? 'parcel' : 'dine_in');
+            $paymentMethod = in_array(strtolower($this->placeOrderPaymentMethod), ['cash', 'upi', 'card', 'online']) ? strtolower($this->placeOrderPaymentMethod) : 'cash';
 
-        $order = Order::create($orderData);
+            $validatedItems = [];
+            $outOfStockItemNames = [];
 
-        foreach ($validatedItems as $item) {
-            $menuItem = MenuItem::find($item['id']);
-            if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
-                $menuItem->decrement('stock_quantity', $item['quantity']);
-                if ($menuItem->fresh()->stock_quantity <= 0) {
-                    $menuItem->update(['is_available' => false]);
+            DB::transaction(function () use (&$validatedItems, &$outOfStockItemNames) {
+                foreach ($this->placeOrderCart as $cartItem) {
+                    $menuItem = MenuItem::where('id', $cartItem['id'])->lockForUpdate()->first();
+                    if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
+                        if ($menuItem->stock_quantity <= 0) {
+                            $outOfStockItemNames[] = $menuItem->name;
+                            continue;
+                        } elseif ($menuItem->stock_quantity < $cartItem['quantity']) {
+                            $cartItem['quantity'] = $menuItem->stock_quantity;
+                        }
+                    }
+                    $validatedItems[] = $cartItem;
                 }
+            });
+
+            if (!empty($outOfStockItemNames)) {
+                Notification::make()->title('Some Items Sold Out!')->body(implode(', ', $outOfStockItemNames))->warning()->send();
             }
-            $order->items()->create([
-                'menu_item_id' => $item['id'],
-                'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
-                'quantity' => $item['quantity'],
-                'confirmed_qty' => $item['quantity'],
-                'requested_qty' => $item['quantity'],
-                'unit_price' => $item['unit_price'],
-                'total_price' => $item['unit_price'] * $item['quantity'],
-                'notes' => $item['notes'] ?? null,
+
+            if (empty($validatedItems)) {
+                return;
+            }
+
+            $totalAmount = collect($validatedItems)->sum(fn($i) => $i['unit_price'] * $i['quantity']);
+
+            // Financial Adjustments: Discount, GST Tax, Extra Charges
+            $subtotal = $totalAmount;
+            $discount = max(0, (float) $this->instantBillDiscount);
+            $taxableSubtotal = max(0, $subtotal - $discount);
+            $taxPercent = max(0, (float) $this->instantBillTaxPercent);
+            $taxAmount = round($taxableSubtotal * ($taxPercent / 100), 2);
+            $extraCharges = max(0, (float) $this->instantBillExtraCharges);
+            $grandTotal = round($taxableSubtotal + $taxAmount + $extraCharges, 2);
+
+            // Session Resolution or Creation
+            $session = null;
+            $orderData = [];
+
+            if ($serviceType === 'parcel' || $this->placeOrderCounterId) {
+                $counterId = $this->placeOrderCounterId;
+                if (!$counterId) {
+                    $firstCounter = ParcelQrCode::where('restaurant_id', $user->restaurant_id)
+                        ->when($user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id))
+                        ->first();
+                    $counterId = $firstCounter?->id;
+                }
+
+                $session = ParcelQrSession::create([
+                    'restaurant_id' => $user->restaurant_id,
+                    'branch_id' => $user->branch_id,
+                    'parcel_qr_code_id' => $counterId,
+                    'customer_name' => $customerName,
+                    'customer_phone' => $customerPhone,
+                    'session_token' => 'INST-' . Str::random(16),
+                    'status' => 'completed',
+                    'is_active' => false,
+                ]);
+
+                $orderData = [
+                    'parcel_qr_session_id' => $session->id,
+                    'service_type' => 'parcel',
+                ];
+            } else {
+                // Dine In
+                $tableId = $this->placeOrderTableId;
+                if (!$tableId) {
+                    $firstTable = RestaurantTable::where('restaurant_id', $user->restaurant_id)
+                        ->when($user->branch_id, fn($q) => $q->where('branch_id', $user->branch_id))
+                        ->first();
+                    $tableId = $firstTable?->id;
+                }
+
+                $session = QrSession::create([
+                    'restaurant_id' => $user->restaurant_id,
+                    'branch_id' => $user->branch_id,
+                    'restaurant_table_id' => $tableId,
+                    'customer_name' => $customerName,
+                    'customer_phone' => $customerPhone,
+                    'session_token' => 'INST-' . Str::random(16),
+                    'status' => 'completed',
+                    'is_active' => false,
+                    'expires_at' => now()->addHours(2),
+                ]);
+
+                $orderData = [
+                    'restaurant_table_id' => $tableId,
+                    'qr_session_id' => $session->id,
+                    'service_type' => 'dine_in',
+                ];
+            }
+
+            $orderData = array_merge($orderData, [
+                'restaurant_id' => $user->restaurant_id,
+                'branch_id' => $user->branch_id,
+                'customer_name' => $customerName,
+                'customer_phone' => $customerPhone,
+                'notes' => $this->placeOrderNotes,
+                'total_amount' => $grandTotal,
+                'confirmed_total' => $grandTotal,
+                'status' => 'served',
+                'payment_status' => 'paid',
             ]);
+
+            $order = Order::create($orderData);
+
+            foreach ($validatedItems as $item) {
+                $menuItem = MenuItem::find($item['id']);
+                if ($menuItem && $menuItem->track_stock && $menuItem->stock_quantity !== null) {
+                    $menuItem->decrement('stock_quantity', $item['quantity']);
+                    if ($menuItem->fresh()->stock_quantity <= 0) {
+                        $menuItem->update(['is_available' => false]);
+                    }
+                }
+                $order->items()->create([
+                    'menu_item_id' => $item['id'],
+                    'item_name' => $menuItem ? $menuItem->name : 'Custom Item',
+                    'quantity' => $item['quantity'],
+                    'confirmed_qty' => $item['quantity'],
+                    'requested_qty' => $item['quantity'],
+                    'unit_price' => $item['unit_price'],
+                    'total_price' => $item['unit_price'] * $item['quantity'],
+                    'notes' => $item['notes'] ?? null,
+                    'status' => 'served',
+                ]);
+            }
+
+            if (auth()->user()->restaurant?->has_detailed_inventory) {
+                InventoryService::deductForOrder($order);
+            }
+
+            // Create Payment record
+            $billNumber = $this->generateBillNumber();
+            $transactionRef = 'INST-' . strtoupper(Str::random(10));
+
+            $payment = Payment::create([
+                'restaurant_id' => $user->restaurant_id,
+                'branch_id' => $user->branch_id,
+                'order_id' => $order->id,
+                'amount' => $grandTotal,
+                'subtotal' => $subtotal,
+                'discount_amount' => $discount,
+                'tax_amount' => $taxAmount,
+                'extra_charges' => $extraCharges,
+                'status' => 'paid',
+                'paid_at' => now(),
+                'payment_method' => $paymentMethod,
+                'transaction_reference' => $transactionRef,
+                'bill_number' => $billNumber,
+            ]);
+
+            // Generate Tax Invoice
+            $invoice = \App\Services\Orders\InvoiceService::generateInvoice($session, $payment);
+
+            // Print Thermal Receipt
+            $this->printThermalInvoiceReceipt($invoice, $payment, $order, $session);
+
+            OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
+
+            Notification::make()
+                ->title("⚡ Instant Bill #{$billNumber} Printed!")
+                ->body("Tax Invoice #{$invoice->invoice_number} created for {$customerName} ({$paymentMethod}).")
+                ->success()
+                ->send();
+
+            $this->closePlaceOrder();
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Instant Billing Exception: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+            Notification::make()->title('Instant Billing Failed')->body($e->getMessage())->danger()->send();
+        } finally {
+            $this->isSubmittingOrder = false;
+        }
+    }
+
+    public function printThermalInvoiceReceipt($invoice, $payment, $order, $session): void
+    {
+        $user = auth()->user();
+        $restaurant = \App\Models\Restaurant::find($user->restaurant_id);
+        $branch = $user->branch_id ? \App\Models\Branch::find($user->branch_id) : null;
+
+        $brandName = $branch ? $branch->name : ($restaurant ? $restaurant->name : 'RESTAURANT');
+        $address = $branch ? $branch->address : ($restaurant ? $restaurant->address : '');
+        $phone = $branch ? $branch->phone : ($restaurant ? $restaurant->phone : '');
+        $gstIn = $restaurant ? $restaurant->gstin_number : 'UNREGISTERED';
+        $upiId = $branch ? $branch->upi_id : ($restaurant ? $restaurant->upi_id : null);
+
+        $locationName = 'Counter / Parcel';
+        if ($order->service_type === 'dine_in' && $order->restaurantTable) {
+            $locationName = 'Table ' . $order->restaurantTable->table_number;
+        } elseif ($session instanceof QrSession && $session->restaurantTable) {
+            $locationName = 'Table ' . $session->restaurantTable->table_number;
         }
 
-        if (auth()->user()->restaurant?->has_detailed_inventory) {
-            InventoryService::deductForOrder($order);
+        $mergedItems = [];
+        $totalQty = 0;
+        foreach ($order->items as $item) {
+            $displayQty = (int) ($item->confirmed_qty ?? $item->quantity);
+            if ($displayQty <= 0) continue;
+            $rate = (float) $item->unit_price;
+            $name = trim($item->item_name);
+            $key = ($item->menu_item_id ? ('menu_' . $item->menu_item_id) : ('name_' . md5($name))) . '_' . number_format($rate, 2, '.', '');
+
+            if (!isset($mergedItems[$key])) {
+                $mergedItems[$key] = [
+                    'name' => $name,
+                    'qty' => 0,
+                    'rate' => $rate,
+                    'amount' => 0,
+                ];
+            }
+            $mergedItems[$key]['qty'] += $displayQty;
+            $mergedItems[$key]['amount'] += ($rate * $displayQty);
+            $totalQty += $displayQty;
         }
 
-        $priorityVal = match ($this->placeOrderPriority) {
-            'urgent' => 10,
-            'hold' => -5,
-            default => 0,
-        };
+        $itemsHtml = '';
+        foreach ($mergedItems as $mItem) {
+            $itemsHtml .= "<tr>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000;'>{$mItem['name']}</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: center; font-weight: bold;'>{$mItem['qty']}</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($mItem['rate'], 2) . "</td>
+                <td style='padding: 5px 0; border-bottom: 1px dashed #000; text-align: right;'>" . number_format($mItem['amount'], 2) . "</td>
+            </tr>";
+        }
 
-        KitchenQueue::firstOrCreate(['order_id' => $order->id], ['current_status' => 'placed', 'priority' => $priorityVal]);
-        OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
-        
-        Notification::make()->title("KOT #{$order->id} Sent to Kitchen for {$customerName}!")->success()->send();
+        $qrHtml = '';
+        if ($this->instantBillIncludeQr && !empty($upiId)) {
+            $upiUrl = "upi://pay?pa={$upiId}&pn=" . urlencode($brandName) . "&am={$payment->amount}&cu=INR&tr={$payment->transaction_reference}";
+            $qrSize = ($this->instantBillPaperSize === '58mm') ? 95 : 120;
+            $qrSvg = (string) \SimpleSoftwareIO\QrCode\Facades\QrCode::size($qrSize)->margin(0)->generate($upiUrl);
 
-        $this->closePlaceOrder();
+            $qrHtml = "
+            <div style='text-align: center; margin-top: 12px; padding-top: 8px; border-top: 1px dashed #000;'>
+                <div style='font-size: 10px; font-weight: bold; margin-bottom: 6px;'>SCAN TO PAY VIA UPI: ₹" . number_format($payment->amount, 0) . "</div>
+                <div style='display: block; margin: 0 auto;'>{$qrSvg}</div>
+            </div>";
+        }
+
+        $subtotal = (float) ($payment->subtotal ?? $order->total_amount);
+        $discountAmt = (float) ($payment->discount_amount ?? 0);
+        $taxAmt = (float) ($invoice->total_tax_amount ?? $payment->tax_amount ?? 0);
+        $extraCharges = (float) ($payment->extra_charges ?? 0);
+        $grandTotal = (float) ($invoice->grand_total ?? $payment->amount);
+
+        $totalItemTypes = count($mergedItems);
+        $breakdownHtml = "<div style='font-size: 11px; margin-bottom: 4px; color: #334155; font-weight: bold;'>Total Qty: {$totalQty} ({$totalItemTypes} Items)</div>";
+        $breakdownHtml .= "<div>Sub Total: ₹" . number_format($subtotal, 2) . "</div>";
+        if ($discountAmt > 0) {
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>Discount: -₹" . number_format($discountAmt, 2) . "</div>";
+        }
+        if ($taxAmt > 0) {
+            $halfTax = $taxAmt / 2;
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>CGST: ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>SGST: ₹" . number_format($halfTax, 2) . "</div>";
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px; font-weight: bold;'>Total GST: ₹" . number_format($taxAmt, 2) . "</div>";
+        }
+        if ($extraCharges > 0) {
+            $breakdownHtml .= "<div style='font-size: 11px; margin-top: 2px;'>Extra / Packaging: +₹" . number_format($extraCharges, 2) . "</div>";
+        }
+        $breakdownHtml .= "<div style='font-size: 16px; margin-top: 5px; border-top: 1px dashed #000; padding-top: 4px; font-weight: 900;'>Grand Total: ₹" . number_format($grandTotal, 2) . "</div>";
+
+        $paymentModeText = strtoupper($payment->payment_method ?: 'CASH');
+        $custPhoneText = $order->customer_phone ? " | Ph: {$order->customer_phone}" : "";
+
+        // Paper Size Formats (80mm vs 58mm vs A4)
+        if ($this->instantBillPaperSize === '58mm') {
+            $pageStyle = "@page { margin: 0; size: 58mm auto; } body { width: 50mm; margin: 2mm auto; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; line-height: 1.2; } table { width: 100%; border-collapse: collapse; font-size: 9px; }";
+            $headerTitleSize = "15px";
+        } elseif ($this->instantBillPaperSize === 'a4') {
+            $pageStyle = "@page { margin: 15mm; size: A4 portrait; } body { max-width: 170mm; margin: 0 auto; font-family: Arial, sans-serif; font-size: 13px; color: #000; line-height: 1.4; } table { width: 100%; border-collapse: collapse; font-size: 12px; }";
+            $headerTitleSize = "22px";
+        } else { // 80mm default
+            $pageStyle = "@page { margin: 0; size: 80mm auto; } body { width: 72mm; margin: 4mm auto; font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; line-height: 1.3; } table { width: 100%; border-collapse: collapse; font-size: 11px; }";
+            $headerTitleSize = "18px";
+        }
+
+        $html = "
+        <html><head><style>{$pageStyle}</style></head>
+        <body>
+            <div style='text-align:center;'>
+                <h2 style='margin:0; font-size:{$headerTitleSize}; font-weight:bold; text-transform: uppercase;'>{$brandName}</h2>
+                <div style='font-size: 11px; margin-top: 3px;'>{$address}</div>
+                <div style='font-size: 11px; margin-top: 2px;'>MOB: {$phone}</div>
+                <div style='font-size: 11px; margin-top: 2px;'>GSTIN: {$gstIn}</div>
+                <div style='font-size: 12px; font-weight: bold; margin-top: 4px; text-decoration: underline;'>TAX INVOICE</div>
+            </div>
+            <hr style='border-top:1px dashed #000; margin:8px 0;'/>
+            <div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold;'>
+                <span>Inv: {$invoice->invoice_number}</span>
+                <span>Date: " . now()->format('d/m/Y H:i') . "</span>
+            </div>
+            <div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-top: 2px;'>
+                <span>Bill: {$payment->bill_number}</span>
+                <span>Mode: {$paymentModeText}</span>
+            </div>
+            <div style='display: flex; justify-content: space-between; font-size: 11px; font-weight: bold; margin-top: 3px;'>
+                <span>Cust: {$order->customer_name}{$custPhoneText}</span>
+            </div>
+            <div style='font-size: 11px; font-weight: bold; margin-top: 3px;'>LOC: {$locationName}</div>
+            <hr style='border-top:1px dashed #000; margin:8px 0;'/>
+            <table>
+                <thead>
+                    <tr style='text-transform: uppercase; font-size: 10px; border-bottom: 1px dashed #000;'>
+                        <th style='text-align:left; padding-bottom:4px;'>Item</th><th style='text-align:center; padding-bottom:4px;'>Qty</th><th style='text-align:right; padding-bottom:4px;'>Rate</th><th style='text-align:right; padding-bottom:4px;'>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>{$itemsHtml}</tbody>
+                <tfoot>
+                    <tr style='border-top: 1px dashed #000; border-bottom: 1px dashed #000; font-weight: bold; font-size: 11px;'>
+                        <td style='padding: 6px 0; text-transform: uppercase;'>TOTAL QTY</td>
+                        <td style='padding: 6px 0; text-align: center; font-size: 12px;'>{$totalQty}</td>
+                        <td colspan='2' style='padding: 6px 0; text-align: right;'>{$totalItemTypes} Items</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <div style='text-align:right; margin-top: 8px; font-size: 12px; font-weight: bold;'>
+                {$breakdownHtml}
+            </div>
+
+            {$qrHtml}
+
+            <div style='text-align:center; margin-top:16px; font-size:11px; font-weight:bold;'>*** THANK YOU FOR VISITING! ***</div>
+        </body></html>";
+
+        $escapedHtml = json_encode($html);
+
+        $this->js("
+            const printWindow = window.open('', '_blank', 'width=400,height=600');
+            printWindow.document.write({$escapedHtml});
+            printWindow.document.close();
+            setTimeout(() => { printWindow.focus(); printWindow.print(); printWindow.onafterprint = () => printWindow.close(); }, 250);
+        ");
     }
 
     public function placeOrderAction(): Action
@@ -1882,6 +2376,17 @@ class ManagerDashboard extends Page
             ->form([
                 TextInput::make('customer_name')
                     ->label('Customer Name')
+                    ->required(),
+                Select::make('status')
+                    ->label('Order Status')
+                    ->options([
+                        'placed' => 'Placed',
+                        'accepted' => 'Accepted',
+                        'preparing' => 'Preparing',
+                        'ready' => 'Ready',
+                        'served' => 'Served',
+                        'cancelled' => 'Cancelled / Rejected',
+                    ])
                     ->required(),
                 Repeater::make('items')->schema([
                     Hidden::make('id'),
@@ -1910,6 +2415,16 @@ class ManagerDashboard extends Page
                         ->live()
                         ->afterStateUpdated(fn($state, callable $set) => $set('unit_price', MenuItem::find($state)?->price ?? 0)),
                     TextInput::make('quantity')->numeric()->minValue(1)->required(),
+                    Select::make('status')
+                        ->label('Item Status')
+                        ->options([
+                            'placed' => 'Waiting (Placed)',
+                            'preparing' => 'Cooking (Preparing)',
+                            'ready' => 'Ready',
+                            'served' => 'Served',
+                        ])
+                        ->default('placed')
+                        ->required(),
                     Hidden::make('unit_price'),
                     TextInput::make('notes')->nullable(),
                 ])->columns(2)->addActionLabel('Add Item'),
@@ -1920,7 +2435,15 @@ class ManagerDashboard extends Page
                     return [];
                 return [
                     'customer_name' => $order->customer_name,
-                    'items' => $order->items->map(fn($item) => ['id' => $item->id, 'menu_item_id' => $item->menu_item_id, 'quantity' => $item->quantity, 'unit_price' => $item->unit_price, 'notes' => $item->notes])->toArray(),
+                    'status' => $order->status,
+                    'items' => $order->items->map(fn($item) => [
+                        'id' => $item->id,
+                        'menu_item_id' => $item->menu_item_id,
+                        'quantity' => $item->quantity,
+                        'status' => $item->status ?? 'placed',
+                        'unit_price' => $item->unit_price,
+                        'notes' => $item->notes,
+                    ])->toArray(),
                 ];
             })
             ->action(function (array $data, array $arguments) {
@@ -1935,6 +2458,7 @@ class ManagerDashboard extends Page
                     $totalPrice = $itemData['unit_price'] * $itemData['quantity'];
                     $totalAmount += $totalPrice;
                     $menuItem = MenuItem::find($itemData['menu_item_id']);
+                    $itemStatus = $itemData['status'] ?? 'placed';
 
                     if (!empty($itemData['id'])) {
                         $orderItem = $order->items()->find($itemData['id']);
@@ -1948,6 +2472,7 @@ class ManagerDashboard extends Page
                                 'unit_price' => $itemData['unit_price'],
                                 'total_price' => $totalPrice,
                                 'notes' => $itemData['notes'] ?? null,
+                                'status' => $itemStatus,
                             ]);
                             $existingItemIds[] = $orderItem->id;
                         }
@@ -1961,17 +2486,26 @@ class ManagerDashboard extends Page
                             'unit_price' => $itemData['unit_price'],
                             'total_price' => $totalPrice,
                             'notes' => $itemData['notes'] ?? null,
+                            'status' => $itemStatus,
                         ]);
                         $existingItemIds[] = $newItem->id;
                     }
                 }
 
                 $order->items()->whereNotIn('id', $existingItemIds)->delete();
+                $newOrderStatus = $data['status'] ?? $order->status;
                 $order->update([
                     'customer_name' => $data['customer_name'] ?? $order->customer_name,
+                    'status' => $newOrderStatus,
                     'total_amount' => $totalAmount,
                     'confirmed_total' => $totalAmount,
                 ]);
+
+                if (in_array($newOrderStatus, ['placed', 'preparing', 'ready'])) {
+                    KitchenQueue::updateOrCreate(['order_id' => $order->id], ['current_status' => $newOrderStatus]);
+                } elseif (in_array($newOrderStatus, ['served', 'completed', 'cancelled', 'rejected'])) {
+                    KitchenQueue::where('order_id', $order->id)->delete();
+                }
 
                 OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
                 Notification::make()->title('Order updated.')->success()->send();
@@ -2093,6 +2627,26 @@ class ManagerDashboard extends Page
     {
         $user = auth()->user();
         $order = Order::with('items')->where('restaurant_id', $user->restaurant_id)->findOrFail($orderId);
+
+        // Idempotency: exact same status is a no-op to guarantee single action = single reaction
+        if ($order->status === $status) {
+            return;
+        }
+
+        // Prevent duplicate acceptance / stock deduction
+        if ($status === 'accepted' && in_array($order->status, ['accepted', 'partial_accepted'])) {
+            return;
+        }
+
+        // Prevent duplicate delivery or cancellation
+        if ($status === 'served' && in_array($order->status, ['served', 'completed'])) {
+            return;
+        }
+
+        if (in_array($status, ['rejected', 'cancelled']) && in_array($order->status, ['rejected', 'cancelled'])) {
+            return;
+        }
+
         $oldStatus = $order->status;
         $stockNotes = [];
         $wasPartial = false;
@@ -2162,24 +2716,68 @@ class ManagerDashboard extends Page
 
         } else {
             $order->update(['status' => $status]);
-            if (in_array($status, ['preparing', 'ready', 'served'])) {
-                KitchenQueue::where('order_id', $order->id)->update(['current_status' => $status]);
-            }
 
-            if ($status === 'preparing') {
+            // Synchronize items and kitchen queue
+            if ($status === 'placed') {
+                $order->items()->where('quantity', '>', 0)->where('status', '!=', 'cancelled')->update(['status' => 'placed']);
+                KitchenQueue::updateOrCreate(['order_id' => $order->id], ['current_status' => 'placed']);
+                Notification::make()->title("Order #{$orderId} moved to Placed")->info()->send();
+            } elseif ($status === 'preparing') {
+                $order->items()->where('quantity', '>', 0)->where('status', 'placed')->update(['status' => 'preparing']);
+                KitchenQueue::updateOrCreate(['order_id' => $order->id], ['current_status' => 'preparing']);
                 Notification::make()->title("Order #{$orderId} is Preparing 🍳")->success()->send();
             } elseif ($status === 'ready') {
+                $order->items()->where('quantity', '>', 0)->where('status', '!=', 'cancelled')->update(['status' => 'ready']);
+                KitchenQueue::updateOrCreate(['order_id' => $order->id], ['current_status' => 'ready']);
                 Notification::make()->title("Order #{$orderId} is Ready 🛎️")->success()->send();
             } elseif ($status === 'served') {
+                $order->items()->update(['status' => 'served']);
+                KitchenQueue::where('order_id', $order->id)->delete();
                 Notification::make()->title("Order #{$orderId} Delivered ✔️")->success()->send();
-            } elseif ($status === 'rejected') {
-                Notification::make()->title("Order #{$orderId} Rejected ❌")->danger()->send();
+            } elseif (in_array($status, ['rejected', 'cancelled'])) {
+                $order->items()->update(['status' => 'cancelled']);
+                KitchenQueue::where('order_id', $order->id)->delete();
+                Notification::make()->title("Order #{$orderId} Cancelled ❌")->danger()->send();
             }
         }
 
         OrderStatusLog::create(['order_id' => $order->id, 'from_status' => $oldStatus, 'to_status' => $order->fresh()->status, 'changed_by' => $user->id]);
         OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
         event(new \App\Events\StockUpdated($order->restaurant_id));
+    }
+
+    public function updateItemStatus($itemId, $newStatus)
+    {
+        $user = auth()->user();
+        $item = OrderItem::whereHas('order', function ($q) use ($user) {
+            $q->where('restaurant_id', $user->restaurant_id);
+            if ($user->branch_id) {
+                $q->where('branch_id', $user->branch_id);
+            }
+        })->findOrFail($itemId);
+
+        // Idempotency: exact same item status is a no-op
+        if ($item->status === $newStatus) {
+            return;
+        }
+
+        $order = $item->order;
+        $oldOrderStatus = $order->status;
+
+        DB::transaction(function () use ($item, $newStatus, $order) {
+            $item->update(['status' => $newStatus]);
+            $order->syncStatusFromItems(true);
+        });
+
+        // Broadcast if syncStatusFromItems did not change overall order status
+        if ($oldOrderStatus === $order->fresh()->status) {
+            OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
+        }
+
+        Notification::make()
+            ->title("{$item->item_name} marked as " . strtoupper(str_replace('_', ' ', $newStatus)))
+            ->success()
+            ->send();
     }
 
     protected function getViewData(): array
@@ -2333,6 +2931,10 @@ class ManagerDashboard extends Page
             $data['selectedEntityData'] = RestaurantTable::find($this->selectedTableId);
             $activeSessions = QrSession::where('restaurant_table_id', $this->selectedTableId)
                 ->where('is_active', true)
+                ->where(function($q) {
+                    $q->where('is_primary', true)
+                      ->orWhere('join_status', 'approved');
+                })
                 ->orderBy('created_at', 'asc')
                 ->get();
             $data['activeDinersList'] = $activeSessions;

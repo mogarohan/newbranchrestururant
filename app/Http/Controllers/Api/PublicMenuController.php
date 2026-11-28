@@ -102,7 +102,7 @@ class PublicMenuController extends Controller
                 ($session->last_activity_at && $session->last_activity_at->diffInHours(now()) >= 3);
         } else {
             $isExpired =
-                !$session->is_active ||
+                (!$session->is_active && $session->join_status !== 'pending') ||
                 Carbon::parse($session->expires_at)->isPast();
         }
 

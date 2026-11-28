@@ -12,6 +12,7 @@ use App\Models\RoomSession;
 use App\Models\ParcelQrSession;
 use App\Models\ParcelQrCode;
 use App\Models\MenuItem;
+use App\Models\OrderItem;
 use App\Models\Category;
 use Filament\Pages\Page;
 use App\Models\ActivityLog;
@@ -52,6 +53,8 @@ class WaiterDashboard extends Page
 
     // Active Assistance & Buzzer Alerts
     public $activeAlerts = [];
+    public array $alertedReadyItemIds = [];
+    public array $alertedReadyOrderIds = [];
 
     // Detailed Table Drawer
     public $viewingTableId = null;
@@ -190,10 +193,10 @@ class WaiterDashboard extends Page
         ]);
 
         // 2. Play Web Audio Chime (double bell ding-dong)
-        $this->dispatch('play-sound', ['type' => 'call']);
+        $this->dispatch('play-sound', type: 'call');
 
         // 3. Indian English / Hindi Speech Voice
-        $this->dispatch('speak-notification', ['text' => "Table number {$numSpeech} needs assistance."]);
+        $this->dispatch('speak-notification', text: "Table number {$numSpeech} needs assistance.");
 
         $this->dispatch('$refresh');
     }
@@ -239,7 +242,10 @@ class WaiterDashboard extends Page
             ]);
 
             // 2. Web Audio Chime (cash register tone)
-            $this->dispatch('play-sound', ['type' => 'bill']);
+            $this->dispatch('play-sound', type: 'bill');
+
+            // 3. Speech Voice
+            $this->dispatch('speak-notification', text: "Bill requested for Table number {$numSpeech}.");
 
             // 3. Voice TTS
             $this->dispatch('speak-notification', ['text' => "Bill requested at Table number {$numSpeech}."]);
@@ -260,30 +266,52 @@ class WaiterDashboard extends Page
         $status = $order['status'] ?? null;
         $orderId = $order['id'] ?? '?';
 
-        if ($status === 'ready') {
-            $serviceType = $order['service_type'] ?? 'dine_in';
-            $displayLocation = 'Unknown';
-            $speechLocation = 'Unknown Location';
+        $serviceType = $order['service_type'] ?? 'dine_in';
+        $displayLocation = 'Unknown';
+        $speechLocation = 'Unknown Location';
 
-            if ($serviceType === 'parcel') {
-                $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Counter';
-                $displayLocation = "🛍️ Parcel ({$counterName})";
-                $speechLocation = "Parcel Counter {$counterName}";
-            } elseif ($serviceType === 'room_service') {
-                $roomNum = $order['room_session']['room']['room_number'] ?? '?';
-                $displayLocation = "🚪 Room {$roomNum}";
-                $speechLocation = "Room {$roomNum}";
+        if ($serviceType === 'parcel') {
+            $counterName = $order['parcel_qr_session']['parcel_qr_code']['name'] ?? 'Counter';
+            $displayLocation = "🛍️ Parcel ({$counterName})";
+            $speechLocation = "Parcel Counter {$counterName}";
+        } elseif ($serviceType === 'room_service') {
+            $roomNum = $order['room_session']['room']['room_number'] ?? '?';
+            $displayLocation = "🚪 Room {$roomNum}";
+            $speechLocation = "Room {$roomNum}";
+        } else {
+            $tableNum = $order['restaurant_table_id']
+                ? RestaurantTable::where('id', $order['restaurant_table_id'])->value('table_number')
+                : ($order['table_number'] ?? '?');
+            $displayLocation = $this->formatTableNumber($tableNum);
+            $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
+            $speechLocation = "Table number " . (is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : $cleanSpeechNum);
+        }
+
+        // Check for newly ready individual items
+        $items = $order['items'] ?? [];
+        $newlyReadyItems = [];
+
+        foreach ($items as $item) {
+            $itemId = $item['id'] ?? null;
+            if (!$itemId) continue;
+
+            if (($item['status'] ?? '') === 'ready') {
+                if (!in_array($itemId, $this->alertedReadyItemIds)) {
+                    $this->alertedReadyItemIds[] = $itemId;
+                    $newlyReadyItems[] = $item;
+                }
             } else {
-                $tableNum = $order['restaurant_table_id']
-                    ? RestaurantTable::where('id', $order['restaurant_table_id'])->value('table_number')
-                    : ($order['table_number'] ?? '?');
-                $displayLocation = $this->formatTableNumber($tableNum);
-                $cleanSpeechNum = str_replace(['Table-', 'Table - ', 'Table ', 'T-', 't-'], '', $tableNum);
-                $speechLocation = "Table number " . (is_numeric($cleanSpeechNum) ? (int)$cleanSpeechNum : $cleanSpeechNum);
+                $this->alertedReadyItemIds = array_values(array_diff($this->alertedReadyItemIds, [$itemId]));
             }
+        }
+
+        if (!empty($newlyReadyItems)) {
+            $itemsSummary = collect($newlyReadyItems)
+                ->map(fn($i) => ($i['quantity'] ?? 1) . 'x ' . ($i['item_name'] ?? 'Item'))
+                ->implode(', ');
 
             Notification::make()
-                ->title("🛎️ Order #{$orderId} is READY for Pickup!")
+                ->title("🛎️ Ready for Pickup: {$itemsSummary}")
                 ->body("Location: {$displayLocation}. Food is hot at the pass.")
                 ->success()
                 ->duration(4000)
@@ -291,18 +319,42 @@ class WaiterDashboard extends Page
 
             // 1. Desktop Browser Notification
             $this->dispatch('trigger-browser-notification', [
-                'title' => "🛎️ Order #{$orderId} READY for Pickup!",
+                'title' => "🛎️ Food Ready: {$itemsSummary}",
                 'body' => "Destination: {$displayLocation}. Please serve promptly.",
                 'type' => 'ready'
             ]);
 
             // 2. Web Audio Chime (ascending 3-bell pass chime)
-            $this->dispatch('play-sound', ['type' => 'ready']);
+            $this->dispatch('play-sound', type: 'ready');
 
-            // 3. Voice TTS
-            $this->dispatch('speak-notification', [
-                'text' => "Order number {$orderId} is ready for {$speechLocation}."
-            ]);
+            // 3. Voice TTS announcement
+            $speechItemText = count($newlyReadyItems) === 1 
+                ? ($newlyReadyItems[0]['item_name'] ?? 'Dish') 
+                : (count($newlyReadyItems) . " dishes");
+            $this->dispatch('speak-notification', text: "{$speechItemText} is ready for {$speechLocation}.");
+        } elseif ($status === 'ready') {
+            if (!in_array($orderId, $this->alertedReadyOrderIds)) {
+                $this->alertedReadyOrderIds[] = $orderId;
+
+                Notification::make()
+                    ->title("🛎️ Order #{$orderId} is READY for Pickup!")
+                    ->body("Location: {$displayLocation}. Food is hot at the pass.")
+                    ->success()
+                    ->duration(4000)
+                    ->send();
+
+                $this->dispatch('trigger-browser-notification', [
+                    'title' => "🛎️ Order #{$orderId} READY for Pickup!",
+                    'body' => "Destination: {$displayLocation}. Please serve promptly.",
+                    'type' => 'ready'
+                ]);
+
+                $this->dispatch('play-sound', type: 'ready');
+
+                $this->dispatch('speak-notification', text: "Order number {$orderId} is ready for {$speechLocation}.");
+            }
+        } else {
+            $this->alertedReadyOrderIds = array_values(array_diff($this->alertedReadyOrderIds, [$orderId]));
         }
 
         $this->dispatch('$refresh');
@@ -357,11 +409,62 @@ class WaiterDashboard extends Page
         Notification::make()->title('Alert attended and dismissed')->success()->send();
     }
 
+    public function markItemAsServed($itemId): void
+    {
+        $user = auth()->user();
+        $item = OrderItem::whereHas('order', function ($q) use ($user) {
+            $q->where('restaurant_id', $user->restaurant_id);
+            if ($user->branch_id) {
+                $q->where('branch_id', $user->branch_id);
+            }
+        })->with('order.items')->findOrFail($itemId);
+
+        if ($item->status === 'served') {
+            return;
+        }
+
+        $order = $item->order;
+
+        DB::transaction(function () use ($item, $order, $user) {
+            $item->update(['status' => 'served']);
+            $order->syncStatusFromItems(true);
+
+            if ($order->fresh()->status === 'served') {
+                KitchenQueue::where('order_id', $order->id)->delete();
+                $user->increment('total_served');
+            }
+
+            ActivityLog::create([
+                'actor_type' => 'staff',
+                'actor_id' => $user->id,
+                'action' => 'marked_item_served',
+                'entity_type' => OrderItem::class,
+                'entity_id' => $item->id,
+                'metadata' => [
+                    'order_id' => $order->id,
+                    'item_name' => $item->item_name,
+                    'table_id' => $order->restaurant_table_id,
+                ]
+            ]);
+        });
+
+        OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
+
+        $tableLabel = $order->table ? $this->formatTableNumber($order->table->table_number) : "Order #{$order->id}";
+        Notification::make()
+            ->title("{$item->item_name} Delivered ✔️")
+            ->body("Delivered to {$tableLabel}.")
+            ->success()
+            ->send();
+
+        $this->dispatch('$refresh');
+    }
+
     public function markAsServed($orderId): void
     {
         $user = auth()->user();
 
-        $query = Order::where('restaurant_id', $user->restaurant_id)->where('id', $orderId);
+        $query = Order::with('items')->where('restaurant_id', $user->restaurant_id)->where('id', $orderId);
         if ($user->branch_id) {
             $query->where('branch_id', $user->branch_id);
         }
@@ -374,18 +477,28 @@ class WaiterDashboard extends Page
         }
 
         DB::transaction(function () use ($order, $user) {
-            $oldStatus = $order->status;
-            $order->update(['status' => 'served']);
-            KitchenQueue::where('order_id', $order->id)->delete();
+            // Check if some items are still cooking or waiting
+            $hasUnfinishedItems = $order->items()->whereNotIn('status', ['ready', 'served', 'cancelled'])->exists();
 
-            $user->increment('total_served');
+            if ($hasUnfinishedItems) {
+                // Deliver all currently ready items
+                $order->items()->where('status', 'ready')->update(['status' => 'served']);
+                $order->syncStatusFromItems(true);
+            } else {
+                // All remaining items are ready or already served - complete whole order
+                $oldStatus = $order->status;
+                $order->items()->where('status', '!=', 'cancelled')->update(['status' => 'served']);
+                $order->update(['status' => 'served']);
+                KitchenQueue::where('order_id', $order->id)->delete();
+                $user->increment('total_served');
 
-            OrderStatusLog::create([
-                'order_id' => $order->id,
-                'from_status' => $oldStatus,
-                'to_status' => 'served',
-                'changed_by' => $user->id,
-            ]);
+                OrderStatusLog::create([
+                    'order_id' => $order->id,
+                    'from_status' => $oldStatus,
+                    'to_status' => 'served',
+                    'changed_by' => $user->id,
+                ]);
+            }
 
             ActivityLog::create([
                 'actor_type' => 'staff',
@@ -401,10 +514,10 @@ class WaiterDashboard extends Page
             ]);
         });
 
-        event(new OrderStatusUpdated($order));
+        OrderStatusUpdated::dispatch($order->fresh(['items.menuItem']));
 
         Notification::make()
-            ->title("Order #{$order->id} Marked as Served ✔️")
+            ->title("Items for Order #{$order->id} Marked as Served ✔️")
             ->body("Delivered to guest.")
             ->success()
             ->send();
@@ -691,6 +804,7 @@ class WaiterDashboard extends Page
                 'unit_price' => $item['unit_price'],
                 'total_price' => $item['unit_price'] * $item['quantity'],
                 'notes' => $item['notes'] ?? null,
+                'status' => 'placed',
             ]);
         }
 
@@ -747,7 +861,10 @@ class WaiterDashboard extends Page
             'parcelQrSession.parcelQrCode'
         ])
         ->where('restaurant_id', $user->restaurant_id)
-        ->where('status', 'ready');
+        ->where(function ($q) {
+            $q->where('status', 'ready')
+              ->orWhereHas('items', fn($iq) => $iq->where('status', 'ready'));
+        });
 
         if ($user->branch_id) {
             $query->where('branch_id', $user->branch_id);

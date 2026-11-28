@@ -43,11 +43,14 @@ class OrderStatusUpdated implements ShouldBroadcastNow
             'payment_status' => $order->payment_status,
             'notes' => $order->notes,
             'total_amount' => (float) ($order->confirmed_total ?? $order->total_amount),
+            'actor_id' => auth()->id() ?? null,
+            'actor_type' => auth()->check() ? 'staff' : 'customer',
             'items' => $order->items ? $order->items->map(function ($item) {
                 return [
                     'id' => $item->id,
                     'menu_item_id' => $item->menu_item_id,
                     'item_name' => $item->item_name,
+                    'status' => $item->status ?? 'placed',
                     'unit_price' => (float) $item->unit_price,
                     'quantity' => (int) ($item->confirmed_qty ?? $item->quantity),
                     'total_price' => (float) $item->total_price,
@@ -109,6 +112,8 @@ class OrderStatusUpdated implements ShouldBroadcastNow
             'version' => 1,
             'event_id' => Str::uuid()->toString(),
             'branch_id' => $this->branchId,
+            'actor_id' => $this->orderPayload['actor_id'] ?? null,
+            'actor_type' => $this->orderPayload['actor_type'] ?? null,
             'order' => $this->orderPayload
         ];
     }

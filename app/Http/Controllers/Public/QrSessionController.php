@@ -85,23 +85,33 @@ class QrSessionController extends Controller
                 ->where('expires_at', '>', now())
                 ->first();
 
+            $sessionToken = $request->input('session_token') ?? $request->bearerToken();
+            $userSession = $sessionToken ? QrSession::where('session_token', $sessionToken)
+                ->where('restaurant_table_id', $table->id)
+                ->where('is_active', true)
+                ->where('expires_at', '>', now())
+                ->first() : null;
+
             $currentOccupancy = QrSession::where('restaurant_table_id', $table->id)
                 ->whereIn('join_status', ['active', 'approved'])
                 ->where('is_active', true)
                 ->where('expires_at', '>', now())
                 ->count();
 
+            $isFull = $userSession ? false : ($currentOccupancy >= $table->seating_capacity);
+
             return response()->json([
                 'valid' => true,
                 'type' => 'table',
                 'has_active_host' => (bool) $host,
                 'host_name' => $host ? $host->customer_name : null,
-                'is_full' => $currentOccupancy >= $table->seating_capacity,
+                'is_full' => $isFull,
                 'is_reserved' => $table->status === 'reserved',
                 'capacity' => $table->seating_capacity,
                 'occupancy' => $currentOccupancy,
                 'table_number' => $table->table_number ?? $table->number ?? $table->id,
                 'restaurant' => $restaurantPayload,
+                'user_session' => $userSession,
             ]);
         }
 
@@ -206,10 +216,19 @@ class QrSessionController extends Controller
                 ->latest()
                 ->first();
 
+            // Reconnection: If customer is rejoining with the same phone number on their active host session, resume it
+            if ($existingHost && !empty($customerPhone) && $existingHost->customer_phone === $customerPhone) {
+                return response()->json($existingHost, 200);
+            }
+
             if (!$existingHost || $mode === 'new') {
                 if ($table->status === 'available' || $table->status === 'cleaning') {
                     $table->update(['status' => 'occupied']);
-                    event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+                    try {
+                        event(new \App\Events\TableStatusUpdated($table->id, 'occupied', $table->restaurant_id));
+                    } catch (\Throwable $e) {
+                        \Log::warning("Pusher TableStatusUpdated broadcast error: " . $e->getMessage());
+                    }
                 }
 
                 return QrSession::create([
@@ -238,12 +257,16 @@ class QrSessionController extends Controller
                 'session_token' => $sessionToken,
                 'is_primary' => false,
                 'join_status' => 'pending',
-                'is_active' => true,
+                'is_active' => false,
                 'host_session_id' => $existingHost->id,
                 'expires_at' => now()->addHours(3),
             ]);
 
-            \App\Events\GuestJoinRequested::dispatch($guestSession);
+            try {
+                \App\Events\GuestJoinRequested::dispatch($guestSession);
+            } catch (\Throwable $e) {
+                \Log::warning("Pusher GuestJoinRequested broadcast error: " . $e->getMessage());
+            }
             return response()->json($guestSession, 201);
         }
 
@@ -358,13 +381,21 @@ class QrSessionController extends Controller
         if (!$token) return response()->json(['message' => 'TOKEN_MISSING'], 401);
 
         // Check Table
-        $tableSession = QrSession::where('session_token', $token)->where('is_active', true)->first();
+        $tableSession = QrSession::where('session_token', $token)
+            ->where(function($q) {
+                $q->where('is_active', true)
+                  ->orWhereIn('join_status', ['pending', 'rejected']);
+            })
+            ->where('expires_at', '>', now())
+            ->first();
         if ($tableSession) {
             return response()->json([
                 'valid' => true, 
                 'type' => 'table', 
                 'session' => $tableSession,
                 'session_id' => $tableSession->id,
+                'is_active' => (bool)$tableSession->is_active,
+                'is_primary' => (bool)$tableSession->is_primary,
                 'join_status' => $tableSession->join_status
             ]);
         }
@@ -413,7 +444,6 @@ class QrSessionController extends Controller
     {
         $pending = QrSession::where('restaurant_table_id', $tableId)
             ->where('join_status', 'pending')
-            ->where('is_active', true)
             ->where('expires_at', '>', now())
             ->get();
 
@@ -445,10 +475,21 @@ class QrSessionController extends Controller
             return response()->json(['message' => 'Parcel counters do not support calling a waiter.'], 400);
         } else {
             $session = \App\Models\QrSession::where('session_token', $token)->first();
-            $entity = \App\Models\RestaurantTable::find($session?->restaurant_table_id);
-            $number = $entity ? ($entity->number ?? $entity->table_number) : '?';
-            $customerName = $session?->customer_name ?? 'Guest';
-            $serviceType = 'dine_in';
+            if (!$session) {
+                $session = \App\Models\RoomSession::where('session_token', $token)->first();
+                if ($session) {
+                    $entity = \App\Models\Room::find($session->room_id);
+                    $number = $entity ? $entity->room_number : '?';
+                    $customerName = $session->guest_name ?? 'Room Guest';
+                    $serviceType = 'room';
+                }
+            }
+            if (!isset($serviceType)) {
+                $entity = \App\Models\RestaurantTable::find($session?->restaurant_table_id);
+                $number = $entity ? ($entity->table_number ?? $entity->number) : '?';
+                $customerName = $session?->customer_name ?? 'Guest';
+                $serviceType = 'dine_in';
+            }
         }
 
         if (!$session) return response()->json(['message' => 'Invalid session token provided.'], 404);
@@ -464,7 +505,9 @@ class QrSessionController extends Controller
                 $branchId,
                 $serviceType
             ));
-        } catch (\Exception $e) {}
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('WaiterCalled broadcast warning: ' . $e->getMessage());
+        }
 
         return response()->json(['message' => 'Waiter has been notified']);
     }
@@ -530,7 +573,8 @@ class QrSessionController extends Controller
 
         $session->update([
             'join_status' => $status,
-            'is_active' => $status === 'approved'
+            'is_active' => $status === 'approved',
+            'expires_at' => $status === 'approved' ? ($hostSession->expires_at ?? now()->addHours(3)) : now()
         ]);
 
         \App\Events\JoinRequestResponded::dispatch($session, $status);
@@ -546,13 +590,33 @@ class QrSessionController extends Controller
         // ── 1. Check Table Session ──
         $tableSession = QrSession::where('session_token', $token)->first();
         if ($tableSession) {
+            // Safety guard: prevent session termination if any orders have been placed
+            $sessionIds = [$tableSession->id];
+            if ($tableSession->is_primary) {
+                $guestIds = QrSession::where('host_session_id', $tableSession->id)->pluck('id')->toArray();
+                $sessionIds = array_merge($sessionIds, $guestIds);
+            }
+            $hasOrders = \App\Models\Order::whereIn('qr_session_id', $sessionIds)
+                ->whereNotIn('status', ['cancelled'])
+                ->exists();
+
+            if ($hasOrders) {
+                return response()->json([
+                    'message' => 'Cannot leave session while orders are active. Please ask your server for the bill or settle your payment.'
+                ], 400);
+            }
+
             $tableSession->update(['is_active' => false]);
             if ($tableSession->is_primary) {
                 QrSession::where('host_session_id', $tableSession->id)->update(['is_active' => false]);
                 $table = \App\Models\RestaurantTable::find($tableSession->restaurant_table_id);
                 if ($table) {
                     $table->update(['status' => 'cleaning']);
-                    event(new \App\Events\TableStatusUpdated($table->id, 'cleaning', $table->restaurant_id));
+                    try {
+                        event(new \App\Events\TableStatusUpdated($table->id, 'cleaning', $table->restaurant_id));
+                    } catch (\Throwable $e) {
+                        \Log::warning("TableStatusUpdated broadcast warning: " . $e->getMessage());
+                    }
                 }
             }
             return response()->json(['message' => 'Session ended']);
@@ -561,6 +625,14 @@ class QrSessionController extends Controller
         // ── 2. Check Parcel Session ──
         $parcelSession = ParcelQrSession::where('session_token', $token)->first();
         if ($parcelSession) {
+            $hasParcelOrders = \App\Models\Order::where('parcel_qr_session_id', $parcelSession->id)
+                ->whereNotIn('status', ['cancelled', 'served'])
+                ->exists();
+            if ($hasParcelOrders) {
+                return response()->json([
+                    'message' => 'Active takeaway orders exist. Please settle your order with the counter.'
+                ], 400);
+            }
             $parcelSession->update(['status' => 'completed']);
             return response()->json(['message' => 'Session ended']);
         }

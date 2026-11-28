@@ -9,7 +9,9 @@ return new class extends Migration {
     public function up(): void
     {
         // 👇 Foreign Key constraints ko temporary off karo
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
 
         Schema::table('restaurant_tables', function (Blueprint $table) {
             // 1. Purana unique index drop karo
@@ -21,7 +23,9 @@ return new class extends Migration {
         });
 
         // 👇 Foreign Key constraints ko wapas ON karo
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
     }
 
     public function down(): void

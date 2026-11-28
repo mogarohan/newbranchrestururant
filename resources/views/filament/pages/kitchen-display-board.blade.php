@@ -10,8 +10,8 @@
             ? \App\Models\Order::where('restaurant_id', $restaurantId)->whereDate('created_at', today())->whereIn('status', ['served', 'completed'])->count()
             : 0;
 
-        $prepCount = $this->preparingOrders->count();
-        $readyCount = $this->readyOrders->count();
+        $prepOrdersCount = $this->preparingOrders->count();
+        $readyOrdersCount = $this->readyOrders->count();
         
         // Helper function to render the location badge
         if (!function_exists('renderKdsLocation')) {
@@ -84,7 +84,7 @@
         @media (min-width: 768px) { .kds-widgets { grid-template-columns: repeat(4, 1fr); } }
         
         .kds-widget { 
-            background: var(--glass-bg);
+            background: var(--glass-bg); 
             backdrop-filter: var(--glass-blur);
             border: 1.5px solid var(--glass-border);
             border-radius: 1.25rem; 
@@ -123,7 +123,7 @@
             backdrop-filter: var(--glass-blur);
             border-radius: 12px; padding: 16px; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.05); 
-            display: flex; flex-direction: column; gap: 16px; 
+            display: flex; flex-direction: column; gap: 14px; 
             border: 1.5px solid var(--glass-border); 
             transition: transform 0.2s, box-shadow 0.2s; 
         }
@@ -144,18 +144,63 @@
         .kds-timer-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; color: var(--text-sub); }
         .kds-timer-val { font-size: 18px; font-family: monospace; font-weight: 800; margin: 0; line-height: 1; color: var(--text-main); }
 
-        .kds-items { display: flex; flex-direction: column; gap: 12px; margin-bottom: 4px; }
-        .kds-item { display: flex; align-items: flex-start; gap: 10px; padding-bottom: 8px; border-bottom: 1px dashed rgba(0,0,0,0.1); }
-        .dark .kds-item { border-bottom: 1px dashed rgba(255,255,255,0.1); }
-        .kds-item:last-child { border-bottom: none; padding-bottom: 0; }
-        .kds-item-qty { font-size: 16px; font-weight: 900; color: var(--brand-blue-light); min-width: 24px; }
-        .kds-item-text { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 700; color: var(--text-main); line-height: 1.3; flex: 1; }
+        .kds-card-progress { background: rgba(0,0,0,0.02); padding: 6px 10px; border-radius: 8px; border: 1px solid var(--glass-border); }
+
+        .kds-items { display: flex; flex-direction: column; gap: 10px; }
+        .kds-item { 
+            display: flex; align-items: flex-start; gap: 10px; 
+            padding: 8px; border-radius: 8px;
+            background: rgba(255, 255, 255, 0.5);
+            border: 1px solid rgba(0,0,0,0.06); 
+            transition: all 0.2s;
+        }
+        .dark .kds-item { background: rgba(255, 255, 255, 0.04); border-color: rgba(255,255,255,0.06); }
+        .kds-item.ready { background: rgba(16, 185, 129, 0.06); border-color: rgba(16, 185, 129, 0.2); }
+        .kds-item.preparing { background: rgba(241, 107, 63, 0.06); border-color: rgba(241, 107, 63, 0.2); }
+
+        .kds-item-qty { font-size: 15px; font-weight: 900; min-width: 26px; padding-top: 1px; }
+        .kds-item-qty.placed { color: var(--brand-blue-light); }
+        .kds-item-qty.preparing { color: var(--brand-orange-primary); }
+        .kds-item-qty.ready { color: var(--brand-green); }
+
+        .kds-item-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .kds-item-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+        .kds-item-text { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 700; color: var(--text-main); line-height: 1.3; }
         .kds-item-text.ready { color: var(--text-sub); text-decoration: line-through; text-decoration-color: var(--brand-green); text-decoration-thickness: 2px; }
-        .kds-item-notes { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 700; color: var(--brand-red); margin-top: 4px; background: var(--brand-red-bg); padding: 4px 8px; border-radius: 6px; display: inline-block; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+        .kds-item-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+        
+        .kds-item-badge { 
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; 
+            padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; line-height: 1.2;
+        }
+        .badge-placed { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+        .badge-preparing { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+        .badge-ready { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .badge-served { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+        .kds-item.served { background: rgba(239, 246, 255, 0.5); border-color: rgba(191, 219, 254, 0.7); opacity: 0.9; }
+        .kds-item-qty.served { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .kds-item-text.served { color: #475569; text-decoration: line-through; }
+
+        .kds-item-btn { 
+            border: none; border-radius: 6px; padding: 4px 8px; 
+            font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 800; cursor: pointer; 
+            transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.3px; 
+            display: inline-flex; align-items: center; gap: 3px; line-height: 1.2; 
+        }
+        .btn-item-start { background: #f97316; color: white; box-shadow: 0 1px 3px rgba(249, 115, 22, 0.3); }
+        .btn-item-start:hover { background: #ea580c; }
+        .btn-item-ready { background: #10b981; color: white; box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3); }
+        .btn-item-ready:hover { background: #059669; }
+        .btn-item-undo { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; padding: 3px 6px; font-size: 11px; }
+        .btn-item-undo:hover { background: #e2e8f0; color: #334155; }
+
+        .kds-item-notes { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; color: var(--brand-red); background: var(--brand-red-bg); padding: 3px 6px; border-radius: 6px; display: inline-block; border: 1px solid rgba(239, 68, 68, 0.3); width: fit-content; }
 
         .kds-btn { 
-            width: 100%; border: 1.5px solid var(--glass-border); border-radius: 10px; padding: 14px; 
-            font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 800; color: white; 
+            width: 100%; border: 1.5px solid var(--glass-border); border-radius: 10px; padding: 12px; 
+            font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 800; color: white; 
             cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; 
             transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; 
         }
@@ -177,11 +222,11 @@
             </div>
             <div class="kds-widget w-orange">
                 <div class="kds-w-title">Preparing Now</div>
-                <div class="kds-w-value">{{ $prepCount }}</div>
+                <div class="kds-w-value">{{ $prepOrdersCount }}</div>
             </div>
             <div class="kds-widget w-green">
                 <div class="kds-w-title">Ready Orders</div>
-                <div class="kds-w-value">{{ $readyCount }}</div>
+                <div class="kds-w-value">{{ $readyOrdersCount }}</div>
             </div>
             <div class="kds-widget w-purple">
                 <div class="kds-w-title">Served Today</div>
@@ -191,7 +236,7 @@
 
         <div class="kds-board">
 
-            {{-- PLACED ORDERS --}}
+            {{-- 1. PLACED ORDERS (All items waiting) --}}
             <div class="kds-col placed">
                 <div class="kds-col-header">
                     <h2 class="kds-col-title" style="color: var(--brand-blue-light);"><div class="kds-dot" style="background: var(--brand-blue-light);"></div> NEW / PLACED</h2>
@@ -199,6 +244,12 @@
                 </div>
 
                 @foreach($this->placedOrders as $queue)
+                    @php
+                        $validItems = $queue->order->items->where('quantity', '>', 0);
+                        $totalCount = $validItems->count();
+                        $readyCount = $validItems->where('status', 'ready')->count();
+                        $prepCount = $validItems->where('status', 'preparing')->count();
+                    @endphp
                     <div class="kds-card placed">
                         <div class="kds-card-top">
                             <div>
@@ -212,11 +263,33 @@
                         </div>
 
                         <div class="kds-items">
-                            @foreach($queue->order->items as $item)
-                                <div class="kds-item">
-                                    <span class="kds-item-qty">{{ $item->quantity }}x</span>
-                                    <div>
-                                        <div class="kds-item-text">{{ $item->item_name }}</div>
+                            @foreach($validItems as $item)
+                                @php $itemStatus = $item->status ?? 'placed'; @endphp
+                                <div class="kds-item {{ $itemStatus }}">
+                                    <span class="kds-item-qty {{ $itemStatus }}">{{ $item->quantity }}x</span>
+                                    <div class="kds-item-content">
+                                        <div class="kds-item-header">
+                                            <div class="kds-item-text {{ $itemStatus === 'ready' ? 'ready' : '' }}">
+                                                {{ $item->item_name }}
+                                            </div>
+                                            <div class="kds-item-controls">
+                                                @if($itemStatus === 'served')
+                                                    <span class="kds-item-badge badge-served">
+                                                        <svg style="width: 10px; height: 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        SERVED
+                                                    </span>
+                                                @elseif($itemStatus === 'ready')
+                                                    <span class="kds-item-badge badge-ready">READY</span>
+                                                @elseif($itemStatus === 'preparing')
+                                                    <span class="kds-item-badge badge-preparing">🔥 COOKING</span>
+                                                @else
+                                                    <span class="kds-item-badge badge-placed">WAITING</span>
+                                                    <button type="button" wire:click="updateItemStatus({{ $item->id }}, 'preparing')" class="kds-item-btn btn-item-start">
+                                                        ▶ Start
+                                                    </button>
+                                                @endif
+                                            </div>
+                                        </div>
                                         @if($item->notes) <div class="kds-item-notes">⚠️ {{ $item->notes }}</div> @endif
                                     </div>
                                 </div>
@@ -224,21 +297,31 @@
                         </div>
 
                         <button wire:click="updateStatus({{ $queue->id }}, 'preparing')" class="kds-btn btn-orange">
-                            START PREP
+                            START ALL PREP
                         </button>
                     </div>
                 @endforeach
             </div>
 
-            {{-- PREPARING ORDERS --}}
+            {{-- 2. PREPARING ORDERS (In progress - item level breakdown) --}}
             <div class="kds-col prep">
                 <div class="kds-col-header">
                     <h2 class="kds-col-title" style="color: var(--brand-orange-primary);"><div class="kds-dot" style="background: var(--brand-orange-primary);"></div> PREPARING</h2>
-                    <span class="kds-col-count">{{ $prepCount }} Orders</span>
+                    <span class="kds-col-count">{{ $prepOrdersCount }} Orders</span>
                 </div>
 
                 @foreach($this->preparingOrders as $queue)
-                    @php $isUrgent = $queue->created_at->diffInMinutes(now()) >= 15; @endphp
+                    @php 
+                        $isUrgent = $queue->created_at->diffInMinutes(now()) >= 15;
+                        $validItems = $queue->order->items->where('quantity', '>', 0);
+                        $totalCount = $validItems->count();
+                        $servedCount = $validItems->where('status', 'served')->count();
+                        $readyCount = $validItems->where('status', 'ready')->count();
+                        $prepCount = $validItems->where('status', 'preparing')->count();
+                        $waitingCount = max(0, $totalCount - $servedCount - $readyCount - $prepCount);
+                        $completedCount = $servedCount + $readyCount;
+                        $percent = $totalCount > 0 ? round(($completedCount / $totalCount) * 100) : 0;
+                    @endphp
                     <div class="kds-card {{ $isUrgent ? 'urgent' : 'prep' }}">
                         <div class="kds-card-top">
                             <div>
@@ -251,12 +334,63 @@
                             </div>
                         </div>
 
+                        {{-- Item Progress Bar --}}
+                        <div class="kds-card-progress">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 4px;">
+                                <span>Progress: <strong style="color: var(--brand-green);">{{ $completedCount }}/{{ $totalCount }} Done</strong></span>
+                                <span>
+                                    @if($servedCount > 0) <span style="color: #2563eb; font-weight: 800; margin-right: 4px;">✓ {{ $servedCount }} Served</span> @endif
+                                    @if($readyCount > 0) <span style="color: var(--brand-green); font-weight: 800;">✨ {{ $readyCount }} Ready</span> @endif
+                                    @if($prepCount > 0) <span style="color: var(--brand-orange-primary); font-weight: 800; margin-left: 4px;">🔥 {{ $prepCount }} Cooking</span> @endif
+                                    @if($waitingCount > 0) <span style="color: var(--brand-blue-light); margin-left: 4px; font-weight: 800;">⏳ {{ $waitingCount }} Waiting</span> @endif
+                                </span>
+                            </div>
+                            <div style="width: 100%; height: 5px; background: rgba(0,0,0,0.08); border-radius: 99px; overflow: hidden;">
+                                <div style="width: {{ $percent }}%; height: 100%; background: linear-gradient(90deg, var(--brand-orange-primary), var(--brand-green)); border-radius: 99px; transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+
                         <div class="kds-items">
-                            @foreach($queue->order->items as $item)
-                                <div class="kds-item">
-                                    <span class="kds-item-qty" style="color: var(--brand-orange-primary);">{{ $item->quantity }}x</span>
-                                    <div>
-                                        <div class="kds-item-text">{{ $item->item_name }}</div>
+                            @foreach($validItems as $item)
+                                @php $itemStatus = $item->status ?? 'placed'; @endphp
+                                <div class="kds-item {{ $itemStatus }}">
+                                    <span class="kds-item-qty {{ $itemStatus }}">{{ $item->quantity }}x</span>
+                                    <div class="kds-item-content">
+                                        <div class="kds-item-header">
+                                            <div class="kds-item-text {{ $itemStatus === 'ready' ? 'ready' : ($itemStatus === 'served' ? 'served' : '') }}">
+                                                {{ $item->item_name }}
+                                            </div>
+                                            <div class="kds-item-controls">
+                                                @if($itemStatus === 'served')
+                                                    <span class="kds-item-badge badge-served">
+                                                        <svg style="width: 10px; height: 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        SERVED
+                                                    </span>
+                                                @elseif($itemStatus === 'ready')
+                                                    <span class="kds-item-badge badge-ready">
+                                                        <svg style="width: 10px; height: 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        READY
+                                                    </span>
+                                                    <button type="button" wire:click="updateItemStatus({{ $item->id }}, 'preparing')" class="kds-item-btn btn-item-undo" title="Revert item to cooking">
+                                                        ↩
+                                                    </button>
+                                                @elseif($itemStatus === 'preparing')
+                                                    <span class="kds-item-badge badge-preparing">
+                                                        🔥 COOKING
+                                                    </span>
+                                                    <button type="button" wire:click="updateItemStatus({{ $item->id }}, 'ready')" class="kds-item-btn btn-item-ready">
+                                                        ✓ Ready
+                                                    </button>
+                                                @else
+                                                    <span class="kds-item-badge badge-placed">
+                                                        WAITING
+                                                    </span>
+                                                    <button type="button" wire:click="updateItemStatus({{ $item->id }}, 'preparing')" class="kds-item-btn btn-item-start">
+                                                        ▶ Start
+                                                    </button>
+                                                @endif
+                                            </div>
+                                        </div>
                                         @if($item->notes) <div class="kds-item-notes">⚠️ {{ $item->notes }}</div> @endif
                                     </div>
                                 </div>
@@ -264,21 +398,24 @@
                         </div>
 
                         <button wire:click="updateStatus({{ $queue->id }}, 'ready')" class="kds-btn {{ $isUrgent ? 'btn-red' : 'btn-blue' }}">
-                            <svg style="width:20px; height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                            {{ $isUrgent ? 'PRIORITIZE (MARK READY)' : 'MARK READY' }}
+                            <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            {{ $isUrgent ? 'PRIORITIZE (MARK ALL READY)' : 'MARK ALL READY' }}
                         </button>
                     </div>
                 @endforeach
             </div>
 
-            {{-- READY ORDERS --}}
+            {{-- 3. READY ORDERS (All items ready - waiting delivery) --}}
             <div class="kds-col ready">
                 <div class="kds-col-header">
                     <h2 class="kds-col-title" style="color: var(--brand-green);"><div class="kds-dot" style="background: var(--brand-green);"></div> READY</h2>
-                    <span class="kds-col-count">{{ $readyCount }} Orders</span>
+                    <span class="kds-col-count">{{ $readyOrdersCount }} Orders</span>
                 </div>
 
                 @foreach($this->readyOrders as $queue)
+                    @php
+                        $validItems = $queue->order->items->where('quantity', '>', 0);
+                    @endphp
                     <div class="kds-card ready">
                         <div class="kds-card-top">
                             <div>
@@ -292,17 +429,38 @@
                         </div>
 
                         <div class="kds-items">
-                            @foreach($queue->order->items as $item)
-                                <div class="kds-item">
-                                    <span class="kds-item-qty" style="color: var(--brand-green);">{{ $item->quantity }}x</span>
-                                    <div>
-                                        <div class="kds-item-text ready">{{ $item->item_name }}</div>
+                            @foreach($validItems as $item)
+                                @php $itemStatus = $item->status ?? 'ready'; @endphp
+                                <div class="kds-item {{ $itemStatus }}">
+                                    <span class="kds-item-qty {{ $itemStatus }}">{{ $item->quantity }}x</span>
+                                    <div class="kds-item-content">
+                                        <div class="kds-item-header">
+                                            <div class="kds-item-text {{ $itemStatus === 'ready' ? 'ready' : ($itemStatus === 'served' ? 'served' : '') }}">
+                                                {{ $item->item_name }}
+                                            </div>
+                                            <div class="kds-item-controls">
+                                                @if($itemStatus === 'served')
+                                                    <span class="kds-item-badge badge-served">
+                                                        <svg style="width: 10px; height: 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        SERVED
+                                                    </span>
+                                                @else
+                                                    <span class="kds-item-badge badge-ready">
+                                                        <svg style="width: 10px; height: 10px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                                        READY
+                                                    </span>
+                                                    <button type="button" wire:click="updateItemStatus({{ $item->id }}, 'preparing')" class="kds-item-btn btn-item-undo" title="Revert to cooking">
+                                                        ↩ Undo
+                                                    </button>
+                                                @endif
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
                         </div>
 
-                        <div style="text-align: center; margin-top: 8px; color: var(--brand-green); font-family: 'Inter', sans-serif; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--brand-green-bg); padding: 10px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <div style="text-align: center; margin-top: 4px; color: var(--brand-green); font-family: 'Inter', sans-serif; font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 6px; background: var(--brand-green-bg); padding: 10px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.3);">
                             <svg style="width:18px; height:18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
                             WAITING FOR DELIVERY
                         </div>

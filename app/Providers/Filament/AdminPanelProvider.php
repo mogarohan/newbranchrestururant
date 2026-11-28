@@ -407,7 +407,7 @@ class AdminPanelProvider extends PanelProvider
                             left: 0 !important;
                             right: 0 !important;
                             width: 100vw !important;
-                            z-index: 99999 !important;
+                            z-index: 30 !important;
                             display: flex !important;
                             align-items: center !important;
                             justify-content: space-between !important;
@@ -418,6 +418,19 @@ class AdminPanelProvider extends PanelProvider
                             color: #ffffff !important;
                             border-top: 2px solid #fe9a54 !important;
                             box-shadow: 0 -3px 14px rgba(42,71,149,0.22) !important;
+                        }
+                        body:has(.stitch-order-overlay) .fi-footer-custom,
+                        body:has(.stitch-modal-overlay) .fi-footer-custom,
+                        body:has(.fi-modal-open) .fi-footer-custom,
+                        body:has(.manager-dashboard-container) .fi-footer-custom {
+                            display: none !important;
+                            visibility: hidden !important;
+                            opacity: 0 !important;
+                            pointer-events: none !important;
+                            height: 0 !important;
+                            padding: 0 !important;
+                            margin: 0 !important;
+                            border: none !important;
                         }
                         .fi-footer-custom .footer-tagline {
                             font-family: "Lora", "Times New Roman", serif !important;

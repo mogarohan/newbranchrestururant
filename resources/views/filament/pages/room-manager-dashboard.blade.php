@@ -136,8 +136,26 @@
                                         <span style="color: #f16b3f; font-weight: bold;">{{ strtoupper($order->status) }}</span>
                                     </div>
                                     @foreach($order->items as $item)
-                                        <div class="flex justify-between text-sm" style="margin-bottom: 4px;">
-                                            <span>{{ $item->quantity }}x {{ $item->menuItem->name ?? $item->item_name ?? 'Custom Item' }}</span>
+                                        @php
+                                            $iStatus = $item->status ?? 'placed';
+                                            $iColor = match($iStatus) {
+                                                'ready' => '#10b981',
+                                                'preparing' => '#f97316',
+                                                default => '#64748b'
+                                            };
+                                            $iBg = match($iStatus) {
+                                                'ready' => '#dcfce7',
+                                                'preparing' => '#ffedd5',
+                                                default => '#f1f5f9'
+                                            };
+                                        @endphp
+                                        <div class="flex justify-between items-center text-sm" style="margin-bottom: 4px;">
+                                            <div class="flex items-center gap-2">
+                                                <span>{{ $item->quantity }}x {{ $item->menuItem->name ?? $item->item_name ?? 'Custom Item' }}</span>
+                                                <span style="font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 4px; background: {{ $iBg }}; color: {{ $iColor }}; text-transform: uppercase;">
+                                                    {{ $iStatus === 'preparing' ? 'Cooking' : ucfirst($iStatus) }}
+                                                </span>
+                                            </div>
                                             <strong>₹{{ number_format($item->total_price, 0) }}</strong>
                                         </div>
                                     @endforeach

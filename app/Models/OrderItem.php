@@ -15,8 +15,28 @@ class OrderItem extends Model
         'quantity',
         'total_price',
         'notes',
-
+        'status',
     ];
+
+    public function isPlaced(): bool
+    {
+        return $this->status === 'placed' || empty($this->status);
+    }
+
+    public function isPreparing(): bool
+    {
+        return $this->status === 'preparing';
+    }
+
+    public function isReady(): bool
+    {
+        return $this->status === 'ready';
+    }
+
+    public function isServed(): bool
+    {
+        return in_array($this->status, ['served', 'completed']);
+    }
 
     public function order(): BelongsTo
     {

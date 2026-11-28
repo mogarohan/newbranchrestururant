@@ -83,6 +83,7 @@ class WaiterAppController extends Controller
 
         DB::transaction(function () use ($order, $user) {
             $order->update(['status' => 'served']);
+            $order->items()->update(['status' => 'served']);
             \App\Models\KitchenQueue::where('order_id', $order->id)->delete();
 
             $user->increment('total_served');

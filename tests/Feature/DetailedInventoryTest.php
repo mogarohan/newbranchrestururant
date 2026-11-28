@@ -23,6 +23,7 @@ class DetailedInventoryTest extends TestCase
         // 1. Create a restaurant with detailed inventory enabled
         $restaurant = Restaurant::create([
             'name' => 'Pizza Palace',
+            'slug' => 'pizza-palace',
             'has_detailed_inventory' => true,
         ]);
 
@@ -49,10 +50,16 @@ class DetailedInventoryTest extends TestCase
             'low_stock_threshold' => 100.0,
         ]);
 
-        // 4. Create menu item
+        // 4. Create category & menu item
+        $category = \App\Models\Category::create([
+            'restaurant_id' => $restaurant->id,
+            'name' => 'Pizzas',
+        ]);
+
         $pizza = MenuItem::create([
             'restaurant_id' => $restaurant->id,
             'branch_id' => $branch->id,
+            'category_id' => $category->id,
             'name' => 'Cheese Pizza',
             'price' => 12.99,
             'is_available' => true,
@@ -77,8 +84,11 @@ class DetailedInventoryTest extends TestCase
         $orderItem = OrderItem::create([
             'order_id' => $order->id,
             'menu_item_id' => $pizza->id,
+            'item_name' => $pizza->name,
+            'unit_price' => 12.99,
             'quantity' => 2,
-            'price' => 12.99,
+            'total_price' => 25.98,
+            'status' => 'placed',
         ]);
 
         // Verify pre-check

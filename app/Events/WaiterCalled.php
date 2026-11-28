@@ -43,6 +43,7 @@ class WaiterCalled implements ShouldBroadcastNow
     {
         return [
             new PrivateChannel('restaurant.' . $this->restaurantId . '.alerts'),
+            new PrivateChannel('restaurant.' . $this->restaurantId),
         ];
     }
 

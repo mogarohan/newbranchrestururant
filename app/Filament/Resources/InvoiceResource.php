@@ -198,13 +198,16 @@ class InvoiceResource extends Resource
         $phone = ($branch && !empty($branch->phone)) ? $branch->phone : ($restaurant->phone_no ?? $restaurant->phone ?? '');
 
         $itemsHtml = '';
+        $totalInvoiceQty = 0;
         foreach ($invoice->items_snapshot as $item) {
             $hsn = isset($item['hsn_code']) && $item['hsn_code'] ? "<br><small style='color:gray;'>HSN: {$item['hsn_code']}</small>" : '';
             $unitPriceFormatted = number_format((float) ($item['unit_price'] ?? 0), 2);
             $totalFormatted = number_format((float) ($item['total'] ?? 0), 2);
+            $itemQty = (int) ($item['qty'] ?? 1);
+            $totalInvoiceQty += $itemQty;
             $itemsHtml .= "<tr>
                 <td style='padding: 10px; border-bottom: 1px solid #ddd;'>{$item['name']} {$hsn}</td>
-                <td style='padding: 10px; border-bottom: 1px solid #ddd; text-align: center;'>{$item['qty']}</td>
+                <td style='padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-weight: bold;'>{$itemQty}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #ddd; text-align: right;'>₹{$unitPriceFormatted}</td>
                 <td style='padding: 10px; border-bottom: 1px solid #ddd; text-align: right;'>₹{$totalFormatted}</td>
             </tr>";
@@ -293,6 +296,13 @@ class InvoiceResource extends Resource
                         </tr>
                     </thead>
                     <tbody>{$itemsHtml}</tbody>
+                    <tfoot>
+                        <tr style='border-top: 2px solid #333; font-weight: bold;'>
+                            <td style='padding: 10px;'>TOTAL QTY</td>
+                            <td style='padding: 10px; text-align: center;'>{$totalInvoiceQty}</td>
+                            <td colspan='2' style='padding: 10px; text-align: right;'>" . count($invoice->items_snapshot ?? []) . " Items</td>
+                        </tr>
+                    </tfoot>
                 </table>
                 
                 <div style='width: 55%; float: right; margin-top: 30px;'>

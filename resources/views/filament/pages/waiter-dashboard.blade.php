@@ -708,6 +708,10 @@
                                 $locationBadgeBg = '#e0f2fe';
                                 $locationBadgeColor = '#1d4ed8';
                             }
+
+                            $readyItems = $order->items->filter(fn($i) => ($i->status ?? 'placed') === 'ready');
+                            $cookingItems = $order->items->filter(fn($i) => in_array($i->status ?? 'placed', ['placed', 'preparing']));
+                            $servedItems = $order->items->filter(fn($i) => ($i->status ?? 'placed') === 'served');
                         @endphp
 
                         <div class="ready-card">
@@ -726,33 +730,78 @@
                                     </div>
 
                                     <div style="text-align: right;">
-                                        <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 3px;">
-                                            <span style="width: 5px; height: 5px; border-radius: 9999px; background: #22c55e;"></span>
-                                            READY
-                                        </span>
+                                        @if($cookingItems->isNotEmpty())
+                                            <span style="background: #fef3c7; color: #b45309; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 3px;">
+                                                <span style="width: 5px; height: 5px; border-radius: 9999px; background: #f59e0b;"></span>
+                                                PARTIAL READY
+                                            </span>
+                                        @else
+                                            <span style="background: #dcfce7; color: #15803d; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 3px;">
+                                                <span style="width: 5px; height: 5px; border-radius: 9999px; background: #22c55e;"></span>
+                                                ALL READY
+                                            </span>
+                                        @endif
                                         <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">
                                             {{ $order->updated_at->diffForHumans(null, true) }} ago
                                         </div>
                                     </div>
                                 </div>
 
-                                <div style="background: #f8fafc; border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; max-height: 160px; overflow-y: auto;">
-                                    <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 4px;">
-                                        Items to Deliver ({{ $order->items->sum('quantity') }})
+                                <div style="background: #f8fafc; border-radius: 10px; padding: 8px 10px; margin-bottom: 12px; max-height: 220px; overflow-y: auto;">
+                                    {{-- 1. Ready to deliver section --}}
+                                    <div style="font-size: 10px; font-weight: 800; text-transform: uppercase; color: #16a34a; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                                        <span>🛎️ Ready for Pickup ({{ $readyItems->sum('quantity') }})</span>
+                                        @if($readyItems->count() > 1)
+                                            <button type="button" wire:click="markAsServed({{ $order->id }})" wire:loading.attr="disabled"
+                                                style="background: #16a34a; color: #ffffff; border: none; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; cursor: pointer;">
+                                                Deliver All ({{ $readyItems->count() }})
+                                            </button>
+                                        @endif
                                     </div>
-                                    @foreach($order->items as $item)
-                                        <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; font-size: 12px;">
-                                            <div style="font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 5px;">
-                                                <span style="background: #e2e8f0; color: #334155; padding: 1px 5px; border-radius: 4px; font-size: 10px;">{{ $item->quantity }}x</span>
+
+                                    @foreach($readyItems as $item)
+                                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed #cbd5e1; font-size: 12px; gap: 6px;">
+                                            <div style="font-weight: 700; color: #0f172a; display: flex; align-items: baseline; gap: 5px; flex: 1;">
+                                                <span style="background: #dcfce7; color: #166534; padding: 1px 5px; border-radius: 4px; font-size: 10px; font-weight: 800;">{{ $item->quantity }}x</span>
                                                 <span>{{ $item->item_name }}</span>
+                                                @if($item->notes)
+                                                    <span style="font-size: 10px; color: #e11d48; font-weight: 600; font-style: italic;">({{ $item->notes }})</span>
+                                                @endif
                                             </div>
-                                            @if($item->notes)
-                                                <span style="font-size: 10px; color: #e11d48; font-weight: 600; font-style: italic;">
-                                                    {{ $item->notes }}
-                                                </span>
-                                            @endif
+                                            <button type="button" wire:click="markItemAsServed({{ $item->id }})" wire:loading.attr="disabled"
+                                                style="padding: 3px 8px; border-radius: 6px; background: #16a34a; color: #ffffff; border: none; font-size: 10px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                                                <span>Deliver</span>
+                                                <span>✔️</span>
+                                            </button>
                                         </div>
                                     @endforeach
+
+                                    {{-- 2. Still cooking section --}}
+                                    @if($cookingItems->isNotEmpty())
+                                        <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #e2e8f0;">
+                                            <div style="font-size: 9px; font-weight: 800; text-transform: uppercase; color: #d97706; margin-bottom: 4px;">
+                                                🍳 Still Cooking ({{ $cookingItems->sum('quantity') }})
+                                            </div>
+                                            @foreach($cookingItems as $cItem)
+                                                <div style="display: flex; align-items: center; justify-content: space-between; padding: 2px 0; font-size: 11px; color: #64748b;">
+                                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                                        <span style="font-size: 9px; background: #fef3c7; color: #b45309; padding: 1px 4px; border-radius: 3px; font-weight: 700;">{{ $cItem->quantity }}x</span>
+                                                        <span>{{ $cItem->item_name }}</span>
+                                                    </div>
+                                                    <span style="font-size: 9px; color: #d97706; font-weight: 700; text-transform: uppercase;">{{ $cItem->status === 'preparing' ? 'Cooking' : 'Waiting' }}</span>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    {{-- 3. Already served section --}}
+                                    @if($servedItems->isNotEmpty())
+                                        <div style="margin-top: 6px; padding-top: 4px; border-top: 1px dashed #e2e8f0;">
+                                            <div style="font-size: 9px; font-weight: 700; color: #94a3b8;">
+                                                ✔️ Already Delivered: {{ $servedItems->map(fn($i) => $i->quantity . 'x ' . $i->item_name)->implode(', ') }}
+                                            </div>
+                                        </div>
+                                    @endif
 
                                     @if($order->notes)
                                         <div style="margin-top: 5px; font-size: 10px; background: #fff1f2; color: #be123c; padding: 3px 6px; border-radius: 5px; font-weight: 600;">
@@ -762,8 +811,8 @@
                                 </div>
                             </div>
 
-                            <button type="button" wire:click="markAsServed({{ $order->id }})" wire:loading.attr="disabled" style="width: 100%; min-height: 42px; background: #16a34a; color: #ffffff; border: none; padding: 10px 14px; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);">
-                                <span>Mark Delivered to Table</span>
+                            <button type="button" wire:click="markAsServed({{ $order->id }})" wire:loading.attr="disabled" style="width: 100%; min-height: 40px; background: #16a34a; color: #ffffff; border: none; padding: 9px 14px; border-radius: 10px; font-size: 13px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; box-shadow: 0 4px 12px rgba(22, 163, 74, 0.25);">
+                                <span>{{ $cookingItems->isNotEmpty() ? 'Deliver All Ready Items' : 'Mark Delivered to Table' }}</span>
                                 <span style="font-size: 15px;">✔️</span>
                             </button>
                         </div>
@@ -1454,11 +1503,27 @@
                                         <div style="background: #f8fafc; border-radius: 8px; padding: 8px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">
                                             @foreach($ord->items as $item)
                                                 <div style="display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 3px;">
-                                                    <div style="font-weight: 700; color: #1e293b;">
+                                                    <div style="font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                                                         <span style="color: #64748b; font-weight: 600;">{{ $item->quantity }}x</span>
                                                         <span>{{ $item->item_name }}</span>
+                                                        @php
+                                                            $iStatus = $item->status ?? 'placed';
+                                                            $iColor = match($iStatus) {
+                                                                'ready' => '#10b981',
+                                                                'preparing' => '#f97316',
+                                                                default => '#64748b'
+                                                            };
+                                                            $iBg = match($iStatus) {
+                                                                'ready' => '#dcfce7',
+                                                                'preparing' => '#ffedd5',
+                                                                default => '#f1f5f9'
+                                                            };
+                                                        @endphp
+                                                        <span style="font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 4px; background: {{ $iBg }}; color: {{ $iColor }}; text-transform: uppercase;">
+                                                            {{ $iStatus === 'preparing' ? 'Cooking' : ucfirst($iStatus) }}
+                                                        </span>
                                                         @if($item->notes)
-                                                            <span style="font-size: 10px; color: #e11d48; font-style: italic; margin-left: 4px;">({{ $item->notes }})</span>
+                                                            <span style="font-size: 10px; color: #e11d48; font-style: italic; margin-left: 2px;">({{ $item->notes }})</span>
                                                         @endif
                                                     </div>
                                                     <span style="font-family: monospace; font-weight: 700; color: #475569;">
@@ -1510,17 +1575,39 @@
             let audioCtx = null;
 
             function getAudioContext() {
-                if (!audioCtx) {
-                    const AudioContext = window.AudioContext || window.webkitAudioContext;
-                    if (AudioContext) {
-                        audioCtx = new AudioContext();
+                try {
+                    if (!audioCtx) {
+                        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                        if (AudioContextClass) {
+                            audioCtx = new AudioContextClass();
+                        }
                     }
-                }
-                if (audioCtx && audioCtx.state === 'suspended') {
-                    audioCtx.resume();
+                    if (audioCtx && audioCtx.state === 'suspended') {
+                        audioCtx.resume();
+                    }
+                } catch (e) {
+                    console.warn("AudioContext init error:", e);
                 }
                 return audioCtx;
             }
+
+            // Automatically unlock AudioContext on first user touch/click (crucial for Android Chrome & iOS Safari)
+            function unlockAudioOnUserGesture() {
+                try {
+                    const ctx = getAudioContext();
+                    if (ctx && ctx.state === 'suspended') {
+                        ctx.resume().then(() => {
+                            if (window.Notification) {
+                                updateStatusButton(Notification.permission);
+                            }
+                        });
+                    }
+                } catch (e) {}
+            }
+
+            ['click', 'touchstart', 'touchend', 'pointerdown', 'keydown'].forEach(evt => {
+                document.addEventListener(evt, unlockAudioOnUserGesture, { passive: true });
+            });
 
             // Synthesized Chime 1: Waiter Call Alert (Harmonic Double Ping: 880Hz -> 1174Hz)
             function playWaiterCallSound() {
@@ -1533,48 +1620,48 @@
                     const gain1 = ctx.createGain();
                     osc1.type = 'sine';
                     osc1.frequency.setValueAtTime(880, now);
-                    gain1.gain.setValueAtTime(0.35, now);
-                    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+                    gain1.gain.setValueAtTime(0.6, now);
+                    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
                     osc1.connect(gain1);
                     gain1.connect(ctx.destination);
                     osc1.start(now);
-                    osc1.stop(now + 0.45);
+                    osc1.stop(now + 0.5);
 
                     const osc2 = ctx.createOscillator();
                     const gain2 = ctx.createGain();
                     osc2.type = 'sine';
-                    osc2.frequency.setValueAtTime(1174.66, now + 0.15);
-                    gain2.gain.setValueAtTime(0.35, now + 0.15);
-                    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+                    osc2.frequency.setValueAtTime(1174.66, now + 0.16);
+                    gain2.gain.setValueAtTime(0.6, now + 0.16);
+                    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
                     osc2.connect(gain2);
                     gain2.connect(ctx.destination);
-                    osc2.start(now + 0.15);
-                    osc2.stop(now + 0.65);
+                    osc2.start(now + 0.16);
+                    osc2.stop(now + 0.75);
                 } catch (e) {
                     console.error("Error playing waiter call sound:", e);
                 }
             }
 
-            // Synthesized Chime 2: Ready Order Chime (Ascending 3-note melody: D5 -> A5 -> D6)
+            // Synthesized Chime 2: Ready Order Chime (Ascending 4-tone loud bell chime: D5 -> A5 -> D6 -> F#6)
             function playOrderReadySound() {
                 try {
                     const ctx = getAudioContext();
                     if (!ctx) return;
 
                     const now = ctx.currentTime;
-                    const notes = [587.33, 880, 1174.66];
+                    const notes = [587.33, 880.0, 1174.66, 1479.98];
                     notes.forEach((freq, idx) => {
                         const osc = ctx.createOscillator();
                         const gain = ctx.createGain();
                         osc.type = 'triangle';
-                        const start = now + (idx * 0.12);
+                        const start = now + (idx * 0.13);
                         osc.frequency.setValueAtTime(freq, start);
-                        gain.gain.setValueAtTime(0.4, start);
-                        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+                        gain.gain.setValueAtTime(0.7, start);
+                        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.55);
                         osc.connect(gain);
                         gain.connect(ctx.destination);
                         osc.start(start);
-                        osc.stop(start + 0.5);
+                        osc.stop(start + 0.55);
                     });
                 } catch (e) {
                     console.error("Error playing order ready sound:", e);
@@ -1593,37 +1680,41 @@
                         const osc = ctx.createOscillator();
                         const gain = ctx.createGain();
                         osc.type = 'sine';
-                        const start = now + (idx * 0.1);
+                        const start = now + (idx * 0.12);
                         osc.frequency.setValueAtTime(freq, start);
-                        gain.gain.setValueAtTime(0.3, start);
-                        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+                        gain.gain.setValueAtTime(0.5, start);
+                        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
                         osc.connect(gain);
                         gain.connect(ctx.destination);
                         osc.start(start);
-                        osc.stop(start + 0.35);
+                        osc.stop(start + 0.4);
                     });
                 } catch (e) {
                     console.error("Error playing bill requested sound:", e);
                 }
             }
 
-            window.testAudioAndNotifications = function () {
-                getAudioContext();
-                playOrderReadySound();
-
-                if ("Notification" in window) {
-                    if (Notification.permission !== "granted") {
-                        Notification.requestPermission().then(permission => {
-                            updateStatusButton(permission);
-                            if (permission === 'granted') {
-                                triggerDesktopNotification("🔔 Notifications Enabled!", "You will now receive alerts for ready orders and waiter calls even when minimized.");
-                            }
-                        });
-                    } else {
-                        triggerDesktopNotification("🛎️ Waiter Audio Test", "Audio and desktop alerts are active! Food ready sound just played.");
-                    }
+            function resolveSoundType(detail) {
+                if (!detail) return '';
+                if (typeof detail === 'string') return detail;
+                if (detail.type) return detail.type;
+                if (Array.isArray(detail) && detail[0]) {
+                    if (typeof detail[0] === 'string') return detail[0];
+                    if (detail[0].type) return detail[0].type;
                 }
-            };
+                return '';
+            }
+
+            function handlePlaySound(data) {
+                const type = resolveSoundType(data);
+                if (type === 'call') {
+                    playWaiterCallSound();
+                } else if (type === 'ready') {
+                    playOrderReadySound();
+                } else if (type === 'bill') {
+                    playBillRequestedSound();
+                }
+            }
 
             function triggerDesktopNotification(title, body) {
                 if ("Notification" in window && Notification.permission === "granted") {
@@ -1650,10 +1741,10 @@
                 if (!btnText) return;
 
                 if (permission === 'granted') {
-                    btnText.innerText = "Audio Alerts Active (Test)";
+                    btnText.innerText = "Audio Alerts Active (Click to Test)";
                     btnIcon.innerText = "🔊";
                 } else if (permission === 'denied') {
-                    btnText.innerText = "Notifications Blocked (Unblock)";
+                    btnText.innerText = "Notifications Blocked (Unblock in browser)";
                     btnIcon.innerText = "🔇";
                 } else {
                     btnText.innerText = "Enable Sound & Alerts";
@@ -1661,7 +1752,55 @@
                 }
             }
 
-            document.addEventListener('DOMContentLoaded', function () {
+            window.testAudioAndNotifications = function () {
+                const ctx = getAudioContext();
+                if (ctx && ctx.state === 'suspended') {
+                    ctx.resume();
+                }
+                playOrderReadySound();
+
+                speakText("Audio and food ready alerts are working.");
+
+                if ("Notification" in window) {
+                    if (Notification.permission !== "granted") {
+                        Notification.requestPermission().then(permission => {
+                            updateStatusButton(permission);
+                            if (permission === 'granted') {
+                                triggerDesktopNotification("🔔 Notifications Enabled!", "Ready order and waiter call alerts will pop up automatically.");
+                            }
+                        });
+                    } else {
+                        triggerDesktopNotification("🛎️ Waiter Audio Test", "Audio and notifications are active! Food ready bell just rang.");
+                    }
+                }
+            };
+
+            function speakText(text) {
+                if (!('speechSynthesis' in window) || !text) return;
+                try {
+                    window.speechSynthesis.cancel();
+                    const msg = new SpeechSynthesisUtterance(text);
+                    const voices = window.speechSynthesis.getVoices();
+                    if (voices && voices.length > 0) {
+                        const preferredVoice = voices.find(v =>
+                            v.lang.includes('gu-IN') ||
+                            v.lang.includes('hi-IN') ||
+                            v.lang.includes('en-IN')
+                        );
+                        if (preferredVoice) {
+                            msg.voice = preferredVoice;
+                        }
+                    }
+                    msg.rate = 1.0;
+                    msg.pitch = 1.0;
+                    msg.volume = 1.0;
+                    window.speechSynthesis.speak(msg);
+                } catch (e) {
+                    console.warn("Speech synthesis error:", e);
+                }
+            }
+
+            function setupListeners() {
                 if ("Notification" in window) {
                     updateStatusButton(Notification.permission);
                     if (Notification.permission !== "granted" && Notification.permission !== "denied") {
@@ -1670,46 +1809,48 @@
                 }
 
                 window.addEventListener('play-sound', function (e) {
-                    const type = e.detail.type || (e.detail[0] ? e.detail[0].type : '');
-                    if (type === 'call') {
-                        playWaiterCallSound();
-                    } else if (type === 'ready') {
-                        playOrderReadySound();
-                    } else if (type === 'bill') {
-                        playBillRequestedSound();
-                    }
+                    handlePlaySound(e.detail);
+                });
+
+                document.addEventListener('play-sound', function (e) {
+                    handlePlaySound(e.detail);
                 });
 
                 window.addEventListener('trigger-browser-notification', function (e) {
-                    const data = e.detail[0] || e.detail;
+                    const data = e.detail && e.detail[0] ? e.detail[0] : (e.detail || {});
                     if (data && data.title) {
                         triggerDesktopNotification(data.title, data.body || '');
                     }
                 });
 
                 window.addEventListener('speak-notification', function (e) {
-                    if ('speechSynthesis' in window) {
-                        const text = e.detail.text || (e.detail[0] ? e.detail[0].text : '');
-                        if (!text) return;
-
-                        window.speechSynthesis.cancel();
-                        const msg = new SpeechSynthesisUtterance(text);
-                        const voices = window.speechSynthesis.getVoices();
-                        const indianVoice = voices.find(voice =>
-                            voice.lang.includes('gu-IN') ||
-                            voice.lang.includes('hi-IN') ||
-                            voice.lang.includes('en-IN')
-                        );
-                        if (indianVoice) {
-                            msg.voice = indianVoice;
-                        }
-                        msg.rate = 0.95;
-                        msg.pitch = 1;
-                        msg.volume = 1;
-                        window.speechSynthesis.speak(msg);
-                    }
+                    const payload = e.detail && e.detail[0] ? e.detail[0] : (e.detail || {});
+                    const text = typeof payload === 'string' ? payload : (payload.text || '');
+                    speakText(text);
                 });
-            });
+
+                if (window.Livewire) {
+                    Livewire.on('play-sound', data => handlePlaySound(data));
+                    Livewire.on('trigger-browser-notification', data => {
+                        const payload = Array.isArray(data) ? data[0] : data;
+                        if (payload && payload.title) triggerDesktopNotification(payload.title, payload.body || '');
+                    });
+                    Livewire.on('speak-notification', data => {
+                        const payload = Array.isArray(data) ? data[0] : data;
+                        const text = typeof payload === 'string' ? payload : (payload.text || '');
+                        speakText(text);
+                    });
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setupListeners);
+            } else {
+                setupListeners();
+            }
+
+            document.addEventListener('livewire:navigated', setupListeners);
+            document.addEventListener('livewire:init', setupListeners);
         })();
     </script>
 </x-filament-panels::page>

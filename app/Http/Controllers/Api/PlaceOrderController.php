@@ -263,6 +263,7 @@ class PlaceOrderController extends Controller
                         'confirmed_qty' => $itemData['quantity'],
                         'total_price' => $itemData['total_price'],
                         'notes' => $itemData['notes'],
+                        'status' => 'placed',
                     ]);
                 }
 
@@ -381,6 +382,7 @@ class PlaceOrderController extends Controller
                         'id' => $item->id,
                         'menu_item_id' => $item->menu_item_id,
                         'item_name' => $item->item_name,
+                        'status' => $item->status ?? 'placed',
                         'unit_price' => $item->unit_price,
                         'quantity' => $item->confirmed_qty ?? $item->quantity,
                         'requested_qty' => (int) $item->requested_qty,
@@ -534,6 +536,7 @@ class PlaceOrderController extends Controller
 
         DB::transaction(function () use ($order, $oldStatus) {
             $order->update(['status' => 'cancelled']);
+            $order->items()->update(['status' => 'cancelled']);
 
             foreach ($order->items as $orderItem) {
                 if (!$orderItem->menu_item_id) continue;

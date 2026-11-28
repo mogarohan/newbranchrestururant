@@ -37,6 +37,16 @@ class OrderStatusService
 
         $order->update(['status' => $to]);
 
+        if ($to === 'preparing') {
+            $order->items()->where('quantity', '>', 0)->where('status', 'placed')->update(['status' => 'preparing']);
+        } elseif ($to === 'ready') {
+            $order->items()->where('quantity', '>', 0)->where('status', '!=', 'cancelled')->update(['status' => 'ready']);
+        } elseif (in_array($to, ['served', 'completed'])) {
+            $order->items()->update(['status' => 'served']);
+        } elseif ($to === 'cancelled') {
+            $order->items()->update(['status' => 'cancelled']);
+        }
+
         KitchenQueue::updateOrCreate(
             ['order_id' => $order->id],
             ['current_status' => $to]

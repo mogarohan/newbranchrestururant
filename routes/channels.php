@@ -28,9 +28,9 @@ Broadcast::channel('session.{sessionId}', function ($user, $sessionId) {
     // A. Check if it's a Table Session (QrSession)
     $qrSession = QrSession::where('session_token', $token)->first();
     if ($qrSession) {
-        // If they are a guest joining a table, their channel ID is actually the host's ID
-        $validId = $qrSession->is_primary ? $qrSession->id : $qrSession->host_session_id;
-        return (int) $validId === (int) $sessionId;
+        // Diner can authorize on their own session channel OR their host session channel
+        return (int) $qrSession->id === (int) $sessionId ||
+               ($qrSession->host_session_id && (int) $qrSession->host_session_id === (int) $sessionId);
     }
 
     // B. Check if it's a Room Session (RoomSession)
